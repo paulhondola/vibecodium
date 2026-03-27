@@ -3,15 +3,14 @@ import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
 import { Play, Square, Trash2, Terminal as TerminalIcon, Globe, RefreshCw, Lock } from "lucide-react";
-import { useAuth0 } from "@auth0/auth0-react";
 
-export default function TerminalArea() {
+export default function TerminalArea({ projectId }: { projectId: string | null }) {
 	const terminalRef = useRef<HTMLDivElement>(null);
 	const termInstance = useRef<Terminal | null>(null);
+	const wsInstance = useRef<WebSocket | null>(null);
 	const [status, setStatus] = useState<"idle" | "running">("idle");
     const [activeTab, setActiveTab] = useState<"terminal" | "preview">("terminal");
     const [previewUrl, setPreviewUrl] = useState("localhost:3000");
-    const { getAccessTokenSilently } = useAuth0();
 
 	useEffect(() => {
 		if (!terminalRef.current || activeTab !== "terminal") return;
@@ -31,69 +30,39 @@ export default function TerminalArea() {
 		const fitAddon = new FitAddon();
 		term.loadAddon(fitAddon);
 		term.open(terminalRef.current);
-		fitAddon.fit();
+		
+		setTimeout(() => {
+			try { fitAddon.fit(); } catch (e) {}
+		}, 10);
 
-		term.writeln("\x1b[1;36m➜\x1b[0m \x1b[1;32m~ \x1b[0m\x1b[36mvibecodium\x1b[0m Shared Terminal Connected.");
-		term.writeln("\x1b[90mSandboxed environment ready.\x1b[0m");
-		term.write("\r\n$ ");
+		term.writeln("\x1b[1;36m➜\x1b[0m \x1b[1;32mConnecting to server...\x1b[0m");
 
-		let currentLine = "";
+		const ws = new WebSocket(`ws://localhost:3000/ws/terminal?roomId=${projectId || "default"}`);
+		wsInstance.current = ws;
+		
+		ws.onopen = () => {
+			term.clear();
+		};
 
-		term.onData(async (data) => {
-			if (status === "running") return; 
+		ws.onmessage = (event) => {
+			if (typeof event.data === "string") {
+				term.write(event.data);
+			} else if (event.data instanceof Blob) {
+				const reader = new FileReader();
+				reader.onload = () => {
+					if (typeof reader.result === "string") {
+						term.write(reader.result);
+					} else if (reader.result instanceof ArrayBuffer) {
+						term.write(new Uint8Array(reader.result));
+					}
+				};
+				reader.readAsArrayBuffer(event.data);
+			}
+		};
 
-			const code = data.charCodeAt(0);
-			
-			if (code === 13) { // Enter
-				term.write("\r\n");
-				if (currentLine.trim() === "clear") {
-					term.clear();
-				} else if (currentLine.trim() === "bun run server/index.ts") {
-                    handleRun();
-                } else if (currentLine.trim().startsWith("git ")) {
-                    setStatus("running");
-                    term.writeln("\x1b[90mExecuting git inside container...\x1b[0m");
-
-                    try {
-                        const token = await getAccessTokenSilently();
-                        const res = await fetch("http://localhost:3000/api/git", {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                "Authorization": `Bearer ${token}`
-                            },
-                            body: JSON.stringify({ command: currentLine.trim(), projectId: "mock-project-id" })
-                        });
-
-                        const resData = await res.json();
-                        
-                        if (!res.ok) {
-                            term.writeln(`\r\n\x1b[31mError:\x1b[0m ${resData.error || "Unknown server error"}`);
-                        } else {
-                            const lines = resData.output.split('\n');
-                            for (const line of lines) {
-                                term.writeln(`\r\n${line}`);
-                            }
-                        }
-                    } catch (err: any) {
-                        term.writeln(`\r\n\x1b[31mError executing git:\x1b[0m ${err.message}`);
-                    }
-                    setStatus("idle");
-                } else if (currentLine.trim() !== "") {
-					term.writeln(`\x1b[31mbash: ${currentLine}: mock command not found\x1b[0m`);
-				}
-				if (currentLine.trim() !== "bun run server/index.ts") {
-				    term.write("\r\n$ ");
-                }
-				currentLine = "";
-			} else if (code === 127) { // Backspace
-				if (currentLine.length > 0) {
-					currentLine = currentLine.slice(0, -1);
-					term.write("\b \b");
-				}
-			} else {
-				currentLine += data;
-				term.write(data);
+		const disposableData = term.onData((data) => {
+			if (ws.readyState === WebSocket.OPEN) {
+				ws.send(data);
 			}
 		});
 
@@ -106,32 +75,26 @@ export default function TerminalArea() {
 
 		return () => {
 			window.removeEventListener("resize", handleResize);
+			disposableData.dispose();
+			ws.close();
 			term.dispose();
 		};
-	}, [activeTab]);
+	}, [activeTab, projectId]);
 
     const handleRun = () => {
-        if (status === "running" || !termInstance.current) return;
+        if (!wsInstance.current || wsInstance.current.readyState !== WebSocket.OPEN) return;
+        wsInstance.current.send("bun run server/index.ts\r");
         setStatus("running");
-        termInstance.current.writeln("\x1b[38;2;34;211;238m[Running]\x1b[0m bun run server/index.ts");
         
         setTimeout(() => {
-            termInstance.current?.writeln("Listening on localhost:3000");
             setActiveTab("preview"); // Auto-switch to preview on run
-        }, 800);
-
-        setTimeout(() => {
-            if (activeTab === "terminal") {
-                termInstance.current?.writeln("\x1b[32m[Finished in 1.2s]\x1b[0m");
-                termInstance.current?.write("\r\n$ ");
-            }
             setStatus("idle");
         }, 1200);
     };
 
     const handleClear = () => {
-        termInstance.current?.clear();
-        termInstance.current?.write("$ ");
+        if (!wsInstance.current || wsInstance.current.readyState !== WebSocket.OPEN) return;
+        wsInstance.current.send("clear\r");
     };
 
 	return (

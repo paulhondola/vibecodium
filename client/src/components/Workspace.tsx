@@ -3,8 +3,13 @@ import ActionHistory from "./ActionHistory";
 import EditorArea from "./EditorArea";
 import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
+<<<<<<< HEAD
 import JoinRequestModal from "./JoinRequestModal";
 import { ArrowLeft, Loader2, Users, Check, ShieldX } from "lucide-react";
+=======
+import ReelsPanel from "./ReelsPanel";
+import { ArrowLeft, Loader2, Share, Film } from "lucide-react";
+>>>>>>> bc5f245de17e09394d37eb6a87dd1f40d03e64c4
 import { useState, useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { WebSocketProvider, useCollabSocket } from "../contexts/WebSocketProvider";
@@ -35,12 +40,20 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [files, setFiles] = useState<ProjectFile[]>([]);
     const [activeFile, setActiveFile] = useState<ProjectFile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+<<<<<<< HEAD
     const [copied, setCopied] = useState(false);
 
     const { getAccessTokenSilently, isAuthenticated } = useAuth0();
     const { connectionState, myPermission, isHost, connectedUsers, syncedFiles } = useCollabSocket();
 
     // 1. Load Files for Host (they fetch from API)
+=======
+    const [isReelsOpen, setIsReelsOpen] = useState(false);
+    const { getAccessTokenSilently, isAuthenticated } = useAuth0();
+
+
+
+>>>>>>> bc5f245de17e09394d37eb6a87dd1f40d03e64c4
     useEffect(() => {
         if (!projectId || !isAuthenticated || !isHost) return;
         setIsLoading(true);
@@ -139,6 +152,18 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 							iT
 						</div>
 						<span className="font-semibold text-sm text-gray-200">{projectId ? `Project ${projectId.slice(0, 8)}` : "itec-project-2026"}</span>
+						<button 
+							onClick={() => {
+								const url = new URL(window.location.href);
+								url.searchParams.set("project", projectId || "default");
+								navigator.clipboard.writeText(url.toString());
+								alert("Share link copied to clipboard!");
+							}}
+							className="ml-4 flex items-center gap-1.5 px-3 py-1 bg-[#27272a] hover:bg-[#3f3f46] text-xs font-semibold rounded text-cyan-400 transition-colors"
+						>
+							<Share size={12} />
+							Share Link
+						</button>
 					</div>
 				</div>
 
@@ -202,10 +227,10 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 				{/* Center Area */}
 				<div className="flex-1 flex flex-col min-w-0 bg-[#09090b] relative">
 					<div className="flex-1 relative border-b border-[#27272a] overflow-hidden">
-						<EditorArea activeFile={activeFile} />
+						<EditorArea activeFile={activeFile} projectId={projectId} />
 					</div>
 					<div className="h-[280px] shrink-0 overflow-hidden relative bg-[#09090b]">
-						<TerminalArea />
+						<TerminalArea projectId={projectId} />
 					</div>
 				</div>
 
@@ -214,6 +239,20 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 					<VibeChat />
 				</div>
 			</div>
+
+            {/* Vibe Reels Panel overlay */}
+            {isReelsOpen && <ReelsPanel onClose={() => setIsReelsOpen(false)} />}
+
+            {/* Side Button to Open Reels Panel */}
+            {!isReelsOpen && (
+                <button
+                    onClick={() => setIsReelsOpen(true)}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 w-8 h-24 bg-[#18181b] hover:bg-[#27272a] text-gray-500 hover:text-pink-500 border-l border-y border-[#27272a] hover:border-pink-500/50 rounded-l-lg flex flex-col items-center justify-center gap-2 shadow-[-5px_0_15px_rgba(0,0,0,0.3)] transition-all z-40 group group-hover:w-10"
+                    title="Open Vibe Reels"
+                >
+                    <Film size={16} className="group-hover:scale-110 transition-transform" />
+                </button>
+            )}
 		</div>
 	);
 }

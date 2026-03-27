@@ -10,15 +10,39 @@ function safeCssId(id: string) {
     return id.replace(/[^a-zA-Z0-9]/g, "_");
 }
 
-export default function EditorArea({ activeFile }: { activeFile: ProjectFile | null }) {
+export default function EditorArea({ activeFile, projectId }: { activeFile: ProjectFile | null, projectId: string | null }) {
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 	const monaco = useMonaco();
 	const [showPending, setShowPending] = useState(false);
 	const [code, setCode] = useState("");
+<<<<<<< HEAD
     
     const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
     const isRemoteUpdate = useRef(false);
     const injectedStyles = useRef<Set<string>>(new Set());
+=======
+	const wsRef = useRef<WebSocket | null>(null);
+	const isRemoteChange = useRef(false);
+
+    useEffect(() => {
+        const ws = new WebSocket(`ws://localhost:3000/ws/editor?roomId=${projectId || "default"}`);
+        wsRef.current = ws;
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if ((data.type === "init" || data.type === "update") && typeof data.content === "string") {
+                    isRemoteChange.current = true;
+                    setCode(data.content);
+                }
+            } catch (e) {
+                console.error("Editor WS parse error", e);
+            }
+        };
+
+        return () => ws.close();
+    }, [projectId]);
+>>>>>>> bc5f245de17e09394d37eb6a87dd1f40d03e64c4
 
     const { ws, myPermission, myClientId, sendMessage, connectedUsers } = useCollabSocket();
 
@@ -124,6 +148,7 @@ export default function EditorArea({ activeFile }: { activeFile: ProjectFile | n
         });
 	};
 
+<<<<<<< HEAD
     // Code change handler with echo prevention
     const handleCodeChange = (val: string | undefined) => {
         const text = val || "";
@@ -137,6 +162,19 @@ export default function EditorArea({ activeFile }: { activeFile: ProjectFile | n
                 filePath: activeFile.path,
                 content: text
             });
+=======
+    const handleCodeChange = (val: string | undefined) => {
+        const newCode = val || "";
+        setCode(newCode);
+
+        if (isRemoteChange.current) {
+            isRemoteChange.current = false;
+            return;
+        }
+
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: "update", content: newCode }));
+>>>>>>> bc5f245de17e09394d37eb6a87dd1f40d03e64c4
         }
     };
 

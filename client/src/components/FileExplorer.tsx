@@ -152,7 +152,11 @@ export default function FileExplorer({ files, activeFile, onSelect, readOnly }: 
             <ImportModal 
                 isOpen={isImportModalOpen} 
                 onClose={() => setImportModalOpen(false)} 
-                onSuccess={(projectId, _path) => console.log("Import loaded!", projectId)} 
+                onSuccess={(newProjectId, _path) => {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("project", newProjectId);
+                    window.location.href = url.toString();
+                }} 
             />
 		</div>
 	);
