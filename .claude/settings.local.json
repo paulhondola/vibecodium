@@ -7,7 +7,9 @@
       "Bash(bunx fx:*)",
       "Bash(pkill -f \"bun --watch run src/index.ts\")",
       "Bash(pkill -f \"turbo dev\")",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(bun run:*)",
+      "Bash(curl:*)"
     ]
   }
 }

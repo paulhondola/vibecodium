@@ -22,4 +22,16 @@ CREATE TABLE IF NOT EXISTS files (
     content TEXT,
     FOREIGN KEY(project_id) REFERENCES projects(id)
 );
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token       TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    expires_at  INTEGER NOT NULL,
+    created_by  TEXT NOT NULL,
+    label       TEXT,
+    FOREIGN KEY(project_id) REFERENCES projects(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions (project_id);
 `);

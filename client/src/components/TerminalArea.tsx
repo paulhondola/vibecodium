@@ -17,10 +17,10 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
 
 		const term = new Terminal({
 			theme: {
-				background: "#09090b", // Deep dark space gray
+				background: "#09090b",
 				foreground: "#d4d4d4",
-				cursor: "#22d3ee", // Cyan-400
-                selectionBackground: "#0891b2", // Cyan-600
+				cursor: "#22d3ee",
+				selectionBackground: "#0891b2",
 			},
 			fontFamily: "Menlo, Monaco, 'Courier New', monospace",
 			fontSize: 13,
@@ -29,55 +29,59 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
 
 		const fitAddon = new FitAddon();
 		term.loadAddon(fitAddon);
-		term.open(terminalRef.current);
-		
-		setTimeout(() => {
-			try { fitAddon.fit(); } catch (e) {}
-		}, 10);
 
-		term.writeln("\x1b[1;36m➜\x1b[0m \x1b[1;32mConnecting to server...\x1b[0m");
+		let disposed = false;
+		let disposableData: ReturnType<typeof term.onData> | null = null;
+		let ws: WebSocket | null = null;
 
-		const ws = new WebSocket(`ws://localhost:3000/ws/terminal?roomId=${projectId || "default"}`);
-		wsInstance.current = ws;
-		
-		ws.onopen = () => {
-			term.clear();
-		};
+		// Defer open() until after layout so the renderer has real dimensions
+		const rafId = requestAnimationFrame(() => {
+			if (disposed || !terminalRef.current) return;
 
-		ws.onmessage = (event) => {
-			if (typeof event.data === "string") {
-				term.write(event.data);
-			} else if (event.data instanceof Blob) {
-				const reader = new FileReader();
-				reader.onload = () => {
-					if (typeof reader.result === "string") {
-						term.write(reader.result);
-					} else if (reader.result instanceof ArrayBuffer) {
-						term.write(new Uint8Array(reader.result));
-					}
-				};
-				reader.readAsArrayBuffer(event.data);
-			}
-		};
+			term.open(terminalRef.current);
+			try { fitAddon.fit(); } catch (_) {}
+			term.writeln("\x1b[1;36m➜\x1b[0m \x1b[1;32mConnecting to server...\x1b[0m");
 
-		const disposableData = term.onData((data) => {
-			if (ws.readyState === WebSocket.OPEN) {
-				ws.send(data);
-			}
+			ws = new WebSocket(`ws://localhost:3000/ws/terminal?roomId=${projectId || "default"}`);
+			wsInstance.current = ws;
+
+			ws.onopen = () => { term.clear(); };
+
+			ws.onmessage = (event) => {
+				if (typeof event.data === "string") {
+					term.write(event.data);
+				} else if (event.data instanceof Blob) {
+					const reader = new FileReader();
+					reader.onload = () => {
+						if (typeof reader.result === "string") {
+							term.write(reader.result);
+						} else if (reader.result instanceof ArrayBuffer) {
+							term.write(new Uint8Array(reader.result));
+						}
+					};
+					reader.readAsArrayBuffer(event.data);
+				}
+			};
+
+			disposableData = term.onData((data) => {
+				if (ws?.readyState === WebSocket.OPEN) ws.send(data);
+			});
+
+			termInstance.current = term;
 		});
 
-		termInstance.current = term;
-
-		const handleResize = () => {
-            try { fitAddon.fit(); } catch(e) {}
-        };
+		const handleResize = () => { try { fitAddon.fit(); } catch (_) {} };
 		window.addEventListener("resize", handleResize);
 
 		return () => {
+			disposed = true;
+			cancelAnimationFrame(rafId);
 			window.removeEventListener("resize", handleResize);
-			disposableData.dispose();
-			ws.close();
+			disposableData?.dispose();
+			ws?.close();
 			term.dispose();
+			wsInstance.current = null;
+			termInstance.current = null;
 		};
 	}, [activeTab, projectId]);
 
