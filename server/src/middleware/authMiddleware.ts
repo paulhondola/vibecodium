@@ -1,5 +1,4 @@
 import { createMiddleware } from "hono/factory";
-import { createRemoteJWKSet, jwtVerify } from "jose";
 
 export const authMiddleware = createMiddleware(async (c, next) => {
 	const authHeader = c.req.header("Authorization");
@@ -20,22 +19,27 @@ export const authMiddleware = createMiddleware(async (c, next) => {
             throw new Error("Critical Configuration Error: AUTH0_DOMAIN is missing in backend .env");
         }
 
-		const JWKS = createRemoteJWKSet(
-			new URL(`https://${auth0Domain}/.well-known/jwks.json`),
-		);
+        // We use the direct /userinfo endpoint to validate the token.
+        // This is a foolproof strategy that works universally for both Opaque Tokens and JWTs
+        // without requiring the user to manually configure separate API Audiences.
+        const response = await fetch(`https://${auth0Domain}/userinfo`, {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
 
-		const { payload } = await jwtVerify(token, JWKS, {
-			issuer: `https://${auth0Domain}/`,
-            // Optional audience validation could be added here
-            // audience: process.env.AUTH0_AUDIENCE
-		});
+        if (!response.ok) {
+            return c.json({ error: "Unauthorized: Invalid or expired Auth0 token" }, 401);
+        }
 
+        const user = await response.json();
+        
         // Set the valid decoded user payload in context
-		c.set("user", payload);
+		c.set("user", user);
 		await next();
 
 	} catch (error: any) {
-		console.error("JWT Verification failed:", error.message);
+		console.error("Token Verification failed:", error.message);
 		return c.json({ error: "Unauthorized", details: error.message }, 401);
 	}
 });
