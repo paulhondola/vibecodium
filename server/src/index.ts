@@ -1,16 +1,18 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { ApiResponse } from "shared";
+import gitRoutes from "./routes/git";
+import projectsRoutes from "./routes/projects";
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://openrouter.ai/api/v1";
 const LLM_API_KEY = process.env.LLM_API_KEY ?? "";
 const LLM_MODEL = process.env.LLM_MODEL ?? "mistralai/devstral-2512:free";
 
 export const app = new Hono()
-
-.use(cors())
-
-.get("/", (c) => {
+	.use(cors())
+	.route("/api/git", gitRoutes)
+	.route("/api/projects", projectsRoutes)
+	.get("/", (c) => {
 	return c.text("Hello Hono!");
 })
 

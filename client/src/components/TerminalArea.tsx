@@ -3,6 +3,7 @@ import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
 import { Play, Square, Trash2, Terminal as TerminalIcon, Globe, RefreshCw, Lock } from "lucide-react";
+import { useAuth0 } from "@auth0/auth0-react";
 
 export default function TerminalArea() {
 	const terminalRef = useRef<HTMLDivElement>(null);
@@ -10,6 +11,7 @@ export default function TerminalArea() {
 	const [status, setStatus] = useState<"idle" | "running">("idle");
     const [activeTab, setActiveTab] = useState<"terminal" | "preview">("terminal");
     const [previewUrl, setPreviewUrl] = useState("localhost:3000");
+    const { getAccessTokenSilently } = useAuth0();
 
 	useEffect(() => {
 		if (!terminalRef.current || activeTab !== "terminal") return;
@@ -37,7 +39,7 @@ export default function TerminalArea() {
 
 		let currentLine = "";
 
-		term.onData((data) => {
+		term.onData(async (data) => {
 			if (status === "running") return; 
 
 			const code = data.charCodeAt(0);
@@ -48,11 +50,40 @@ export default function TerminalArea() {
 					term.clear();
 				} else if (currentLine.trim() === "bun run server/index.ts") {
                     handleRun();
+                } else if (currentLine.trim().startsWith("git ")) {
+                    setStatus("running");
+                    term.writeln("\x1b[90mExecuting git inside container...\x1b[0m");
+
+                    try {
+                        const token = await getAccessTokenSilently();
+                        const res = await fetch("http://localhost:3000/api/git", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${token}`
+                            },
+                            body: JSON.stringify({ command: currentLine.trim(), projectId: "mock-project-id" })
+                        });
+
+                        const resData = await res.json();
+                        
+                        if (!res.ok) {
+                            term.writeln(`\r\n\x1b[31mError:\x1b[0m ${resData.error || "Unknown server error"}`);
+                        } else {
+                            const lines = resData.output.split('\n');
+                            for (const line of lines) {
+                                term.writeln(`\r\n${line}`);
+                            }
+                        }
+                    } catch (err: any) {
+                        term.writeln(`\r\n\x1b[31mError executing git:\x1b[0m ${err.message}`);
+                    }
+                    setStatus("idle");
                 } else if (currentLine.trim() !== "") {
 					term.writeln(`\x1b[31mbash: ${currentLine}: mock command not found\x1b[0m`);
 				}
 				if (currentLine.trim() !== "bun run server/index.ts") {
-				    term.write("$ ");
+				    term.write("\r\n$ ");
                 }
 				currentLine = "";
 			} else if (code === 127) { // Backspace
