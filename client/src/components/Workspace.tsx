@@ -25,6 +25,10 @@ export default function Workspace({ onBack, projectId }: { onBack: () => void, p
     const [, setMyColor] = useState("#A855F7");
     const sessionIdRef = useRef(Math.random().toString(36).substring(2, 10));
 
+    // Remote editor events — set in onmessage, consumed by EditorArea via props
+    const [remoteCodeUpdate, setRemoteCodeUpdate] = useState<{ filePath: string; content: string; clientId: string } | null>(null);
+    const [remoteCursorUpdate, setRemoteCursorUpdate] = useState<{ filePath: string; clientId: string; color: string; userName: string; position: { lineNumber: number; column: number } } | null>(null);
+
     const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
     const myUserId = `${user?.sub || "anon"}_${sessionIdRef.current}`;
 
@@ -63,21 +67,21 @@ export default function Workspace({ onBack, projectId }: { onBack: () => void, p
         wsRef.current = ws;
 
         ws.onmessage = (e) => {
-            const data = JSON.parse(e.data);
+            let data: any;
+            try { data = JSON.parse(e.data); } catch { return; }
 
             if (data.type === "connected") {
-                // Server confirms connection and gives us our color + existing users
                 setMyColor(data.color);
                 setCollabUsers(data.users || []);
             } else if (data.type === "user_joined") {
-                setCollabUsers(prev => {
-                    if (prev.some(u => u.id === data.user.id)) return prev;
-                    return [...prev, data.user];
-                });
+                setCollabUsers(prev => prev.some(u => u.id === data.user.id) ? prev : [...prev, data.user]);
             } else if (data.type === "user_left") {
                 setCollabUsers(prev => prev.filter(u => u.id !== data.clientId));
+            } else if (data.type === "code_update") {
+                setRemoteCodeUpdate({ filePath: data.filePath, content: data.content, clientId: data.clientId });
+            } else if (data.type === "cursor_update") {
+                setRemoteCursorUpdate({ filePath: data.filePath, clientId: data.clientId, color: data.color, userName: data.userName, position: data.position });
             }
-            // code_update, cursor_update, file_focus_update are handled by EditorArea
         };
 
         ws.onclose = () => { wsRef.current = null; };
@@ -163,7 +167,13 @@ export default function Workspace({ onBack, projectId }: { onBack: () => void, p
 				{/* Center Area */}
 				<div className="flex-1 flex flex-col min-w-0 bg-[#09090b] relative">
 					<div className="flex-1 relative border-b border-[#27272a] overflow-hidden">
-						<EditorArea activeFile={activeFile} collabWs={wsRef} userId={myUserId} />
+						<EditorArea
+							activeFile={activeFile}
+							collabWs={wsRef}
+							userId={myUserId}
+							remoteCodeUpdate={remoteCodeUpdate}
+							remoteCursorUpdate={remoteCursorUpdate}
+						/>
 					</div>
 					<div className="h-[280px] shrink-0 overflow-hidden relative bg-[#09090b]">
 						<TerminalArea projectId={projectId} />

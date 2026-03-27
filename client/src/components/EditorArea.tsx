@@ -8,13 +8,18 @@ function safeCssId(id: string) {
     return id.replace(/[^a-zA-Z0-9]/g, "_");
 }
 
+interface RemoteCodeUpdate { filePath: string; content: string; clientId: string }
+interface RemoteCursorUpdate { filePath: string; clientId: string; color: string; userName: string; position: { lineNumber: number; column: number } }
+
 interface EditorAreaProps {
     activeFile: ProjectFile | null;
     collabWs?: MutableRefObject<WebSocket | null>;
     userId?: string;
+    remoteCodeUpdate?: RemoteCodeUpdate | null;
+    remoteCursorUpdate?: RemoteCursorUpdate | null;
 }
 
-export default function EditorArea({ activeFile, collabWs, userId }: EditorAreaProps) {
+export default function EditorArea({ activeFile, collabWs, userId, remoteCodeUpdate, remoteCursorUpdate }: EditorAreaProps) {
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 	const monaco = useMonaco();
 	const [showPending, setShowPending] = useState(false);
@@ -23,6 +28,9 @@ export default function EditorArea({ activeFile, collabWs, userId }: EditorAreaP
     const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
     const isRemoteUpdate = useRef(false);
     const injectedStyles = useRef<Set<string>>(new Set());
+    // Keep activeFile in a ref so cursor/send closures always see the current value
+    const activeFileRef = useRef(activeFile);
+    useEffect(() => { activeFileRef.current = activeFile; }, [activeFile]);
 
     // Sync code when active file changes
     useEffect(() => {
@@ -44,76 +52,53 @@ export default function EditorArea({ activeFile, collabWs, userId }: EditorAreaP
         }
     }, [activeFile, collabWs]);
 
-    // Listen for remote code_update + cursor_update
+    // Apply incoming remote code update
     useEffect(() => {
-        const ws = collabWs?.current;
-        if (!ws || !monaco || !editorRef.current || !activeFile) return;
+        if (!remoteCodeUpdate) return;
+        if (remoteCodeUpdate.clientId === userId) return;
+        if (remoteCodeUpdate.filePath !== activeFileRef.current?.path) return;
 
-        const handler = (e: MessageEvent) => {
-            let data: any;
-            try { data = JSON.parse(e.data); } catch { return; }
+        isRemoteUpdate.current = true;
+        setCode(remoteCodeUpdate.content);
+        if (activeFileRef.current) activeFileRef.current.content = remoteCodeUpdate.content;
+        setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+    }, [remoteCodeUpdate, userId]);
 
-            // Only process events for the currently viewed file
-            if (data.filePath && data.filePath !== activeFile.path) return;
+    // Apply incoming remote cursor update
+    useEffect(() => {
+        if (!remoteCursorUpdate || !monaco || !editorRef.current) return;
+        if (remoteCursorUpdate.clientId === userId) return;
+        if (remoteCursorUpdate.filePath !== activeFileRef.current?.path) return;
 
-            // ── Remote code change ──
-            if (data.type === "code_update" && data.clientId !== userId) {
-                isRemoteUpdate.current = true;
-                setCode(data.content);
-                // Also update the activeFile.content in-memory so switching away and back preserves it
-                if (activeFile) activeFile.content = data.content;
-                setTimeout(() => { isRemoteUpdate.current = false; }, 50);
-            }
+        const { clientId, color, userName, position } = remoteCursorUpdate;
+        const safeId = safeCssId(clientId);
 
-            // ── Remote cursor ──
-            if (data.type === "cursor_update" && data.clientId !== userId) {
-                const pos = data.position;
-                const safeId = safeCssId(data.clientId);
-                const color = data.color || "#A855F7";
-                const userName = data.userName || "Remote";
+        if (!decorationsRef.current) {
+            decorationsRef.current = editorRef.current.createDecorationsCollection([]);
+        }
 
-                if (!decorationsRef.current) {
-                    decorationsRef.current = editorRef.current!.createDecorationsCollection([]);
+        if (!injectedStyles.current.has(safeId)) {
+            const style = document.createElement("style");
+            style.id = `cursor-${safeId}`;
+            style.innerHTML = `
+                .rc-${safeId} { border-left: 2px solid ${color} !important; position: relative; z-index: 9; }
+                .rc-${safeId}::after {
+                    content: "${userName}";
+                    position: absolute; top: -18px; left: 0;
+                    background: ${color}; color: white;
+                    font-size: 10px; padding: 1px 5px; border-radius: 3px;
+                    white-space: nowrap; pointer-events: none; font-family: 'Inter', sans-serif;
                 }
+            `;
+            document.head.appendChild(style);
+            injectedStyles.current.add(safeId);
+        }
 
-                // Inject CSS for this remote cursor (once per user)
-                if (!injectedStyles.current.has(safeId)) {
-                    const style = document.createElement("style");
-                    style.id = `cursor-${safeId}`;
-                    style.innerHTML = `
-                        .rc-${safeId} {
-                            border-left: 2px solid ${color} !important;
-                            position: relative;
-                            z-index: 9;
-                        }
-                        .rc-${safeId}::after {
-                            content: "${userName}";
-                            position: absolute;
-                            top: -18px; left: 0;
-                            background: ${color};
-                            color: white;
-                            font-size: 10px;
-                            padding: 1px 5px;
-                            border-radius: 3px;
-                            white-space: nowrap;
-                            pointer-events: none;
-                            font-family: 'Inter', sans-serif;
-                        }
-                    `;
-                    document.head.appendChild(style);
-                    injectedStyles.current.add(safeId);
-                }
-
-                decorationsRef.current.set([{
-                    range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
-                    options: { className: `rc-${safeId}`, hoverMessage: { value: `**${userName}**` } }
-                }]);
-            }
-        };
-
-        ws.addEventListener("message", handler);
-        return () => ws.removeEventListener("message", handler);
-    }, [collabWs?.current, monaco, activeFile?.path, userId]);
+        decorationsRef.current.set([{
+            range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+            options: { className: `rc-${safeId}`, hoverMessage: { value: `**${userName}**` } }
+        }]);
+    }, [remoteCursorUpdate, userId, monaco]);
 
 	const handleEditorDidMount = (ed: editor.IStandaloneCodeEditor) => {
 		editorRef.current = ed;
