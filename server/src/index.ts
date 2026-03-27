@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import Docker from "dockerode";
+import { Writable } from "stream";
 import type { ApiResponse, ExecuteRequest, ExecuteResponse } from "shared";
 import gitRoutes from "./routes/git";
 import projectsRoutes from "./routes/projects";
@@ -34,6 +36,22 @@ async function pingProvider(baseURL: string, apiKey: string, model: string) {
 	const data = await res.json() as { choices: { message: { content: string } }[] };
 	return data.choices[0]?.message?.content?.trim();
 }
+
+const docker = new Docker();
+
+const LANGUAGE_IMAGES: Record<string, string> = {
+	python: "python:3.10-alpine",
+	node: "node:20-alpine",
+	"c++": "gcc:10.2.0",
+	rust: "rust:1.68.2-alpine"
+};
+
+const EXEC_COMMANDS: Record<string, () => string[]> = {
+	python: () => ["python", "-c", "import os\nexec(os.environ.get('USER_CODE', ''))"],
+	node: () => ["node", "-e", "eval(process.env.USER_CODE)"],
+	"c++": () => ["sh", "-c", "printenv USER_CODE > main.cpp && g++ main.cpp && ./a.out"],
+	rust: () => ["sh", "-c", "printenv USER_CODE > main.rs && rustc main.rs && ./main"] 
+};
 
 export const app = new Hono()
 	.use(cors())
@@ -118,52 +136,103 @@ export const app = new Hono()
 			}, 400);
 		}
 
-		// Piston v2 API payload
-		const payload = {
-			language: body.language,
-			version: body.version,
-			files: [
-				{
-					name: "main",
-					content: body.code,
-				}
-			],
-			compile_timeout: 10000,
-			run_timeout: 3000, // Important: 3s limit for infinite loops
-		};
+		const imageName = LANGUAGE_IMAGES[body.language];
+		const getCmd = EXEC_COMMANDS[body.language];
 
-		const PISTON_URL = process.env.PISTON_URL || "http://localhost:2000/api/v2/execute";
-		const response = await fetch(PISTON_URL, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(payload),
-		});
-
-		const result = await response.json() as any;
-
-		if (!response.ok) {
+		if (!imageName || !getCmd) {
 			return c.json<ExecuteResponse>({
 				success: false,
 				stdout: "",
 				stderr: "",
-				error: result.message || "Piston API Error",
-			}, response.status as any);
+				error: `Unsupported language mapping for: ${body.language}`
+			}, 400);
 		}
 
-		return c.json<ExecuteResponse>({
-			success: result.run.code === 0,
-			stdout: result.run.stdout,
-			stderr: result.run.stderr,
-			compileOutput: result.compile?.stderr || "",
+		const container = await docker.createContainer({
+			Image: imageName,
+			Cmd: getCmd(),
+			Env: [`USER_CODE=${body.code}`],
+			HostConfig: {
+				Memory: 256 * 1024 * 1024,
+				NetworkMode: "none",
+			},
+			Tty: false
 		});
+
+		try {
+			const stream = await container.attach({ stream: true, stdout: true, stderr: true });
+
+			let stdoutData = "";
+			let stderrData = "";
+
+			const stdoutStream = new Writable({
+				write(chunk, enc, next) {
+					stdoutData += chunk.toString();
+					next();
+				}
+			});
+
+			const stderrStream = new Writable({
+				write(chunk, enc, next) {
+					stderrData += chunk.toString();
+					next();
+				}
+			});
+
+			container.modem.demuxStream(stream, stdoutStream, stderrStream);
+
+			await container.start();
+
+			// Race between actual wait and our 3000ms timeout logic
+			const waitPromise = container.wait();
+			let timeoutTrigged = false;
+			const timeoutPromise = new Promise<{ StatusCode: number }>((resolve) => 
+				setTimeout(() => {
+					timeoutTrigged = true;
+					resolve({ StatusCode: 137 }); // Killed
+				}, 3000)
+			);
+			
+			const waitResult = await Promise.race([waitPromise, timeoutPromise]);
+			
+			if (timeoutTrigged) {
+				await container.kill().catch(() => {});
+				return c.json<ExecuteResponse>({
+					success: false,
+					stdout: stdoutData,
+					stderr: stderrData,
+					error: "Execution Timeout: Code ran longer than 3 seconds. Preemptively killed."
+				});
+			}
+
+			return c.json<ExecuteResponse>({
+				success: waitResult.StatusCode === 0,
+				stdout: stdoutData,
+				stderr: stderrData,
+				compileOutput: ""
+			});
+
+		} finally {
+			// Wipe container
+			await container.remove({ force: true }).catch(() => {});
+		}
 
 	} catch (err: any) {
 		console.error("Execute error:", err);
+		if (err.statusCode === 404) {
+			return c.json<ExecuteResponse>({
+				success: false,
+				stdout: "",
+				stderr: "",
+				error: "Docker image missing! Please run `docker pull python:3.10-alpine` (or requested language) on the host machine first.",
+			}, 500);
+		}
+		
 		return c.json<ExecuteResponse>({
 			success: false,
 			stdout: "",
 			stderr: "",
-			error: "Internal Server Error executing code",
+			error: "Internal Server Error executing code directly via Docker",
 		}, 500);
 	}
 });
