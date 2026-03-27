@@ -1,8 +1,5 @@
 import { Hono } from "hono";
 import { createBunWebSocket } from "hono/bun";
-import { db } from "../db";
-import { files } from "../db/schema";
-import { eq } from "drizzle-orm";
 
 const { upgradeWebSocket, websocket } = createBunWebSocket();
 
@@ -10,23 +7,16 @@ const { upgradeWebSocket, websocket } = createBunWebSocket();
 // Types
 // ──────────────────────────────────────────
 
-type Permission = 'pending' | 'edit' | 'readonly';
-type Role = 'host' | 'guest';
-
-interface CollabClient {
-    clientId: string;
-    userName: string;
-    role: Role;
-    permission: Permission;
+interface Client {
+    id: string;
+    name: string;
     color: string;
     currentFile: string | null;
-    ws: any; // Hono WSContext
+    ws: any;
 }
 
 interface Room {
-    projectId: string;
-    clients: Map<string, CollabClient>;
-    hostId: string | null;
+    clients: Map<string, Client>;
 }
 
 // ──────────────────────────────────────────
@@ -34,35 +24,19 @@ interface Room {
 // ──────────────────────────────────────────
 
 const rooms = new Map<string, Room>();
-const CURSOR_COLORS = ["#A855F7", "#3B82F6", "#10B981", "#F59E0B", "#EC4899", "#EF4444", "#14B8A6", "#F97316"];
+const COLORS = ["#A855F7", "#3B82F6", "#10B981", "#F59E0B", "#EC4899", "#EF4444", "#14B8A6", "#F97316"];
 
 // ──────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────
 
-function broadcast(room: Room, message: object, excludeClientId?: string) {
-    const json = JSON.stringify(message);
-    for (const [cid, client] of room.clients.entries()) {
-        if (cid === excludeClientId) continue;
-        if (client.permission === 'pending') continue;
-        try { client.ws.send(json); } catch (_) { /* dead socket */ }
+function broadcast(room: Room, msg: object, excludeId?: string) {
+    const json = JSON.stringify(msg);
+    for (const [id, client] of room.clients) {
+        if (id !== excludeId) {
+            try { client.ws.send(json); } catch (_) {}
+        }
     }
-}
-
-function sendTo(client: CollabClient, message: object) {
-    try { client.ws.send(JSON.stringify(message)); } catch (_) { /* dead socket */ }
-}
-
-function getAcceptedUsers(room: Room): { id: string; name: string; color: string; currentFile: string | null }[] {
-    return Array.from(room.clients.values())
-        .filter(c => c.permission !== 'pending')
-        .map(c => ({ id: c.clientId, name: c.userName, color: c.color, currentFile: c.currentFile }));
-}
-
-async function getProjectFiles(projectId: string) {
-    return db.select({ id: files.id, path: files.path, content: files.content })
-        .from(files)
-        .where(eq(files.projectId, projectId));
 }
 
 // ──────────────────────────────────────────
@@ -70,54 +44,41 @@ async function getProjectFiles(projectId: string) {
 // ──────────────────────────────────────────
 
 export function attachCollaborationWS(app: Hono) {
+
     app.get("/ws/collab/:projectId", upgradeWebSocket((c) => {
-        const rawProjectId = c.req.param("projectId");
-        const rawClientId = c.req.query("clientId");
-        const rawUserName = c.req.query("userName");
-
-        if (!rawProjectId || !rawClientId || !rawUserName) {
-            console.error("[WS] Missing metadata for WebSocket connection");
-            return {};
-        }
-
-        const projectId: string = rawProjectId;
-        const clientId: string = rawClientId;
-        const userName: string = rawUserName;
+        const projectId = c.req.param("projectId")!;
+        const clientId = c.req.query("userId") || c.req.query("clientId") || "anon";
+        const userName = c.req.query("userName") || "Anonymous";
 
         return {
             onOpen(_event, ws) {
                 let room = rooms.get(projectId);
                 if (!room) {
-                    room = { projectId, clients: new Map(), hostId: null };
+                    room = { clients: new Map() };
                     rooms.set(projectId, room);
                 }
 
-                const isFirstOrNoHost = room.clients.size === 0 || !room.hostId;
-                const role: Role = isFirstOrNoHost ? 'host' : 'guest';
-                const permission: Permission = isFirstOrNoHost ? 'edit' : 'pending';
-                const color = CURSOR_COLORS[room.clients.size % CURSOR_COLORS.length]!;
-
-                const client: CollabClient = { clientId, userName, role, permission, color, currentFile: null, ws };
+                const color = COLORS[room.clients.size % COLORS.length]!;
+                const client: Client = { id: clientId, name: userName, color, currentFile: null, ws };
                 room.clients.set(clientId, client);
 
-                if (role === 'host') {
-                    room.hostId = clientId;
-                    // Host is automatically accepted — send room_status
-                    sendTo(client, { type: "room_status", status: "host", clientId, color });
-                    console.log(`[WS] Host ${userName} (${clientId}) created room ${projectId}`);
-                } else {
-                    // Guest in pending state — notify the Host
-                    sendTo(client, { type: "room_status", status: "pending" });
+                // Tell this client their info
+                ws.send(JSON.stringify({
+                    type: "connected",
+                    clientId,
+                    color,
+                    users: Array.from(room.clients.values())
+                        .filter(c => c.id !== clientId)
+                        .map(c => ({ id: c.id, name: c.name, color: c.color, currentFile: c.currentFile }))
+                }));
 
-                    const host = room.hostId ? room.clients.get(room.hostId) : null;
-                    if (host) {
-                        sendTo(host, {
-                            type: "join_request",
-                            user: { id: clientId, name: userName }
-                        });
-                    }
-                    console.log(`[WS] Guest ${userName} (${clientId}) waiting in room ${projectId}`);
-                }
+                // Tell everyone else a new user joined
+                broadcast(room, {
+                    type: "user_joined",
+                    user: { id: clientId, name: userName, color }
+                }, clientId);
+
+                console.log(`[WS] ${userName} joined room ${projectId} (${room.clients.size} users)`);
             },
 
             onMessage(event, _ws) {
@@ -125,131 +86,106 @@ export function attachCollaborationWS(app: Hono) {
                     const data = JSON.parse(event.data as string);
                     const room = rooms.get(projectId);
                     if (!room) return;
-
                     const sender = room.clients.get(clientId);
                     if (!sender) return;
 
-                    // ── 1. HOST PERMISSION RESPONSE ──
-                    if (data.type === "join_response" && sender.role === 'host') {
-                        const target = room.clients.get(data.targetUserId);
-                        if (!target || target.permission !== 'pending') return;
-
-                        if (data.permission === 'reject') {
-                            sendTo(target, { type: "join_rejected" });
-                            target.ws.close();
-                            room.clients.delete(data.targetUserId);
-                            console.log(`[WS] Host rejected ${data.targetUserId}`);
-                        } else {
-                            const grantedPermission: Permission = data.permission === 'edit' ? 'edit' : 'readonly';
-                            target.permission = grantedPermission;
-
-                            // Send sync_workspace to the newly accepted guest
-                            getProjectFiles(projectId).then(projectFiles => {
-                                sendTo(target, {
-                                    type: "join_granted",
-                                    permission: grantedPermission,
-                                    currentUsers: getAcceptedUsers(room!),
-                                    files: projectFiles
-                                });
-
-                                // Broadcast to everyone else that a new user joined
-                                broadcast(room!, {
-                                    type: "user_joined",
-                                    user: { id: target.clientId, name: target.userName, color: target.color }
-                                }, target.clientId);
-                            });
-
-                            console.log(`[WS] Host granted '${grantedPermission}' to ${target.userName}`);
-                        }
+                    // ── CODE CHANGE ──
+                    if (data.type === "code_change") {
+                        broadcast(room, {
+                            type: "code_update",
+                            clientId,
+                            filePath: data.filePath,
+                            content: data.content
+                        }, clientId);
                         return;
                     }
 
-                    // ── 2. BLOCK PENDING USERS ──
-                    if (sender.permission === 'pending') return;
+                    // ── CURSOR MOVE ──
+                    if (data.type === "cursor_move") {
+                        broadcast(room, {
+                            type: "cursor_update",
+                            clientId,
+                            userName: sender.name,
+                            color: sender.color,
+                            filePath: data.filePath,
+                            position: data.position
+                        }, clientId);
+                        return;
+                    }
 
-                    // ── 3. FILE FOCUS EVENT ──
+                    // ── FILE FOCUS ──
                     if (data.type === "file_focus") {
                         sender.currentFile = data.filePath;
                         broadcast(room, {
                             type: "file_focus_update",
-                            clientId: sender.clientId,
+                            clientId,
                             filePath: data.filePath
-                        }, sender.clientId);
-                        return;
-                    }
-
-                    // ── 4. CURSOR MOVE ──
-                    if (data.type === "cursor_move") {
-                        broadcast(room, {
-                            type: "cursor_update",
-                            clientId: sender.clientId,
-                            userName: sender.userName,
-                            color: sender.color,
-                            position: data.position,
-                            filePath: data.filePath
-                        }, sender.clientId);
-                        return;
-                    }
-
-                    // ── 5. CODE CHANGE (BACKEND ENFORCEMENT) ──
-                    if (data.type === "code_change") {
-                        // SILENTLY DROP if sender is readonly
-                        if (sender.permission === 'readonly') {
-                            console.log(`[WS] Dropped code_change from readonly user ${sender.userName}`);
-                            return;
-                        }
-
-                        broadcast(room, {
-                            type: "code_update",
-                            clientId: sender.clientId,
-                            filePath: data.filePath,
-                            content: data.content
-                        }, sender.clientId);
+                        }, clientId);
                         return;
                     }
 
                 } catch (e) {
-                    console.error("[WS] Message parse error:", e);
+                    console.error("[WS] Parse error:", e);
                 }
             },
 
-            onClose(_event, ws) {
+            onClose(_event, _ws) {
                 const room = rooms.get(projectId);
                 if (!room) return;
 
-                // Find which client disconnected by matching ws reference
-                let disconnectedId: string | null = null;
-                for (const [cid, client] of room.clients.entries()) {
-                    if (client.ws === ws) { disconnectedId = cid; break; }
-                }
-
-                if (!disconnectedId) return;
-
-                room.clients.delete(disconnectedId);
-                broadcast(room, { type: "user_left", clientId: disconnectedId });
-                console.log(`[WS] Client ${disconnectedId} left room ${projectId}`);
-
-                // Re-assign host if host leaves
-                if (room.hostId === disconnectedId) {
-                    const nextHost = Array.from(room.clients.values()).find(c => c.permission === 'edit');
-                    if (nextHost) {
-                        room.hostId = nextHost.clientId;
-                        nextHost.role = 'host';
-                        sendTo(nextHost, { type: "room_status", status: "host", clientId: nextHost.clientId, color: nextHost.color });
-                        broadcast(room, { type: "host_changed", clientId: nextHost.clientId, userName: nextHost.userName });
-                        console.log(`[WS] Host reassigned to ${nextHost.userName}`);
-                    } else {
-                        room.hostId = null;
-                    }
-                }
+                room.clients.delete(clientId);
+                broadcast(room, { type: "user_left", clientId });
+                console.log(`[WS] ${userName} left room ${projectId} (${room.clients.size} remaining)`);
 
                 if (room.clients.size === 0) {
                     rooms.delete(projectId);
-                    console.log(`[WS] Room ${projectId} destroyed (empty)`);
+                    console.log(`[WS] Room ${projectId} destroyed`);
                 }
             }
         };
     }));
+
+    // ── Terminal WS (node-pty) ──
+    let pty: any = null;
+    try { pty = require("node-pty"); } catch (_) { console.warn("[WS] node-pty not available"); }
+
+    const terminals = new Map<string, { pty: any, clients: Set<any> }>();
+
+    if (pty) {
+        app.get("/ws/terminal", upgradeWebSocket((c) => {
+            const roomId = c.req.query("roomId") || "default";
+            return {
+                onOpen(_event, ws) {
+                    let room = terminals.get(roomId);
+                    if (!room) {
+                        const ptyProcess = pty.spawn(process.env.SHELL || "bash", [], {
+                            name: "xterm-color", cols: 80, rows: 30,
+                            cwd: process.cwd(), env: process.env as any
+                        });
+                        room = { pty: ptyProcess, clients: new Set() };
+                        terminals.set(roomId, room);
+                        ptyProcess.onData((data: string) => {
+                            room!.clients.forEach((c: any) => { try { c.send(data); } catch (_) {} });
+                        });
+                    }
+                    room.clients.add(ws);
+                    (ws as any).roomId = roomId;
+                },
+                onMessage(event, ws) {
+                    const room = terminals.get((ws as any).roomId);
+                    if (room && typeof event.data === "string") room.pty.write(event.data);
+                },
+                onClose(_event, ws) {
+                    const rid = (ws as any).roomId;
+                    const room = terminals.get(rid);
+                    if (room) {
+                        room.clients.delete(ws);
+                        if (room.clients.size === 0) { room.pty.kill(); terminals.delete(rid); }
+                    }
+                }
+            };
+        }));
+    }
 
     return websocket;
 }

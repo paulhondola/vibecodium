@@ -11,77 +11,99 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
 	const [status, setStatus] = useState<"idle" | "running">("idle");
     const [activeTab, setActiveTab] = useState<"terminal" | "preview">("terminal");
     const [previewUrl, setPreviewUrl] = useState("localhost:3000");
+    const [wsConnected, setWsConnected] = useState(false);
 
 	useEffect(() => {
 		if (!terminalRef.current || activeTab !== "terminal") return;
 
-		const term = new Terminal({
-			theme: {
-				background: "#09090b",
-				foreground: "#d4d4d4",
-				cursor: "#22d3ee",
-				selectionBackground: "#0891b2",
-			},
-			fontFamily: "Menlo, Monaco, 'Courier New', monospace",
-			fontSize: 13,
-			cursorBlink: true,
-		});
+        // Small delay to ensure the container is actually rendered and has dimensions
+        const initTimeout = setTimeout(() => {
+            if (!terminalRef.current) return;
 
-		const fitAddon = new FitAddon();
-		term.loadAddon(fitAddon);
+            const term = new Terminal({
+                theme: {
+                    background: "#09090b",
+                    foreground: "#d4d4d4",
+                    cursor: "#22d3ee",
+                    selectionBackground: "#0891b2",
+                },
+                fontFamily: "Menlo, Monaco, 'Courier New', monospace",
+                fontSize: 13,
+                cursorBlink: true,
+            });
 
-		let disposed = false;
-		let disposableData: ReturnType<typeof term.onData> | null = null;
-		let ws: WebSocket | null = null;
+            const fitAddon = new FitAddon();
+            term.loadAddon(fitAddon);
+            term.open(terminalRef.current!);
 
-		// Defer open() until after layout so the renderer has real dimensions
-		const rafId = requestAnimationFrame(() => {
-			if (disposed || !terminalRef.current) return;
+            // Delay fit() so the DOM has had time to layout
+            requestAnimationFrame(() => {
+                try { fitAddon.fit(); } catch (_) {}
+            });
 
-			term.open(terminalRef.current);
-			try { fitAddon.fit(); } catch (_) {}
-			term.writeln("\x1b[1;36m➜\x1b[0m \x1b[1;32mConnecting to server...\x1b[0m");
+            termInstance.current = term;
+            term.writeln("\x1b[1;36m➜\x1b[0m \x1b[90mTerminal ready. Connecting...\x1b[0m");
 
-			ws = new WebSocket(`ws://localhost:3000/ws/terminal?roomId=${projectId || "default"}`);
-			wsInstance.current = ws;
+            // Try connecting WS — but don't crash if server doesn't support it
+            try {
+                const ws = new WebSocket(`ws://localhost:3000/ws/terminal?roomId=${projectId || "default"}`);
+                wsInstance.current = ws;
 
-			ws.onopen = () => { term.clear(); };
+                ws.onopen = () => {
+                    setWsConnected(true);
+                    term.clear();
+                };
 
-			ws.onmessage = (event) => {
-				if (typeof event.data === "string") {
-					term.write(event.data);
-				} else if (event.data instanceof Blob) {
-					const reader = new FileReader();
-					reader.onload = () => {
-						if (typeof reader.result === "string") {
-							term.write(reader.result);
-						} else if (reader.result instanceof ArrayBuffer) {
-							term.write(new Uint8Array(reader.result));
-						}
-					};
-					reader.readAsArrayBuffer(event.data);
-				}
-			};
+                ws.onmessage = (event) => {
+                    if (typeof event.data === "string") {
+                        term.write(event.data);
+                    } else if (event.data instanceof Blob) {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            if (typeof reader.result === "string") term.write(reader.result);
+                            else if (reader.result instanceof ArrayBuffer) term.write(new Uint8Array(reader.result));
+                        };
+                        reader.readAsArrayBuffer(event.data);
+                    }
+                };
 
-			disposableData = term.onData((data) => {
-				if (ws?.readyState === WebSocket.OPEN) ws.send(data);
-			});
+                ws.onerror = () => {
+                    term.writeln("\x1b[33m⚠ Terminal WS unavailable — node-pty not installed on server.\x1b[0m");
+                    term.writeln("\x1b[90mYou can still use the editor for collaboration.\x1b[0m");
+                    setWsConnected(false);
+                };
 
-			termInstance.current = term;
-		});
+                ws.onclose = () => { setWsConnected(false); };
 
-		const handleResize = () => { try { fitAddon.fit(); } catch (_) {} };
-		window.addEventListener("resize", handleResize);
+                const disposableData = term.onData((data) => {
+                    if (ws.readyState === WebSocket.OPEN) ws.send(data);
+                });
+
+                const handleResize = () => {
+                    try { fitAddon.fit(); } catch (_) {}
+                };
+                window.addEventListener("resize", handleResize);
+
+                // Store cleanup refs
+                (term as any)._cleanup = () => {
+                    window.removeEventListener("resize", handleResize);
+                    disposableData.dispose();
+                    ws.close();
+                    term.dispose();
+                };
+            } catch (_) {
+                term.writeln("\x1b[33m⚠ Could not connect to terminal server.\x1b[0m");
+            }
+        }, 50); // 50ms delay for DOM readiness
 
 		return () => {
-			disposed = true;
-			cancelAnimationFrame(rafId);
-			window.removeEventListener("resize", handleResize);
-			disposableData?.dispose();
-			ws?.close();
-			term.dispose();
-			wsInstance.current = null;
-			termInstance.current = null;
+            clearTimeout(initTimeout);
+            if (termInstance.current) {
+                const cleanup = (termInstance.current as any)._cleanup;
+                if (cleanup) cleanup();
+                else termInstance.current.dispose();
+                termInstance.current = null;
+            }
 		};
 	}, [activeTab, projectId]);
 
@@ -89,11 +111,7 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
         if (!wsInstance.current || wsInstance.current.readyState !== WebSocket.OPEN) return;
         wsInstance.current.send("bun run server/index.ts\r");
         setStatus("running");
-        
-        setTimeout(() => {
-            setActiveTab("preview"); // Auto-switch to preview on run
-            setStatus("idle");
-        }, 1200);
+        setTimeout(() => { setActiveTab("preview"); setStatus("idle"); }, 1200);
     };
 
     const handleClear = () => {
@@ -103,16 +121,15 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
 
 	return (
 		<div className="flex flex-col h-full bg-[#09090b] text-white">
-			{/* Shared Tabs Toolbar */}
-			<div className="flex items-center justify-between px-2 bg-[#18181b] border-b border-[#27272a] shrink-0 cursor-row-resize">
+			<div className="flex items-center justify-between px-2 bg-[#18181b] border-b border-[#27272a] shrink-0">
 				<div className="flex items-center gap-1">
-                    <button 
+                    <button
                         onClick={() => setActiveTab("terminal")}
                         className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors text-xs font-medium uppercase tracking-wider ${activeTab === "terminal" ? 'border-cyan-400 text-cyan-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
                     >
                         <TerminalIcon size={14} /> Terminal
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveTab("preview")}
                         className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors text-xs font-medium uppercase tracking-wider ${activeTab === "preview" ? 'border-cyan-400 text-cyan-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
                     >
@@ -122,29 +139,26 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
                 <div className="flex gap-2">
                     {activeTab === "terminal" && (
                         <>
-                            <button onClick={handleRun} disabled={status === "running"} className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-colors disabled:opacity-50">
+                            <button onClick={handleRun} disabled={status === "running" || !wsConnected} className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-colors disabled:opacity-50">
                                 {status === "running" ? <Square size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" />}
                                 {status === "running" ? "Stop" : "Run Server"}
                             </button>
-                            <button onClick={handleClear} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-[#27272a] transition-colors mr-2">
+                            <button onClick={handleClear} disabled={!wsConnected} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-[#27272a] transition-colors mr-2 disabled:opacity-50">
                                 <Trash2 size={12} />
                             </button>
                         </>
                     )}
                 </div>
 			</div>
-			
-            {/* Terminal View */}
+
             {activeTab === "terminal" && (
                 <div className="flex-1 w-full pl-2 pb-2 relative">
                     <div ref={terminalRef} className="absolute inset-0 pt-2" />
                 </div>
             )}
 
-            {/* Live Preview View */}
             {activeTab === "preview" && (
                 <div className="flex-1 w-full flex flex-col bg-white overflow-hidden text-black relative">
-                    {/* Simulated Browser Address Bar */}
                     <div className="h-10 bg-[#f1f5f9] border-b border-[#cbd5e1] flex items-center px-4 gap-4 shrink-0 shadow-sm">
                         <div className="flex gap-1.5">
                             <div className="w-3 h-3 rounded-full bg-[#f87171]"></div>
@@ -153,7 +167,7 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
                         </div>
                         <div className="flex-1 max-w-xl mx-auto flex items-center bg-white border border-[#e2e8f0] rounded-md h-7 px-3 gap-2 shadow-inner">
                             <Lock size={12} className="text-gray-400" />
-                            <input 
+                            <input
                                 type="text"
                                 value={previewUrl}
                                 onChange={(e) => setPreviewUrl(e.target.value)}
@@ -162,7 +176,6 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
                             <RefreshCw size={12} className="text-gray-400 cursor-pointer hover:text-gray-600" />
                         </div>
                     </div>
-                    {/* Simulated IFrame Content */}
                     <div className="flex-1 bg-white p-8 overflow-y-auto w-full flex items-center justify-center">
                         <div className="text-center">
                             <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500 mb-4">Hello from Bun!</h2>
