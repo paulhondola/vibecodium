@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FileCode, FileJson, FileText, Folder, Plus, Trash2 } from "lucide-react";
+import ImportModal from "./ImportModal";
 
 export interface MockFile {
 	id: string;
@@ -21,6 +22,7 @@ const initialFiles: MockFile[] = [
 export default function FileExplorer() {
 	const [activeId, setActiveId] = useState<string>("4");
 	const [files] = useState<MockFile[]>(initialFiles);
+	const [isImportModalOpen, setImportModalOpen] = useState(false);
 
 	const getIcon = (file: MockFile) => {
 		if (file.type === "directory") return <Folder size={16} className="text-blue-400" />;
@@ -39,7 +41,11 @@ export default function FileExplorer() {
 			<div className="flex items-center justify-between p-3 border-b border-[#27272a] shrink-0">
 				<h2 className="font-semibold text-xs tracking-wider uppercase text-gray-400">Explorer</h2>
 				<div className="flex gap-2">
-					<button className="p-1 hover:bg-[#18181b] rounded transition-colors text-gray-400 hover:text-white">
+					<button 
+                        onClick={() => setImportModalOpen(true)}
+                        className="p-1 hover:bg-[#18181b] rounded transition-colors text-gray-400 hover:text-white"
+                        title="Import from GitHub"
+                    >
 						<Plus size={14} />
 					</button>
                     <button className="p-1 hover:bg-[#18181b] rounded transition-colors text-gray-400 hover:text-red-400">
@@ -47,6 +53,7 @@ export default function FileExplorer() {
 					</button>
 				</div>
 			</div>
+			
 			<div className="flex-1 overflow-y-auto py-2">
 				{files.map((file) => (
 					<div
@@ -64,6 +71,12 @@ export default function FileExplorer() {
 					</div>
 				))}
 			</div>
+
+            <ImportModal 
+                isOpen={isImportModalOpen} 
+                onClose={() => setImportModalOpen(false)} 
+                onSuccess={(projectId, path) => console.log("Imported successfully!", projectId, path)} 
+            />
 		</div>
 	);
 }
