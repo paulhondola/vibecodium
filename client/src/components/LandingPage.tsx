@@ -47,40 +47,6 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 				</div>
 			</nav>
 
-			{/* Sidebar */}
-			<aside className="hidden md:flex fixed left-0 top-14 h-[calc(100vh-88px)] w-16 glass-card rounded-none border-y-0 border-l-0 flex-col items-center py-6 space-y-8 z-40">
-				<div className="flex flex-col items-center space-y-8 w-full">
-					<button className="relative group text-[#A855F7]">
-						<span className="material-symbols-outlined text-2xl">folder</span>
-						<div className="absolute -right-2 top-0 w-1 h-6 bg-[#A855F7] rounded-full"></div>
-					</button>
-					<button className="text-slate-500 hover:text-[#3B82F6] transition-all transform hover:scale-110">
-						<span className="material-symbols-outlined text-2xl">search</span>
-					</button>
-					<button className="text-slate-500 hover:text-[#3B82F6] transition-all transform hover:scale-110">
-						<span className="material-symbols-outlined text-2xl">account_tree</span>
-					</button>
-					<button className="text-slate-500 hover:text-[#3B82F6] transition-all transform hover:scale-110">
-						<span className="material-symbols-outlined text-2xl">extension</span>
-					</button>
-					<button className="text-slate-500 hover:text-[#A855F7] transition-all transform hover:scale-110">
-						<span className="material-symbols-outlined text-2xl sentient-ai">smart_toy</span>
-					</button>
-				</div>
-				<div className="mt-auto flex flex-col items-center space-y-6 w-full">
-					<button className="text-slate-600 hover:text-slate-300 transition-all">
-						<span className="material-symbols-outlined">settings</span>
-					</button>
-					<div className="w-8 h-8 rounded-full border border-[rgba(168,85,247,0.3)] p-0.5 animate-pulse">
-						<img
-							alt="User"
-							className="w-full h-full rounded-full object-cover"
-							src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2q2NOe8rpubJsKNRyuGl5bx1jOwXvU5Phzd-WY9zbU3xopgRGK80DPolznn8NUaxUKiMzhnFcRAXyqNJacEYeSUTochygQDU0tl7hBC1DCpMefGJJB9hRTOrbcRRIt-qerNfm98JiUIErglxBmQdAKQjGlA9nzThCOGSRKBKijO1EmcuFZY4G23ebVcGfgSYYIj3nacMwKwbMYtdU8QzqVDo05t9Bw1yK8fA9_Y6iYZXHcMKAmC-IQt3kOQDqTtFkf0NBJ3QxNCxO"
-						/>
-					</div>
-				</div>
-			</aside>
-
 			<main className="pl-16 pt-14 pb-8 overflow-x-hidden">
 				{/* Cinematic Hero Section */}
 				<section className="relative min-h-[90vh] flex flex-col items-center justify-center px-6 warp-speed">
@@ -398,33 +364,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 						</div>
 					</div>
 				</section>
-
-				{/* Final CTA */}
-				<section className="py-32 px-6">
-					<div className="max-w-6xl mx-auto rounded-[3rem] glass-card p-16 md:p-32 text-center relative overflow-hidden border-[rgba(168,85,247,0.2)] group hover:border-[rgba(168,85,247,0.5)]">
-						<div className="absolute inset-0 bg-gradient-to-br from-[rgba(168,85,247,0.1)] via-[#02040a] to-[rgba(59,130,246,0.1)] -z-10"></div>
-						<div className="absolute -top-1/2 -left-1/2 w-full h-full bg-[rgba(168,85,247,0.1)] blur-[150px] animate-pulse-slow"></div>
-						<h2 className="text-6xl md:text-8xl font-['Space_Grotesk'] font-bold mb-10 tracking-tighter text-glow">
-							Ready to Enter <br/>
-							<span className="text-[#A855F7]">The Void?</span>
-						</h2>
-						<p className="text-2xl text-slate-400 max-w-2xl mx-auto mb-16 font-light">
-							Join 100,000+ architects building the next generation of digital infrastructure.
-						</p>
-						<div className="flex flex-wrap justify-center gap-10 relative z-10">
-							<button
-								onClick={() => onEnter()}
-								className="px-14 py-6 bg-[#A855F7] text-[#02040a] font-['Space_Grotesk'] font-black text-lg rounded-2xl shadow-[0_0_50px_rgba(168,85,247,0.3)] hover:scale-105 transition-all uppercase tracking-[0.2em]"
-							>
-								Create Neural Link
-							</button>
-							<button className="px-14 py-6 glass-card text-[#f8fafc] font-['Space_Grotesk'] font-black text-lg rounded-2xl hover:bg-white/10 transition-all uppercase tracking-[0.2em] border-[rgba(168,85,247,0.2)]">
-								Talk to Sales
-							</button>
-						</div>
-					</div>
-				</section>
-                
+				
                 <ImportModal 
                     isOpen={isImportModalOpen} 
                     onClose={() => setImportModalOpen(false)} 
