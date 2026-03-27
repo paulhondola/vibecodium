@@ -24,6 +24,15 @@ function Index() {
         }
     }, [view, isLoading, isAuthenticated, navigate]);
 
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const projectParam = params.get("project");
+        if (projectParam && view === "landing") {
+            setProjectId(projectParam);
+            setView("app");
+        }
+    }, [view]);
+
 	if (view === "landing") {
 		return <LandingPage onEnter={(pid?: string) => {
             if (pid) {
