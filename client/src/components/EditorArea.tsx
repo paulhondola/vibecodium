@@ -3,38 +3,150 @@ import MonacoEditor, { useMonaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { Bot, Check, X, Sparkles } from "lucide-react";
 import type { ProjectFile } from "./Workspace";
+import { useCollabSocket } from "../contexts/WebSocketProvider";
+
+// CSS-safe class name from clientId (remove special chars)
+function safeCssId(id: string) {
+    return id.replace(/[^a-zA-Z0-9]/g, "_");
+}
 
 export default function EditorArea({ activeFile }: { activeFile: ProjectFile | null }) {
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 	const monaco = useMonaco();
 	const [showPending, setShowPending] = useState(false);
 	const [code, setCode] = useState("");
+    
+    const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
+    const isRemoteUpdate = useRef(false);
+    const injectedStyles = useRef<Set<string>>(new Set());
 
+    const { ws, myPermission, myClientId, sendMessage, connectedUsers } = useCollabSocket();
+
+    // Update code when activeFile changes
     useEffect(() => {
         if (activeFile) {
             setCode(activeFile.content || "");
             setShowPending(false);
+            decorationsRef.current?.clear();
         } else {
             setCode("");
         }
     }, [activeFile]);
 
-	const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor) => {
-		editorRef.current = editor;
+    // Emit file_focus when switching files
+    useEffect(() => {
+        if (activeFile) {
+            sendMessage({ type: "file_focus", filePath: activeFile.path });
+        }
+    }, [activeFile, sendMessage]);
+
+    // WebSocket listener for code_update + cursor_update
+    useEffect(() => {
+        if (!ws || !monaco || !editorRef.current || !activeFile) return;
+
+        const handleMessage = (e: MessageEvent) => {
+            const data = JSON.parse(e.data);
+
+            // ── CODE UPDATE ──
+            if (data.type === "code_update" && data.clientId !== myClientId && data.filePath === activeFile.path) {
+                isRemoteUpdate.current = true;
+                setCode(data.content);
+                setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+            }
+
+            // ── CURSOR UPDATE ──
+            if (data.type === "cursor_update" && data.clientId !== myClientId && data.filePath === activeFile.path) {
+                const pos = data.position;
+                const safeId = safeCssId(data.clientId);
+                const color = data.color || "#A855F7";
+                const userName = data.userName || "Remote";
+
+                if (!decorationsRef.current) {
+                    decorationsRef.current = editorRef.current!.createDecorationsCollection([]);
+                }
+                
+                // Inject cursor CSS per unique remote user
+                if (!injectedStyles.current.has(safeId)) {
+                    const style = document.createElement("style");
+                    style.id = `cursor-${safeId}`;
+                    style.innerHTML = `
+                        .rc-${safeId} {
+                            border-left: 2px solid ${color} !important;
+                            position: relative;
+                            z-index: 9;
+                        }
+                        .rc-${safeId}::after {
+                            content: "${userName}";
+                            position: absolute;
+                            top: -18px;
+                            left: 0;
+                            background: ${color};
+                            color: white;
+                            font-size: 10px;
+                            padding: 1px 5px;
+                            border-radius: 3px;
+                            white-space: nowrap;
+                            pointer-events: none;
+                            font-family: 'Inter', sans-serif;
+                        }
+                    `;
+                    document.head.appendChild(style);
+                    injectedStyles.current.add(safeId);
+                }
+
+                decorationsRef.current.set([{
+                    range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+                    options: {
+                        className: `rc-${safeId}`,
+                        hoverMessage: { value: `**${userName}**` }
+                    }
+                }]);
+            }
+        };
+
+        ws.addEventListener("message", handleMessage);
+        return () => ws.removeEventListener("message", handleMessage);
+    }, [ws, monaco, activeFile, myClientId]);
+
+	const handleEditorDidMount = (ed: editor.IStandaloneCodeEditor) => {
+		editorRef.current = ed;
+        decorationsRef.current = ed.createDecorationsCollection([]);
+
+        // Cursor broadcast
+        ed.onDidChangeCursorPosition((e) => {
+            if (activeFile) {
+                sendMessage({
+                    type: "cursor_move",
+                    filePath: activeFile.path,
+                    position: { lineNumber: e.position.lineNumber, column: e.position.column }
+                });
+            }
+        });
 	};
+
+    // Code change handler with echo prevention
+    const handleCodeChange = (val: string | undefined) => {
+        const text = val || "";
+        setCode(text);
+        
+        if (isRemoteUpdate.current) return;
+
+        if (activeFile) {
+            sendMessage({
+                type: "code_change",
+                filePath: activeFile.path,
+                content: text
+            });
+        }
+    };
 
 	const simulateAIEdit = () => {
 		if (!editorRef.current || !monaco || !activeFile) return;
 		setShowPending(true);
 	};
 
-	const acceptEdit = () => {
-		setShowPending(false);
-	};
-
-	const rejectEdit = () => {
-		setShowPending(false);
-	};
+	const acceptEdit = () => setShowPending(false);
+	const rejectEdit = () => setShowPending(false);
 
     const language = activeFile?.path.endsWith(".tsx") || activeFile?.path.endsWith(".ts") 
         ? "typescript" 
@@ -42,7 +154,13 @@ export default function EditorArea({ activeFile }: { activeFile: ProjectFile | n
         ? "json" 
         : activeFile?.path.endsWith(".md") 
         ? "markdown" 
+        : activeFile?.path.endsWith(".css")
+        ? "css"
+        : activeFile?.path.endsWith(".html")
+        ? "html"
         : "javascript";
+
+    const isReadOnly = myPermission === "readonly";
 
 	return (
 		<div className="flex flex-col h-full bg-[#09090b] text-[#c9d1d9] relative">
@@ -53,8 +171,24 @@ export default function EditorArea({ activeFile }: { activeFile: ProjectFile | n
 						<span className="text-yellow-400 font-bold">JS</span>
                         {activeFile ? activeFile.path.split("/").pop() : "Welcome"}
 					</div>
+
+                    {/* Users viewing same file */}
+                    {activeFile && connectedUsers.filter(u => u.currentFile === activeFile.path).length > 0 && (
+                        <div className="flex -space-x-1 ml-3">
+                            {connectedUsers.filter(u => u.currentFile === activeFile.path).map(u => (
+                                <div key={u.id} title={u.name} className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white border border-[#09090b]" style={{ backgroundColor: u.color }}>
+                                    {u.name.substring(0, 2).toUpperCase()}
+                                </div>
+                            ))}
+                        </div>
+                    )}
 				</div>
-                <div className="flex gap-2 mr-2">
+                <div className="flex gap-2 mr-2 items-center">
+                    {isReadOnly && (
+                        <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
+                            Read Only
+                        </span>
+                    )}
                     <button 
                         onClick={simulateAIEdit}
                         className="flex items-center gap-1.5 px-3 py-[3px] bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded text-xs font-semibold shadow-sm transition-all"
@@ -65,7 +199,7 @@ export default function EditorArea({ activeFile }: { activeFile: ProjectFile | n
                 </div>
 			</div>
 
-			{/* Monaco Container */}
+			{/* Monaco Editor */}
 			<div className="flex-1 relative">
                 {activeFile ? (
                     <MonacoEditor
@@ -73,7 +207,7 @@ export default function EditorArea({ activeFile }: { activeFile: ProjectFile | n
                         language={language}
                         theme="vs-dark"
                         value={code}
-                        onChange={(val) => setCode(val || "")}
+                        onChange={handleCodeChange}
                         options={{
                             fontSize: 13,
                             minimap: { enabled: false },
@@ -81,6 +215,7 @@ export default function EditorArea({ activeFile }: { activeFile: ProjectFile | n
                             scrollBeyondLastLine: false,
                             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                             padding: { top: 16 },
+                            readOnly: isReadOnly,
                         }}
                         onMount={handleEditorDidMount}
                     />
@@ -90,7 +225,7 @@ export default function EditorArea({ activeFile }: { activeFile: ProjectFile | n
                     </div>
                 )}
 
-                {/* Simulated Pending Block Widget Overlaid */}
+                {/* Simulated Pending Block */}
                 {showPending && activeFile && (
                     <div className="absolute top-[80px] left-[40px] right-8 bg-[#09090b]/80 backdrop-blur-sm border-2 border-purple-500/50 rounded-lg overflow-hidden shadow-2xl flex flex-col z-20">
                         <div className="flex items-center justify-between bg-purple-500/10 px-3 py-2 border-b border-purple-500/20">

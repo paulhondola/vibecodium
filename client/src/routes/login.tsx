@@ -23,7 +23,7 @@ function Login() {
 
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
-      navigate({ to: "/" });
+      navigate({ to: "/", search: { w: undefined } });
     }
   }, [isAuthenticated, isLoading, navigate]);
 

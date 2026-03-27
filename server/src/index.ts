@@ -5,6 +5,7 @@ import { Writable } from "stream";
 import type { ApiResponse, ExecuteRequest, ExecuteResponse } from "shared";
 import gitRoutes from "./routes/git";
 import projectsRoutes from "./routes/projects";
+import { attachCollaborationWS } from "./ws/collaboration";
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.groq.com/openai/v1";
 const LLM_API_KEY = process.env.LLM_API_KEY ?? "";
@@ -237,4 +238,10 @@ export const app = new Hono()
 	}
 });
 
-export default app;
+const websocket = attachCollaborationWS(app);
+
+export default {
+    port: process.env.PORT || 3000,
+    fetch: app.fetch,
+    websocket,
+};

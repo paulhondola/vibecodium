@@ -48,6 +48,7 @@ if (!rootElement.innerHTML) {
                 authorizationParams={{
                     redirect_uri: window.location.origin,
                 }}
+                cacheLocation="localstorage"
             >
 				<QueryClientProvider client={queryClient}>
 					<RouterProvider router={router} />

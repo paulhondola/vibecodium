@@ -7,6 +7,7 @@ interface FileExplorerProps {
     files: ProjectFile[];
     activeFile: ProjectFile | null;
     onSelect: (file: ProjectFile) => void;
+    readOnly?: boolean;
 }
 
 type TreeNode = {
@@ -106,7 +107,7 @@ function FileTreeNodeComponent({ node, depth, activeFile, onSelect }: { node: Tr
     );
 }
 
-export default function FileExplorer({ files, activeFile, onSelect }: FileExplorerProps) {
+export default function FileExplorer({ files, activeFile, onSelect, readOnly }: FileExplorerProps) {
 	const [isImportModalOpen, setImportModalOpen] = useState(false);
 
     // Recompunem Tree-ul doar când se modifică sursa files array-ul 
@@ -116,18 +117,20 @@ export default function FileExplorer({ files, activeFile, onSelect }: FileExplor
 		<div className="flex flex-col h-full bg-[#09090b] text-[#c9d1d9] text-[13px] font-mono leading-relaxed">
 			<div className="flex items-center justify-between p-3 border-b border-[#27272a] shrink-0 font-sans">
 				<h2 className="font-semibold text-xs tracking-wider uppercase text-gray-400">Explorer</h2>
-				<div className="flex gap-2">
-					<button 
-                        onClick={() => setImportModalOpen(true)}
-                        className="p-1 hover:bg-[#18181b] rounded transition-colors text-gray-400 hover:text-white"
-                        title="Import from GitHub"
-                    >
-						<Plus size={14} />
-					</button>
-                    <button className="p-1 hover:bg-[#18181b] rounded transition-colors text-gray-400 hover:text-red-400">
-						<Trash2 size={14} />
-					</button>
-				</div>
+				{!readOnly && (
+                    <div className="flex gap-2">
+					    <button 
+                            onClick={() => setImportModalOpen(true)}
+                            className="p-1 hover:bg-[#18181b] rounded transition-colors text-gray-400 hover:text-white"
+                            title="Import from GitHub"
+                        >
+						    <Plus size={14} />
+					    </button>
+                        <button className="p-1 hover:bg-[#18181b] rounded transition-colors text-gray-400 hover:text-red-400">
+						    <Trash2 size={14} />
+					    </button>
+				    </div>
+                )}
 			</div>
 			
 			<div className="flex-1 overflow-y-auto py-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
