@@ -124,7 +124,7 @@ function App() {
     <>
       <div>
         <a href="https://github.com/stevedylandev/bhvr" target="_blank">
-          <img src={beaver} className="logo" alt="beaver logo" />
+          <img src={vibecodium_icon} className="logo" alt="vibecodium logo" />
         </a>
       </div>
       <h1>bhvr</h1>

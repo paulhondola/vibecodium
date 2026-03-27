@@ -1,0 +1,59 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2a1060"/>
+      <stop offset="100%" stop-color="#0d0820"/>
+    </linearGradient>
+    <linearGradient id="bracket-l" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#AFA9EC"/>
+      <stop offset="50%" stop-color="#7F77DD"/>
+      <stop offset="100%" stop-color="#AFA9EC"/>
+    </linearGradient>
+    <linearGradient id="bracket-r" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#AFA9EC"/>
+      <stop offset="50%" stop-color="#7F77DD"/>
+      <stop offset="100%" stop-color="#AFA9EC"/>
+    </linearGradient>
+    <radialGradient id="nucleus-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#EEEDFE"/>
+      <stop offset="100%" stop-color="#7F77DD"/>
+    </radialGradient>
+    <radialGradient id="bg-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3C3489" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#3C3489" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- background -->
+  <rect width="200" height="200" rx="44" fill="url(#bg)"/>
+  <!-- subtle center glow on bg -->
+  <rect width="200" height="200" rx="44" fill="url(#bg-glow)"/>
+
+  <!-- left bracket -->
+  <path d="M62 36 C44 36 36 48 36 62 L36 84 C36 94 30 98 22 100 C30 102 36 106 36 116 L36 138 C36 152 44 164 62 164" fill="none" stroke="url(#bracket-l)" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- right bracket -->
+  <path d="M138 36 C156 36 164 48 164 62 L164 84 C164 94 170 98 178 100 C170 102 164 106 164 116 L164 138 C164 152 156 164 138 164" fill="none" stroke="url(#bracket-r)" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- atom: nucleus glow ring -->
+  <circle cx="100" cy="100" r="11" fill="#7F77DD" opacity="0.2"/>
+  <circle cx="100" cy="100" r="8" fill="#534AB7" opacity="0.3"/>
+  <!-- atom: nucleus -->
+  <circle cx="100" cy="100" r="6" fill="url(#nucleus-glow)"/>
+
+  <!-- atom: orbit 1 (horizontal ellipse) -->
+  <ellipse cx="100" cy="100" rx="36" ry="13" fill="none" stroke="#AFA9EC" stroke-width="1.8" opacity="0.9"/>
+
+  <!-- atom: orbit 2 (tilted 60deg) -->
+  <ellipse cx="100" cy="100" rx="36" ry="13" fill="none" stroke="#AFA9EC" stroke-width="1.8" opacity="0.9" transform="rotate(60 100 100)"/>
+
+  <!-- atom: orbit 3 (tilted -60deg) -->
+  <ellipse cx="100" cy="100" rx="36" ry="13" fill="none" stroke="#AFA9EC" stroke-width="1.8" opacity="0.9" transform="rotate(-60 100 100)"/>
+
+  <!-- electrons — one per orbit -->
+  <circle cx="136" cy="100" r="3.5" fill="#FAC775"/>
+  <circle cx="82" cy="69" r="3.5" fill="#FAC775" transform="rotate(60 100 100)"/>
+  <circle cx="82" cy="69" r="3.5" fill="#FAC775" transform="rotate(-60 100 100)"/>
+
+</svg>

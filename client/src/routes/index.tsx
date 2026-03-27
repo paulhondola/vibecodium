@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { hcWithType } from "server/client";
-import beaver from "@/assets/beaver.svg";
+import icon from "@/assets/vibecodium_icon.svg";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
@@ -44,9 +44,9 @@ function Index() {
 				rel="noopener"
 			>
 				<img
-					src={beaver}
+					src={icon}
 					className="w-16 h-16 cursor-pointer"
-					alt="beaver logo"
+					alt="vibe logo"
 				/>
 			</a>
 			<h1 className="text-5xl font-black">bhvr</h1>

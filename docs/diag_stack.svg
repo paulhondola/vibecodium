@@ -1,0 +1,82 @@
+<svg width="100%" viewBox="0 0 680 560" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- UI layer -->
+  <rect x="40" y="30" width="600" height="64" rx="12" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="340" y="55" text-anchor="middle" font-size="14" font-weight="500" fill="#3C3489">UI layer</text>
+  <text x="340" y="76" text-anchor="middle" font-size="12" fill="#534AB7">React + Vite — Monaco, output panel, vibe chat</text>
+
+  <line x1="340" y1="94" x2="340" y2="124" stroke="#888780" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="340" y1="124" x2="340" y2="94" stroke="#888780" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- API layer -->
+  <rect x="40" y="134" width="600" height="64" rx="12" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="340" y="159" text-anchor="middle" font-size="14" font-weight="500" fill="#085041">API layer</text>
+  <text x="340" y="180" text-anchor="middle" font-size="12" fill="#0F6E56">Hono — RPC routes, SSE streaming, inline-edit</text>
+
+  <line x1="200" y1="198" x2="200" y2="228" stroke="#888780" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="480" y1="198" x2="480" y2="228" stroke="#888780" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- Agent layer -->
+  <rect x="40" y="238" width="290" height="64" rx="12" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="185" y="263" text-anchor="middle" font-size="14" font-weight="500" fill="#712B13">Agent layer</text>
+  <text x="185" y="284" text-anchor="middle" font-size="12" fill="#993C1D">LLM loop — tools, context, snapshots</text>
+
+  <!-- Execution layer -->
+  <rect x="350" y="238" width="290" height="64" rx="12" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="495" y="263" text-anchor="middle" font-size="14" font-weight="500" fill="#633806">Execution layer</text>
+  <text x="495" y="284" text-anchor="middle" font-size="12" fill="#854F0B">Bun.spawn (JS/TS) — Piston API (others)</text>
+
+  <line x1="185" y1="302" x2="185" y2="332" stroke="#888780" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="495" y1="302" x2="495" y2="332" stroke="#888780" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- Storage layer -->
+  <rect x="40" y="342" width="290" height="64" rx="12" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="185" y="367" text-anchor="middle" font-size="14" font-weight="500" fill="#0C447C">Storage layer</text>
+  <text x="185" y="388" text-anchor="middle" font-size="12" fill="#185FA5">Bun.sqlite + Drizzle ORM</text>
+
+  <!-- LLM provider -->
+  <rect x="350" y="342" width="290" height="64" rx="12" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="495" y="367" text-anchor="middle" font-size="14" font-weight="500" fill="#444441">LLM provider</text>
+  <text x="495" y="388" text-anchor="middle" font-size="12" fill="#5F5E5A">OpenRouter — Devstral 2 (free tier)</text>
+
+  <!-- DB table nodes -->
+  <line x1="100" y1="406" x2="100" y2="432" stroke="#888780" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="185" y1="406" x2="222" y2="432" stroke="#888780" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="230" y1="406" x2="300" y2="432" stroke="#888780" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="260" y1="406" x2="420" y2="432" stroke="#888780" stroke-width="1" marker-end="url(#arr)"/>
+
+  <rect x="40" y="432" width="120" height="44" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="100" y="450" text-anchor="middle" font-size="13" font-weight="500" fill="#0C447C">projects</text>
+  <text x="100" y="466" text-anchor="middle" font-size="11" fill="#185FA5">metadata</text>
+
+  <rect x="172" y="432" width="110" height="44" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="227" y="450" text-anchor="middle" font-size="13" font-weight="500" fill="#0C447C">files</text>
+  <text x="227" y="466" text-anchor="middle" font-size="11" fill="#185FA5">per-row saves</text>
+
+  <rect x="294" y="432" width="116" height="44" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="352" y="450" text-anchor="middle" font-size="13" font-weight="500" fill="#0C447C">messages</text>
+  <text x="352" y="466" text-anchor="middle" font-size="11" fill="#185FA5">chat history</text>
+
+  <rect x="422" y="432" width="116" height="44" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="480" y="450" text-anchor="middle" font-size="13" font-weight="500" fill="#0C447C">snapshots</text>
+  <text x="480" y="466" text-anchor="middle" font-size="11" fill="#185FA5">undo / rollback</text>
+
+  <!-- legend -->
+  <rect x="40" y="510" width="10" height="10" rx="2" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="56" y="519" font-size="11" fill="#5F5E5A">UI</text>
+  <rect x="86" y="510" width="10" height="10" rx="2" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="102" y="519" font-size="11" fill="#5F5E5A">API</text>
+  <rect x="136" y="510" width="10" height="10" rx="2" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="152" y="519" font-size="11" fill="#5F5E5A">Agent</text>
+  <rect x="196" y="510" width="10" height="10" rx="2" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="212" y="519" font-size="11" fill="#5F5E5A">Execution</text>
+  <rect x="278" y="510" width="10" height="10" rx="2" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="294" y="519" font-size="11" fill="#5F5E5A">Storage</text>
+  <rect x="344" y="510" width="10" height="10" rx="2" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="360" y="519" font-size="11" fill="#5F5E5A">LLM</text>
+</svg>

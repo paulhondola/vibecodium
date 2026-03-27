@@ -1,0 +1,74 @@
+<svg width="100%" viewBox="0 0 680 460" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- projects -->
+  <rect x="40" y="30" width="170" height="34" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="125" y="52" text-anchor="middle" font-size="13" font-weight="500" fill="#085041">projects</text>
+
+  <rect x="40" y="64" width="170" height="170" rx="4" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+  <text x="52" y="84" font-size="11" fill="#854F0B" font-weight="500">PK</text>
+  <text x="76" y="84" font-size="11" fill="#444441">id</text>
+  <text x="52" y="104" font-size="11" fill="#5F5E5A">   name</text>
+  <text x="52" y="124" font-size="11" fill="#5F5E5A">   entry_point</text>
+  <text x="52" y="144" font-size="11" fill="#5F5E5A">   language</text>
+  <text x="52" y="164" font-size="11" fill="#5F5E5A">   created_at</text>
+
+  <!-- files -->
+  <rect x="260" y="30" width="170" height="34" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="345" y="52" text-anchor="middle" font-size="13" font-weight="500" fill="#085041">files</text>
+
+  <rect x="260" y="64" width="170" height="190" rx="4" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+  <text x="272" y="84" font-size="11" fill="#854F0B" font-weight="500">PK</text>
+  <text x="296" y="84" font-size="11" fill="#444441">id</text>
+  <text x="272" y="104" font-size="11" fill="#0F6E56" font-weight="500">FK</text>
+  <text x="296" y="104" font-size="11" fill="#444441">project_id</text>
+  <text x="272" y="124" font-size="11" fill="#534AB7" font-weight="500">IX</text>
+  <text x="296" y="124" font-size="11" fill="#444441">path</text>
+  <text x="272" y="144" font-size="11" fill="#5F5E5A">   content</text>
+  <text x="272" y="164" font-size="11" fill="#5F5E5A">   updated_at</text>
+  <text x="272" y="190" font-size="10" fill="#888780" font-style="italic">unique(project_id, path)</text>
+
+  <!-- messages -->
+  <rect x="260" y="290" width="170" height="34" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="345" y="312" text-anchor="middle" font-size="13" font-weight="500" fill="#712B13">messages</text>
+
+  <rect x="260" y="324" width="170" height="120" rx="4" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+  <text x="272" y="344" font-size="11" fill="#854F0B" font-weight="500">PK</text>
+  <text x="296" y="344" font-size="11" fill="#444441">id</text>
+  <text x="272" y="364" font-size="11" fill="#0F6E56" font-weight="500">FK</text>
+  <text x="296" y="364" font-size="11" fill="#444441">project_id</text>
+  <text x="272" y="384" font-size="11" fill="#5F5E5A">   role</text>
+  <text x="272" y="404" font-size="11" fill="#5F5E5A">   content (JSON)</text>
+  <text x="272" y="424" font-size="11" fill="#5F5E5A">   created_at</text>
+
+  <!-- snapshots -->
+  <rect x="480" y="30" width="170" height="34" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="565" y="52" text-anchor="middle" font-size="13" font-weight="500" fill="#633806">snapshots</text>
+
+  <rect x="480" y="64" width="170" height="170" rx="4" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+  <text x="492" y="84" font-size="11" fill="#854F0B" font-weight="500">PK</text>
+  <text x="516" y="84" font-size="11" fill="#444441">id</text>
+  <text x="492" y="104" font-size="11" fill="#0F6E56" font-weight="500">FK</text>
+  <text x="516" y="104" font-size="11" fill="#444441">project_id</text>
+  <text x="492" y="124" font-size="11" fill="#5F5E5A">   label</text>
+  <text x="492" y="144" font-size="11" fill="#5F5E5A">   files_json</text>
+  <text x="492" y="164" font-size="11" fill="#5F5E5A">   created_at</text>
+  <text x="492" y="190" font-size="10" fill="#888780" font-style="italic">full blob for restore</text>
+
+  <!-- FK relation lines -->
+  <line x1="210" y1="110" x2="260" y2="110" stroke="#0F6E56" stroke-width="0.5" marker-end="url(#arr)"/>
+  <text x="218" y="104" font-size="10" fill="#0F6E56">1</text>
+  <text x="248" y="104" font-size="10" fill="#0F6E56">N</text>
+
+  <path d="M210 130 L230 130 L230 350 L260 350" fill="none" stroke="#993C1D" stroke-width="0.5" marker-end="url(#arr)"/>
+  <text x="218" y="124" font-size="10" fill="#993C1D">1</text>
+  <text x="248" y="350" font-size="10" fill="#993C1D">N</text>
+
+  <path d="M210 150 L240 150 L240 100 L480 100" fill="none" stroke="#854F0B" stroke-width="0.5" marker-end="url(#arr)"/>
+  <text x="218" y="144" font-size="10" fill="#854F0B">1</text>
+  <text x="468" y="94" font-size="10" fill="#854F0B">N</text>
+</svg>
