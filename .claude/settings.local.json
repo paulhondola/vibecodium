@@ -6,7 +6,8 @@
       "Bash(curl -s http://localhost:3000/api/ping-llm)",
       "Bash(bunx fx:*)",
       "Bash(pkill -f \"bun --watch run src/index.ts\")",
-      "Bash(pkill -f \"turbo dev\")"
+      "Bash(pkill -f \"turbo dev\")",
+      "Bash(ls:*)"
     ]
   }
 }
