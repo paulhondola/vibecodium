@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import type { ApiResponse } from "shared";
+import type { ApiResponse, ExecuteRequest, ExecuteResponse } from "shared";
 import gitRoutes from "./routes/git";
 import projectsRoutes from "./routes/projects";
 
@@ -102,6 +102,69 @@ export const app = new Hono()
 				groq: String(remoteErr),
 			}, 503);
 		}
+	}
+})
+
+.post("/execute", async (c) => {
+	try {
+		const body = await c.req.json<ExecuteRequest>();
+		
+		if (!body.language || !body.version || !body.code) {
+			return c.json<ExecuteResponse>({ 
+				success: false, 
+				stdout: "", 
+				stderr: "", 
+				error: "Missing language, version, or code in request." 
+			}, 400);
+		}
+
+		// Piston v2 API payload
+		const payload = {
+			language: body.language,
+			version: body.version,
+			files: [
+				{
+					name: "main",
+					content: body.code,
+				}
+			],
+			compile_timeout: 10000,
+			run_timeout: 3000, // Important: 3s limit for infinite loops
+		};
+
+		const PISTON_URL = process.env.PISTON_URL || "http://localhost:2000/api/v2/execute";
+		const response = await fetch(PISTON_URL, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(payload),
+		});
+
+		const result = await response.json() as any;
+
+		if (!response.ok) {
+			return c.json<ExecuteResponse>({
+				success: false,
+				stdout: "",
+				stderr: "",
+				error: result.message || "Piston API Error",
+			}, response.status as any);
+		}
+
+		return c.json<ExecuteResponse>({
+			success: result.run.code === 0,
+			stdout: result.run.stdout,
+			stderr: result.run.stderr,
+			compileOutput: result.compile?.stderr || "",
+		});
+
+	} catch (err: any) {
+		console.error("Execute error:", err);
+		return c.json<ExecuteResponse>({
+			success: false,
+			stdout: "",
+			stderr: "",
+			error: "Internal Server Error executing code",
+		}, 500);
 	}
 });
 
