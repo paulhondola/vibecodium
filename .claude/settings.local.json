@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(svg|json\\)$\")",
+      "Bash(ln -sf ../.env /Users/paulhondola/Developer/vibecodium/server/.env)",
+      "Bash(curl -s http://localhost:3000/api/ping-llm)",
+      "Bash(bunx fx:*)",
+      "Bash(pkill -f \"bun --watch run src/index.ts\")",
+      "Bash(pkill -f \"turbo dev\")"
+    ]
+  }
+}
