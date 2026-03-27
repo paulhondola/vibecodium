@@ -118,3 +118,124 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* iTECify Landing Page Custom Styles */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.glass-card {
+  background: rgba(10, 12, 20, 0.4);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(168, 85, 247, 0.5);
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.15);
+  transform: translateY(-8px) scale(1.01);
+}
+
+.warp-speed {
+  background: radial-gradient(circle at center, transparent 0%, #02040a 80%),
+              repeating-linear-gradient(0deg, transparent 0, transparent 2px, rgba(168, 85, 247, 0.1) 3px, transparent 4px);
+  background-size: 100% 4px;
+  perspective: 1000px;
+  overflow: hidden;
+}
+
+.warp-layer {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background-image: radial-gradient(1px 1px at 20px 30px, #fff, rgba(0,0,0,0)),
+                    radial-gradient(1.5px 1.5px at 40px 70px, #A855F7, rgba(0,0,0,0)),
+                    radial-gradient(1px 1px at 50px 160px, #3B82F6, rgba(0,0,0,0));
+  background-repeat: repeat;
+  background-size: 200px 200px;
+  animation: warp 15s linear infinite;
+  opacity: 0.3;
+}
+
+.text-glow {
+  text-shadow: 0 0 15px rgba(168, 85, 247, 0.5);
+}
+
+.sentient-ai {
+  animation: aiBreath 4s ease-in-out infinite;
+}
+
+.data-stream {
+  background: linear-gradient(90deg, transparent, #10B981, transparent);
+  height: 1px;
+  width: 100%;
+  position: absolute;
+  animation: streamMove 3s linear infinite;
+}
+
+/* Custom Keyframe Animations */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes warp {
+  0% {
+    transform: translateZ(0) translateY(0);
+  }
+  100% {
+    transform: translateZ(500px) translateY(-100%);
+  }
+}
+
+@keyframes glowLine {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scaleX(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.05);
+  }
+}
+
+@keyframes aiBreath {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.2);
+    border-color: rgba(168, 85, 247, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 50px rgba(168, 85, 247, 0.4);
+    border-color: rgba(168, 85, 247, 0.6);
+  }
+}
+
+@keyframes streamMove {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Utility animations for Tailwind */
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-glow-line {
+  animation: glowLine 3s ease-in-out infinite;
+}
