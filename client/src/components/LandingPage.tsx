@@ -3,7 +3,7 @@ import { useState } from "react";
 import ImportModal from "./ImportModal";
 
 interface LandingPageProps {
-	onEnter: () => void;
+	onEnter: (projectId?: string) => void;
 }
 
 export default function LandingPage({ onEnter }: LandingPageProps) {
@@ -36,7 +36,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 						</button>
 					</div>
 					<button
-						onClick={onEnter}
+						onClick={() => onEnter()}
 						className="relative overflow-hidden px-6 py-2 rounded-lg bg-[#A855F7] font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest text-[#02040a] hover:scale-105 active:scale-95 transition-all group"
 					>
 						<span className="relative z-10">
@@ -109,7 +109,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 
 						<div className="flex flex-wrap justify-center gap-6 pt-6">
 							<button
-								onClick={onEnter}
+								onClick={() => onEnter()}
 								className="px-10 py-5 bg-[#A855F7] text-[#02040a] font-['Space_Grotesk'] font-bold rounded-xl shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:shadow-[0_0_50px_rgba(168,85,247,0.6)] hover:-translate-y-1 transition-all duration-300 uppercase tracking-widest text-sm"
 							>
 								{isLoading ? "Starting..." : isAuthenticated ? `Resume Session (${user?.name || "User"})` : "Initialize Workspace"}
@@ -413,7 +413,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 						</p>
 						<div className="flex flex-wrap justify-center gap-10 relative z-10">
 							<button
-								onClick={onEnter}
+								onClick={() => onEnter()}
 								className="px-14 py-6 bg-[#A855F7] text-[#02040a] font-['Space_Grotesk'] font-black text-lg rounded-2xl shadow-[0_0_50px_rgba(168,85,247,0.3)] hover:scale-105 transition-all uppercase tracking-[0.2em]"
 							>
 								Create Neural Link
@@ -428,9 +428,8 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
                 <ImportModal 
                     isOpen={isImportModalOpen} 
                     onClose={() => setImportModalOpen(false)} 
-                    onSuccess={(projectId, path) => {
-                        console.log("Repo imported:", projectId, path);
-                        onEnter();
+                    onSuccess={(projectId) => {
+                        onEnter(projectId);
                     }} 
                 />
 			</main>

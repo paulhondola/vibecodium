@@ -10,6 +10,7 @@ export const Route = createFileRoute("/")({
 
 function Index() {
 	const [view, setView] = useState<"landing" | "app">("landing");
+    const [projectId, setProjectId] = useState<string | null>(null);
     const { isAuthenticated, isLoading } = useAuth0();
     const navigate = useNavigate();
 
@@ -20,7 +21,10 @@ function Index() {
     }, [view, isLoading, isAuthenticated, navigate]);
 
 	if (view === "landing") {
-		return <LandingPage onEnter={() => setView("app")} />;
+		return <LandingPage onEnter={(pid?: string) => {
+            if (pid) setProjectId(pid);
+            setView("app");
+        }} />;
 	}
 
     if (isLoading) {
@@ -29,7 +33,7 @@ function Index() {
 
     if (!isAuthenticated) return null; // Will redirect via useEffect
 
-	return <Workspace onBack={() => setView("landing")} />;
+	return <Workspace projectId={projectId} onBack={() => { setView("landing"); setProjectId(null); }} />;
 }
 
 export default Index;
