@@ -6,11 +6,15 @@ import Workspace from "../components/Workspace";
 
 export const Route = createFileRoute("/")({
 	component: Index,
+    validateSearch: (search: Record<string, unknown>) => {
+        return { w: search.w as string | undefined };
+    }
 });
 
 function Index() {
-	const [view, setView] = useState<"landing" | "app">("landing");
-    const [projectId, setProjectId] = useState<string | null>(null);
+    const { w } = Route.useSearch();
+	const [view, setView] = useState<"landing" | "app">(w ? "app" : "landing");
+    const [projectId, setProjectId] = useState<string | null>(w || null);
     const { isAuthenticated, isLoading } = useAuth0();
     const navigate = useNavigate();
 
@@ -22,7 +26,10 @@ function Index() {
 
 	if (view === "landing") {
 		return <LandingPage onEnter={(pid?: string) => {
-            if (pid) setProjectId(pid);
+            if (pid) {
+                setProjectId(pid);
+                navigate({ to: "/", search: { w: pid } });
+            }
             setView("app");
         }} />;
 	}
@@ -33,7 +40,11 @@ function Index() {
 
     if (!isAuthenticated) return null; // Will redirect via useEffect
 
-	return <Workspace projectId={projectId} onBack={() => { setView("landing"); setProjectId(null); }} />;
+	return <Workspace projectId={projectId} onBack={() => { 
+        setView("landing"); 
+        setProjectId(null); 
+        navigate({ to: "/", search: { w: undefined }, replace: true });
+    }} />;
 }
 
 export default Index;
