@@ -145,47 +145,91 @@ export function attachCollaborationWS(app: Hono) {
         };
     }));
 
-    // ── Terminal WS (node-pty) ──
-    let pty: any = null;
-    try { pty = require("node-pty"); } catch (_) { console.warn("[WS] node-pty not available"); }
+    // ── Terminal WS (Bun.spawn — no native addons needed) ──
+    interface TerminalRoom { proc: ReturnType<typeof Bun.spawn>; clients: Set<any> }
+    const terminals = new Map<string, TerminalRoom>();
 
-    const terminals = new Map<string, { pty: any, clients: Set<any> }>();
+    app.get("/ws/terminal", upgradeWebSocket((c) => {
+        const roomId = c.req.query("roomId") || "default";
+        return {
+            async onOpen(_event, ws) {
+                let room = terminals.get(roomId);
+                if (!room) {
+                    const shells = [process.env.SHELL, "/bin/zsh", "/bin/bash", "/bin/sh"].filter(Boolean) as string[];
+                    let proc: ReturnType<typeof Bun.spawn> | null = null;
 
-    if (pty) {
-        app.get("/ws/terminal", upgradeWebSocket((c) => {
-            const roomId = c.req.query("roomId") || "default";
-            return {
-                onOpen(_event, ws) {
-                    let room = terminals.get(roomId);
-                    if (!room) {
-                        const ptyProcess = pty.spawn(process.env.SHELL || "bash", [], {
-                            name: "xterm-color", cols: 80, rows: 30,
-                            cwd: process.cwd(), env: process.env as any
-                        });
-                        room = { pty: ptyProcess, clients: new Set() };
-                        terminals.set(roomId, room);
-                        ptyProcess.onData((data: string) => {
-                            room!.clients.forEach((c: any) => { try { c.send(data); } catch (_) {} });
-                        });
+                    for (const shell of shells) {
+                        try {
+                            proc = Bun.spawn([shell, "-i"], {
+                                stdin: "pipe",
+                                stdout: "pipe",
+                                stderr: "pipe",
+                                env: { ...process.env, TERM: "xterm-256color" },
+                                cwd: process.cwd(),
+                            });
+                            break;
+                        } catch (_) {}
                     }
-                    room.clients.add(ws);
-                    (ws as any).roomId = roomId;
-                },
-                onMessage(event, ws) {
-                    const room = terminals.get((ws as any).roomId);
-                    if (room && typeof event.data === "string") room.pty.write(event.data);
-                },
-                onClose(_event, ws) {
-                    const rid = (ws as any).roomId;
-                    const room = terminals.get(rid);
-                    if (room) {
-                        room.clients.delete(ws);
-                        if (room.clients.size === 0) { room.pty.kill(); terminals.delete(rid); }
+
+                    if (!proc) {
+                        ws.send("\x1b[31mTerminal unavailable: could not spawn shell.\x1b[0m\r\n");
+                        ws.close(1011, "No shell available");
+                        return;
                     }
+
+                    room = { proc, clients: new Set() };
+                    terminals.set(roomId, room);
+
+                    const broadcast = (text: string) =>
+                        room!.clients.forEach(c => { try { c.send(text); } catch (_) {} });
+
+                    // Pipe stdout → all clients
+                    (async () => {
+                        try {
+                            for await (const chunk of proc!.stdout as AsyncIterable<Uint8Array>) {
+                                broadcast(new TextDecoder().decode(chunk));
+                            }
+                        } catch (_) {}
+                        broadcast("\x1b[33m[shell exited]\x1b[0m\r\n");
+                        terminals.delete(roomId);
+                    })();
+
+                    // Pipe stderr → all clients
+                    (async () => {
+                        try {
+                            for await (const chunk of proc!.stderr as AsyncIterable<Uint8Array>) {
+                                broadcast(new TextDecoder().decode(chunk));
+                            }
+                        } catch (_) {}
+                    })();
                 }
-            };
-        }));
-    }
+
+                room.clients.add(ws);
+                (ws as any).roomId = roomId;
+            },
+
+            onMessage(event, ws) {
+                const room = terminals.get((ws as any).roomId);
+                if (!room || typeof event.data !== "string") return;
+                try {
+                    const sink = room.proc.stdin as import("bun").FileSink;
+                    sink.write(event.data);
+                    sink.flush();
+                } catch (_) {}
+            },
+
+            onClose(_event, ws) {
+                const rid = (ws as any).roomId;
+                const room = terminals.get(rid);
+                if (!room) return;
+                room.clients.delete(ws);
+                if (room.clients.size === 0) {
+                    try { room.proc.kill(); } catch (_) {}
+                    terminals.delete(rid);
+                }
+            }
+        };
+    }));
 
     return websocket;
 }

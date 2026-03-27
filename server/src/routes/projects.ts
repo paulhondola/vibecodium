@@ -8,7 +8,11 @@ import * as path from "node:path";
 
 const projectsRoutes = new Hono();
 
-projectsRoutes.use("/*", authMiddleware);
+// Skip auth for OPTIONS preflight — the CORS middleware on the main app handles those
+projectsRoutes.use("/*", async (c, next) => {
+    if (c.req.method === "OPTIONS") return next();
+    return authMiddleware(c, next);
+});
 
 function getAllFilesRecursive(dir: string, baseDir: string): { path: string; content: string }[] {
     const results: { path: string; content: string }[] = [];

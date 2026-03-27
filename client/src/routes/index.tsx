@@ -13,45 +13,52 @@ export const Route = createFileRoute("/")({
 
 function Index() {
     const { w } = Route.useSearch();
-	const [view, setView] = useState<"landing" | "app">(w ? "app" : "landing");
-    const [projectId, setProjectId] = useState<string | null>(w || null);
-    const { isAuthenticated, isLoading } = useAuth0();
+    // Derive view directly from URL so navigations (OAuth callback, shared links)
+    // are reflected immediately without stale state.
+    const view: "landing" | "app" = w ? "app" : "landing";
+    const [projectId, setProjectId] = useState<string | null>(w ?? null);
+    const [manualApp, setManualApp] = useState(false); // entered without a ?w= URL
+    const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
     const navigate = useNavigate();
 
+    // Keep projectId in sync when ?w= changes (OAuth restore, shared link navigation)
     useEffect(() => {
-        if (view === "app" && !isLoading && !isAuthenticated) {
-            navigate({ to: "/login" });
+        if (w && w !== projectId) {
+            setProjectId(w);
         }
-    }, [view, isLoading, isAuthenticated, navigate]);
+    }, [w]);
+
+    const inApp = view === "app" || manualApp;
 
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const projectParam = params.get("project");
-        if (projectParam && view === "landing") {
-            setProjectId(projectParam);
-            setView("app");
+        if (inApp && !isLoading && !isAuthenticated) {
+            loginWithRedirect({
+                appState: { returnTo: window.location.href },
+                authorizationParams: { connection: "github" },
+            });
         }
-    }, [view]);
+    }, [inApp, isLoading, isAuthenticated, loginWithRedirect]);
 
-	if (view === "landing") {
-		return <LandingPage onEnter={(pid?: string) => {
+    if (!inApp) {
+        return <LandingPage onEnter={(pid?: string) => {
             if (pid) {
                 setProjectId(pid);
                 navigate({ to: "/", search: { w: pid } });
+            } else {
+                setManualApp(true);
             }
-            setView("app");
         }} />;
-	}
+    }
 
     if (isLoading) {
         return <div className="min-h-screen bg-[#000000] flex items-center justify-center text-cyan-400">Loading Workspace...</div>;
     }
 
-    if (!isAuthenticated) return null; // Will redirect via useEffect
+    if (!isAuthenticated) return null; // loginWithRedirect fires via useEffect
 
-	return <Workspace projectId={projectId} onBack={() => { 
-        setView("landing"); 
-        setProjectId(null); 
+    return <Workspace projectId={projectId} onBack={() => {
+        setManualApp(false);
+        setProjectId(null);
         navigate({ to: "/", search: { w: undefined }, replace: true });
     }} />;
 }
