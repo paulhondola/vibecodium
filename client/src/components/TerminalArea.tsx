@@ -31,7 +31,10 @@ export default function TerminalArea() {
 		const fitAddon = new FitAddon();
 		term.loadAddon(fitAddon);
 		term.open(terminalRef.current);
-		fitAddon.fit();
+		
+		setTimeout(() => {
+			try { fitAddon.fit(); } catch (e) {}
+		}, 10);
 
 		term.writeln("\x1b[1;36m➜\x1b[0m \x1b[1;32m~ \x1b[0m\x1b[36mvibecodium\x1b[0m Shared Terminal Connected.");
 		term.writeln("\x1b[90mSandboxed environment ready.\x1b[0m");
