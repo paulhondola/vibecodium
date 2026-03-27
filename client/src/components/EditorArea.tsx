@@ -4,11 +4,32 @@ import type { editor } from "monaco-editor";
 import { Bot, Check, X, Sparkles } from "lucide-react";
 import type { ProjectFile } from "./Workspace";
 
-export default function EditorArea({ activeFile }: { activeFile: ProjectFile | null }) {
+export default function EditorArea({ activeFile, projectId }: { activeFile: ProjectFile | null, projectId: string | null }) {
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 	const monaco = useMonaco();
 	const [showPending, setShowPending] = useState(false);
 	const [code, setCode] = useState("");
+	const wsRef = useRef<WebSocket | null>(null);
+	const isRemoteChange = useRef(false);
+
+    useEffect(() => {
+        const ws = new WebSocket(`ws://localhost:3000/ws/editor?roomId=${projectId || "default"}`);
+        wsRef.current = ws;
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if ((data.type === "init" || data.type === "update") && typeof data.content === "string") {
+                    isRemoteChange.current = true;
+                    setCode(data.content);
+                }
+            } catch (e) {
+                console.error("Editor WS parse error", e);
+            }
+        };
+
+        return () => ws.close();
+    }, [projectId]);
 
     useEffect(() => {
         if (activeFile) {
@@ -22,6 +43,20 @@ export default function EditorArea({ activeFile }: { activeFile: ProjectFile | n
 	const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor) => {
 		editorRef.current = editor;
 	};
+
+    const handleCodeChange = (val: string | undefined) => {
+        const newCode = val || "";
+        setCode(newCode);
+
+        if (isRemoteChange.current) {
+            isRemoteChange.current = false;
+            return;
+        }
+
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: "update", content: newCode }));
+        }
+    };
 
 	const simulateAIEdit = () => {
 		if (!editorRef.current || !monaco || !activeFile) return;
@@ -73,7 +108,7 @@ export default function EditorArea({ activeFile }: { activeFile: ProjectFile | n
                         language={language}
                         theme="vs-dark"
                         value={code}
-                        onChange={(val) => setCode(val || "")}
+                        onChange={handleCodeChange}
                         options={{
                             fontSize: 13,
                             minimap: { enabled: false },

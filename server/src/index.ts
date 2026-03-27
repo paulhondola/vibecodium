@@ -5,6 +5,13 @@ import { Writable } from "stream";
 import type { ApiResponse, ExecuteRequest, ExecuteResponse } from "shared";
 import gitRoutes from "./routes/git";
 import projectsRoutes from "./routes/projects";
+import { createBunWebSocket } from "hono/bun";
+import * as pty from "node-pty";
+
+const { upgradeWebSocket, websocket } = createBunWebSocket();
+
+const terminals = new Map<string, { pty: pty.IPty, clients: Set<any> }>();
+const editors = new Map<string, { clients: Set<any>, lastContent: string }>();
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.groq.com/openai/v1";
 const LLM_API_KEY = process.env.LLM_API_KEY ?? "";
@@ -54,7 +61,12 @@ const EXEC_COMMANDS: Record<string, () => string[]> = {
 };
 
 export const app = new Hono()
-	.use(cors())
+	.use("/*", cors({
+		origin: ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"],
+		allowHeaders: ["Content-Type", "Authorization"],
+		allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+		credentials: true,
+	}))
 	.route("/api/git", gitRoutes)
 	.route("/api/projects", projectsRoutes)
 	.get("/", (c) => {
@@ -237,4 +249,105 @@ export const app = new Hono()
 	}
 });
 
-export default app;
+app.get("/ws/terminal", upgradeWebSocket((c) => {
+	const roomId = c.req.query("roomId") || "default";
+	return {
+		onOpen(event, ws) {
+			let room = terminals.get(roomId);
+			if (!room) {
+				const shell = process.env.SHELL || "bash";
+				const ptyProcess = pty.spawn(shell, [], {
+					name: "xterm-color",
+					cols: 80,
+					rows: 30,
+					cwd: process.cwd(),
+					env: process.env as any
+				});
+
+				room = { pty: ptyProcess, clients: new Set() };
+				terminals.set(roomId, room);
+
+				ptyProcess.onData((data) => {
+					room!.clients.forEach((client) => {
+						client.send(data);
+					});
+				});
+			}
+
+			room.clients.add(ws);
+			(ws as any).roomId = roomId;
+		},
+		onMessage(event, ws) {
+			const roomId = (ws as any).roomId;
+			const room = terminals.get(roomId);
+			if (room && typeof event.data === "string") {
+				room.pty.write(event.data);
+			}
+		},
+		onClose(event, ws) {
+			const roomId = (ws as any).roomId;
+			const room = terminals.get(roomId);
+			if (room) {
+				room.clients.delete(ws);
+				if (room.clients.size === 0) {
+					room.pty.kill();
+					terminals.delete(roomId);
+				}
+			}
+		}
+	}
+}));
+
+app.get("/ws/editor", upgradeWebSocket((c) => {
+	const roomId = c.req.query("roomId") || "default";
+	return {
+		onOpen(event, ws) {
+			let room = editors.get(roomId);
+			if (!room) {
+				room = { clients: new Set(), lastContent: "" };
+				editors.set(roomId, room);
+			}
+			room.clients.add(ws);
+			(ws as any).roomId = roomId;
+
+			if (room.lastContent) {
+				ws.send(JSON.stringify({ type: "init", content: room.lastContent }));
+			}
+		},
+		onMessage(event, ws) {
+			const roomId = (ws as any).roomId;
+			const room = editors.get(roomId);
+			if (room && typeof event.data === "string") {
+				try {
+					const data = JSON.parse(event.data);
+					if (data.type === "update") {
+						room.lastContent = data.content;
+						room.clients.forEach((client) => {
+							if (client !== ws) {
+								client.send(JSON.stringify({ type: "update", content: data.content }));
+							}
+						});
+					}
+				} catch (e) {
+					console.error("Failed to parse editor message", e);
+				}
+			}
+		},
+		onClose(event, ws) {
+			const roomId = (ws as any).roomId;
+			const room = editors.get(roomId);
+			if (room) {
+				room.clients.delete(ws);
+				if (room.clients.size === 0) {
+					editors.delete(roomId);
+				}
+			}
+		}
+	}
+}));
+
+export default {
+	port: process.env.PORT || 3000,
+	fetch: app.fetch,
+	websocket,
+};
