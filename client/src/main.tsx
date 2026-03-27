@@ -49,6 +49,18 @@ if (!rootElement.innerHTML) {
                     redirect_uri: window.location.origin,
                 }}
                 cacheLocation="localstorage"
+                onRedirectCallback={(appState) => {
+                    // After Auth0 returns, navigate back to the URL the user was on
+                    // before the login redirect (which includes ?w= if set).
+                    const returnTo = appState?.returnTo;
+                    if (returnTo) {
+                        const url = new URL(returnTo);
+                        const w = url.searchParams.get("w");
+                        router.navigate({ to: "/", search: { w: w ?? undefined }, replace: true });
+                    } else {
+                        router.navigate({ to: "/", search: { w: undefined }, replace: true });
+                    }
+                }}
             >
 				<QueryClientProvider client={queryClient}>
 					<RouterProvider router={router} />

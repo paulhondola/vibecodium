@@ -22,8 +22,10 @@ function Login() {
   }
 
   useEffect(() => {
+    // Only auto-redirect if already authenticated (user visited /login directly).
+    // If coming back from OAuth, onRedirectCallback in main.tsx handles navigation.
     if (isAuthenticated && !isLoading) {
-      navigate({ to: "/", search: { w: undefined } });
+      navigate({ to: "/", search: { w: undefined }, replace: true });
     }
   }, [isAuthenticated, isLoading, navigate]);
 

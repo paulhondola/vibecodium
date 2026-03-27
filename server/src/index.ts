@@ -5,6 +5,7 @@ import { Writable } from "stream";
 import type { ApiResponse, ExecuteRequest, ExecuteResponse } from "shared";
 import gitRoutes from "./routes/git";
 import projectsRoutes from "./routes/projects";
+import sessionsRoutes from "./routes/sessions";
 import { attachCollaborationWS } from "./ws/collaboration";
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.groq.com/openai/v1";
@@ -55,9 +56,15 @@ const EXEC_COMMANDS: Record<string, () => string[]> = {
 };
 
 export const app = new Hono()
-	.use(cors())
+	.use(cors({
+		origin: (origin) => origin ?? "http://localhost:5173",
+		allowHeaders: ["Content-Type", "Authorization"],
+		allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+		credentials: true,
+	}))
 	.route("/api/git", gitRoutes)
 	.route("/api/projects", projectsRoutes)
+	.route("/api/sessions", sessionsRoutes)
 	.get("/", (c) => {
 	return c.text("Hello Hono!");
 })
