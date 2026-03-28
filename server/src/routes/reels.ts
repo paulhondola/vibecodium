@@ -89,7 +89,7 @@ const reelsRoutes = new Hono()
 
 			// YouTube API: Search for Shorts (vertical videos under 60s)
 			const apiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoDuration=short&q=${encodeURIComponent(
-				searchQuery
+				searchQuery ?? ""
 			)}&maxResults=${limit}&key=${YOUTUBE_API_KEY}`;
 
 			const response = await fetch(apiUrl);

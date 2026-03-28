@@ -9,7 +9,8 @@
       "Bash(pkill -f \"turbo dev\")",
       "Bash(ls:*)",
       "Bash(bun run:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(bun install:*)"
     ]
   }
 }

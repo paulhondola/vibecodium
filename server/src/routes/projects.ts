@@ -381,7 +381,7 @@ projectsRoutes.post("/create-repo", async (c) => {
             const errorData = await response.json() as any;
             return c.json({
                 error: errorData.message || "Failed to create repository on GitHub"
-            }, response.status);
+            }, response.status as any);
         }
 
         const repoData = await response.json() as any;
