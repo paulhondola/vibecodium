@@ -42,4 +42,15 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions (project_id);
+
+CREATE TABLE IF NOT EXISTS users (
+    auth0_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    picture TEXT,
+    bio TEXT,
+    language TEXT,
+    location TEXT,
+    created_at INTEGER NOT NULL
+);
 `);
