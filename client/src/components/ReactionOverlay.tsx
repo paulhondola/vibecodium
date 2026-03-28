@@ -13,9 +13,11 @@ const REACTION_EMOJIS = ["🚀", "🔥", "💥", "😂", "👏", "🤯", "💀",
 interface ReactionOverlayProps {
     lastMessage: any;
     onSendReaction: (emoji: string) => void;
+    buttonClassName?: string;
+    pickerPosition?: "above" | "below";
 }
 
-export default function ReactionOverlay({ lastMessage, onSendReaction }: ReactionOverlayProps) {
+export default function ReactionOverlay({ lastMessage, onSendReaction, buttonClassName, pickerPosition = "above" }: ReactionOverlayProps) {
     const [floating, setFloating] = useState<FloatingEmoji[]>([]);
     const [showPicker, setShowPicker] = useState(false);
     const timeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -75,7 +77,7 @@ export default function ReactionOverlay({ lastMessage, onSendReaction }: Reactio
             <div className="relative">
                 <button
                     onClick={() => setShowPicker(p => !p)}
-                    className="text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-purple-900/30 text-purple-400 border border-purple-500/30 hover:bg-purple-500/20 hover:scale-105"
+                    className={buttonClassName ?? "text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-purple-900/30 text-purple-400 border border-purple-500/30 hover:bg-purple-500/20 hover:scale-105"}
                     title="Send a reaction to all collaborators"
                 >
                     <span className="text-base leading-none">🎯</span>
@@ -83,7 +85,7 @@ export default function ReactionOverlay({ lastMessage, onSendReaction }: Reactio
                 </button>
 
                 {showPicker && (
-                    <div className="absolute bottom-full mb-2 right-0 bg-[#18181b] border border-[#3f3f46] rounded-xl p-3 shadow-2xl shadow-black/60 grid grid-cols-5 gap-2 z-50 min-w-[200px]">
+                    <div className={`absolute ${pickerPosition === "above" ? "bottom-full mb-2" : "top-full mt-2"} right-0 bg-[#18181b] border border-[#3f3f46] rounded-xl p-3 shadow-2xl shadow-black/60 grid grid-cols-5 gap-2 z-50 min-w-[200px]`}>
                         <div className="col-span-5 text-[9px] uppercase tracking-widest text-gray-500 font-semibold mb-1">
                             React to everyone 📡
                         </div>

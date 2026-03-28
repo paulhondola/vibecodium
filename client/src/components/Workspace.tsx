@@ -12,7 +12,7 @@ import SpotifyPlayer from "./SpotifyPlayer";
 import MatrixRain from "./MatrixRain";
 import ReactionOverlay from "./ReactionOverlay";
 import CodeRoastModal from "./CodeRoastModal";
-import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, ChevronDown, Wrench } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
@@ -37,6 +37,8 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [showRoast, setShowRoast] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showSecurityScan, setShowSecurityScan] = useState(false);
+    const [showToolsMenu, setShowToolsMenu] = useState(false);
+    const toolsMenuRef = useRef<HTMLDivElement>(null);
 
     // Panel toggles
     const [showSidebar, setShowSidebar] = useState(true);
@@ -61,6 +63,18 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const { user, getAccessTokenSilently, isAuthenticated, loginWithRedirect } = useAuth0();
     const getTokenRef = useRef(getAccessTokenSilently);
     useEffect(() => { getTokenRef.current = getAccessTokenSilently; }, [getAccessTokenSilently]);
+
+    // Close tools menu on outside click
+    useEffect(() => {
+        if (!showToolsMenu) return;
+        function handleClickOutside(e: MouseEvent) {
+            if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target as Node)) {
+                setShowToolsMenu(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [showToolsMenu]);
 
     // 1. Fetch project files from API + store token for agent
     useEffect(() => {
@@ -350,70 +364,88 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                         <PomodoroTimer />
                     </div>
 
-                    {/* Collaborate button */}
-                    <button
-                        onClick={copyCollabLink}
-                        className={`text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm ${
-                            copied ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white"
-                        }`}
-                    >
-                        {copied ? <Check size={14} /> : <Users size={14} />}
-                        {copied ? "Copied Link!" : "Collaborate"}
-                    </button>
-
-                    {/* Emoji Reactions */}
-                    <ReactionOverlay
-                        lastMessage={lastMessage}
-                        onSendReaction={(emoji) => send({ type: "emoji_reaction", emoji, sender: user?.name || "Someone" })}
-                    />
-
-                    {/* Roast My Code button */}
-                    {activeFile && (
+                    {/* Tools Dropdown */}
+                    <div className="relative" ref={toolsMenuRef}>
                         <button
-                            onClick={() => setShowRoast(true)}
-                            className="text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-gradient-to-r from-orange-600 to-red-600 hover:scale-105 text-white"
-                            title="Let the AI roast your current file"
+                            onClick={() => setShowToolsMenu(prev => !prev)}
+                            className={`text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-[#27272a] hover:bg-[#3f3f46] text-gray-200 ${showToolsMenu ? "ring-1 ring-cyan-500/50" : ""}`}
                         >
-                            🔥 Roast My Code
+                            <Wrench size={14} />
+                            Tools
+                            <ChevronDown size={12} className={`transition-transform ${showToolsMenu ? "rotate-180" : ""}`} />
                         </button>
-                    )}
 
-                    {/* Hacker Mode button */}
-                    <button
-                        onClick={() => setShowMatrix(prev => !prev)}
-                        className={`text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm hover:scale-105 ${showMatrix ? 'bg-green-500 text-black shadow-[0_0_15px_rgba(34,197,94,0.5)]' : 'bg-green-900/30 text-green-500 border border-green-500/30 hover:bg-green-500/20'}`}
-                    >
-                        <Terminal size={14} />
-                        Hacker Mode
-                    </button>
+                        {showToolsMenu && (
+                            <div className="absolute right-0 top-full mt-1.5 w-52 bg-[#18181b] border border-[#27272a] rounded-lg shadow-xl z-50 overflow-hidden py-1">
+                                {/* Collaborate */}
+                                <button
+                                    onClick={() => { copyCollabLink(); setShowToolsMenu(false); }}
+                                    className={`w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 transition-colors ${copied ? "text-green-400 bg-green-500/10" : "text-gray-300 hover:bg-[#27272a] hover:text-white"}`}
+                                >
+                                    {copied ? <Check size={14} /> : <Users size={14} />}
+                                    {copied ? "Copied Link!" : "Collaborate"}
+                                </button>
 
-                    {/* Security Scan button */}
-                    <button
-						onClick={() => setShowSecurityScan(true)}
-						className="text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-gradient-to-r from-cyan-500 to-blue-600 hover:scale-105 text-white"
-					>
-						<Shield size={14} />
-						Security Scan
-					</button>
+                                {/* Emoji Reactions */}
+                                <div className="border-t border-[#27272a]">
+                                    <ReactionOverlay
+                                        lastMessage={lastMessage}
+                                        onSendReaction={(emoji) => { send({ type: "emoji_reaction", emoji, sender: user?.name || "Someone" }); setShowToolsMenu(false); }}
+                                        buttonClassName="w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 text-purple-400 hover:bg-[#27272a] hover:text-purple-300 transition-colors"
+                                        pickerPosition="below"
+                                    />
+                                </div>
 
-                    {/* Vibe Reels button */}
-                    <button
-                        onClick={() => setShowReels(true)}
-                        className="text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 hover:scale-105 text-white"
-                    >
-                        <Flame size={14} />
-                        Vibe Reels
-                    </button>
+                                {/* Roast My Code */}
+                                {activeFile && (
+                                    <button
+                                        onClick={() => { setShowRoast(true); setShowToolsMenu(false); }}
+                                        className="w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 text-orange-400 hover:bg-[#27272a] hover:text-orange-300 transition-colors border-t border-[#27272a]"
+                                    >
+                                        <span>🔥</span>
+                                        Roast My Code
+                                    </button>
+                                )}
 
-					<div className="w-[1px] h-4 bg-[#27272a] mx-1"></div>
-                    <button
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        className="text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-[#27272a] hover:bg-[#3f3f46] text-gray-200 disabled:opacity-50"
-                    >
-                        {isSaving ? <Loader2 size={14} className="animate-spin" /> : <GitCommit size={14} />}
-                        Commit
-                    </button>
+                                {/* Hacker Mode */}
+                                <button
+                                    onClick={() => { setShowMatrix(prev => !prev); setShowToolsMenu(false); }}
+                                    className={`w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 transition-colors border-t border-[#27272a] ${showMatrix ? "text-green-400 bg-green-500/10 hover:bg-green-500/20" : "text-green-500 hover:bg-[#27272a] hover:text-green-400"}`}
+                                >
+                                    <Terminal size={14} />
+                                    Hacker Mode {showMatrix && <span className="ml-auto text-[10px] font-bold text-green-400">ON</span>}
+                                </button>
+
+                                {/* Security Scan */}
+                                <button
+                                    onClick={() => { setShowSecurityScan(true); setShowToolsMenu(false); }}
+                                    className="w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 text-cyan-400 hover:bg-[#27272a] hover:text-cyan-300 transition-colors border-t border-[#27272a]"
+                                >
+                                    <Shield size={14} />
+                                    Security Scan
+                                </button>
+
+                                {/* Vibe Reels */}
+                                <button
+                                    onClick={() => { setShowReels(true); setShowToolsMenu(false); }}
+                                    className="w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 text-pink-400 hover:bg-[#27272a] hover:text-pink-300 transition-colors border-t border-[#27272a]"
+                                >
+                                    <Flame size={14} />
+                                    Vibe Reels
+                                </button>
+
+                                {/* Commit */}
+                                <button
+                                    onClick={() => { handleSave(); setShowToolsMenu(false); }}
+                                    disabled={isSaving}
+                                    className="w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 text-gray-300 hover:bg-[#27272a] hover:text-white transition-colors border-t border-[#27272a] disabled:opacity-50"
+                                >
+                                    {isSaving ? <Loader2 size={14} className="animate-spin" /> : <GitCommit size={14} />}
+                                    Commit
+                                </button>
+                            </div>
+                        )}
+                    </div>
 					<div className="w-[1px] h-4 bg-[#27272a] mx-1"></div>
 					<span className="relative flex h-2.5 w-2.5">
 						<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
@@ -429,19 +461,22 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                     {showSidebar && (
                         <>
                             <Panel defaultSize={20} minSize={15} className="flex flex-col bg-[#09090b] relative z-10 border-r border-[#27272a]">
-                                <div className="flex-1 overflow-y-auto w-full">
-                                    <FileExplorer
-                                    files={files}
-                                    activeFile={activeFile}
-                                    onSelect={handleSelectFile}
-                                    projectId={projectId}
-                                    token={agentToken}
-                                    onFilesChange={setFiles}
-                                />
-                                </div>
-                                <div className="h-[220px] shrink-0 border-t border-[#27272a] overflow-y-auto shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
-                                    <ActivityFeed projectId={projectId} />
-                                </div>
+                                <PanelGroup orientation="vertical" className="h-full">
+                                    <Panel defaultSize={70} minSize={20} className="overflow-y-auto">
+                                        <FileExplorer
+                                            files={files}
+                                            activeFile={activeFile}
+                                            onSelect={handleSelectFile}
+                                            projectId={projectId}
+                                            token={agentToken}
+                                            onFilesChange={setFiles}
+                                        />
+                                    </Panel>
+                                    <PanelResizeHandle className="h-1 bg-[#27272a] hover:bg-cyan-500/50 transition-colors cursor-row-resize" />
+                                    <Panel defaultSize={30} minSize={10} className="overflow-y-auto border-t border-[#27272a] shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
+                                        <ActivityFeed projectId={projectId} />
+                                    </Panel>
+                                </PanelGroup>
                             </Panel>
                             <PanelResizeHandle className="w-1 hover:bg-cyan-500/50 transition-colors z-50 cursor-col-resize" />
                         </>
