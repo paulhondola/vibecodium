@@ -23,6 +23,7 @@
     "lucide-react": "^0.507.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "react-resizable-panels": "^4.7.6",
     "server": "workspace:*",
     "shared": "workspace:*",
     "tailwind-merge": "^3.4.0",

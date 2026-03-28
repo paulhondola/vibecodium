@@ -2,16 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
-import { Play, Square, Trash2, Terminal as TerminalIcon, Globe, RefreshCw, Lock } from "lucide-react";
+import { Terminal as TerminalIcon, RefreshCw, Lock } from "lucide-react";
 
 export default function TerminalArea({ projectId }: { projectId: string | null }) {
 	const terminalRef = useRef<HTMLDivElement>(null);
 	const termInstance = useRef<Terminal | null>(null);
 	const wsInstance = useRef<WebSocket | null>(null);
-	const [status, setStatus] = useState<"idle" | "running">("idle");
     const [activeTab, setActiveTab] = useState<"terminal" | "preview">("terminal");
     const [previewUrl, setPreviewUrl] = useState("localhost:3000");
-    const [wsConnected, setWsConnected] = useState(false);
 
 	useEffect(() => {
 		if (!terminalRef.current || activeTab !== "terminal") return;
@@ -50,7 +48,6 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
                 wsInstance.current = ws;
 
                 ws.onopen = () => {
-                    setWsConnected(true);
                     term.clear();
                 };
 
@@ -70,10 +67,7 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
                 ws.onerror = () => {
                     term.writeln("\x1b[33m⚠ Terminal WS unavailable — node-pty not installed on server.\x1b[0m");
                     term.writeln("\x1b[90mYou can still use the editor for collaboration.\x1b[0m");
-                    setWsConnected(false);
                 };
-
-                ws.onclose = () => { setWsConnected(false); };
 
                 const disposableData = term.onData((data) => {
                     if (ws.readyState === WebSocket.OPEN) ws.send(data);
@@ -107,17 +101,7 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
 		};
 	}, [activeTab, projectId]);
 
-    const handleRun = () => {
-        if (!wsInstance.current || wsInstance.current.readyState !== WebSocket.OPEN) return;
-        wsInstance.current.send("bun run server/index.ts\r");
-        setStatus("running");
-        setTimeout(() => { setActiveTab("preview"); setStatus("idle"); }, 1200);
-    };
 
-    const handleClear = () => {
-        if (!wsInstance.current || wsInstance.current.readyState !== WebSocket.OPEN) return;
-        wsInstance.current.send("clear\r");
-    };
 
 	return (
 		<div className="flex flex-col h-full bg-[#09090b] text-white">
