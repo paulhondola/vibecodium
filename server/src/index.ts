@@ -6,6 +6,7 @@ import type { ApiResponse, ExecuteRequest, ExecuteResponse } from "shared";
 import gitRoutes from "./routes/git";
 import projectsRoutes from "./routes/projects";
 import sessionsRoutes from "./routes/sessions";
+import reelsRoutes from "./routes/reels";
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.groq.com/openai/v1";
 const LLM_API_KEY = process.env.LLM_API_KEY ?? "";
@@ -64,6 +65,7 @@ export const app = new Hono()
 	.route("/api/git", gitRoutes)
 	.route("/api/projects", projectsRoutes)
 	.route("/api/sessions", sessionsRoutes)
+	.route("/api/reels", reelsRoutes)
 	.get("/", c => c.text("Hello Hono!"))
 	.get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
     .get("/api/ping-llm", async (c) => {
