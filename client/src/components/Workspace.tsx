@@ -4,7 +4,7 @@ import EditorArea from "./EditorArea";
 import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
 import ReelsWidget from "./ReelsWidget";
-import { ArrowLeft, Loader2, Users, Check, Flame, Save, PanelLeft, TerminalSquare, PanelRight } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
@@ -228,8 +228,8 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                         disabled={isSaving}
                         className="text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-[#27272a] hover:bg-[#3f3f46] text-gray-200 disabled:opacity-50"
                     >
-                        {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                        Save
+                        {isSaving ? <Loader2 size={14} className="animate-spin" /> : <GitCommit size={14} />}
+                        Commit
                     </button>
 					<div className="w-[1px] h-4 bg-[#27272a] mx-1"></div>
 					<span className="relative flex h-2.5 w-2.5">
