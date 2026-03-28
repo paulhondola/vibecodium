@@ -8,6 +8,7 @@ import gitRoutes from "./routes/git";
 import projectsRoutes from "./routes/projects";
 import sessionsRoutes from "./routes/sessions";
 import reelsRoutes from "./routes/reels";
+import agentRoutes from "./routes/agent";
 import { syncProjectFilesToDisk } from "./utils/sync";
 import { db } from "./db";
 import { files, snapshots } from "./db/schema";
@@ -71,6 +72,7 @@ export const app = new Hono()
 	.route("/api/projects", projectsRoutes)
 	.route("/api/sessions", sessionsRoutes)
 	.route("/api/reels", reelsRoutes)
+	.route("/api/agent", agentRoutes)
 	.get("/", c => c.text("Hello Hono!"))
 	.get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
     .get("/api/ping-llm", async (c) => {
@@ -293,6 +295,49 @@ export default {
                 if (payload.type === "JOIN_RESPONSE") {
                     if (data.isHost) {
                         ws.publish(data.projectId, JSON.stringify(payload)); // Send approval
+                    }
+                    return;
+                }
+
+                // agent_accepted: one client accepted a suggestion — atomically broadcast to all
+                if (payload.type === "agent_accepted") {
+                    const broadcast = {
+                        type: "agent_accepted",
+                        filePath: payload.filePath,
+                        content: payload.content,
+                        appliedBy: data.clientId,
+                        updateId: payload.updateId,
+                    };
+                    ws.publish(data.projectId, JSON.stringify(broadcast));
+
+                    // Also persist as a normal code_update in SQLite
+                    if (payload.filePath && payload.content !== undefined) {
+                        setImmediate(() => {
+                            (async () => {
+                                try {
+                                    const timestamp = Date.now();
+                                    await db.insert(files).values({
+                                        id: crypto.randomUUID(),
+                                        projectId: data.projectId,
+                                        path: payload.filePath,
+                                        content: payload.content,
+                                        updatedAt: timestamp
+                                    }).onConflictDoUpdate({
+                                        target: [files.projectId, files.path],
+                                        set: { content: payload.content, updatedAt: Math.floor(timestamp / 1000) }
+                                    });
+                                    await db.insert(snapshots).values({
+                                        id: crypto.randomUUID(),
+                                        projectId: data.projectId,
+                                        path: payload.filePath,
+                                        content: payload.content,
+                                        timestamp
+                                    });
+                                } catch (e) {
+                                    console.error("[WS AgentAccept DB Error]:", e);
+                                }
+                            })();
+                        });
                     }
                     return;
                 }

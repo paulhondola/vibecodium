@@ -1,132 +1,172 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, TerminalSquare, FileEdit, Search, Bot, User, Loader2 } from "lucide-react";
+import { Send, TerminalSquare, FileEdit, Search, Bot, User, Loader2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAgentStream, type PendingUpdate } from "../hooks/useAgentStream";
+import type { ProjectFile } from "./Workspace";
 
 interface Message {
-	id: string;
-	role: "user" | "assistant";
-	content: string;
-	tools?: ToolCall[];
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    tools?: ToolCall[];
+    hasSuggestion?: boolean;
 }
 
 interface ToolCall {
-	id: string;
-	name: "write_file" | "execute_command" | "read_file";
-	args: any;
-	status: "pending" | "done";
+    id: string;
+    name: "write_file" | "execute_command" | "read_file";
+    args: any;
+    status: "pending" | "done";
 }
 
-const mockHistory: Message[] = [
-	{
-		id: "msg1",
-		role: "assistant",
-		content: "Hello! I am your VibeCodium agent. I can help edit files, run commands, and read from the codebase. Try asking me to add a new route or run the server.",
-	},
-];
+interface VibeChatProps {
+    activeFile: ProjectFile | null;
+    projectId: string | null;
+    token: string | null;
+    onPendingUpdate: (update: PendingUpdate) => void;
+}
 
-export default function VibeChat() {
-	const [messages, setMessages] = useState<Message[]>(mockHistory);
-	const [input, setInput] = useState("");
-	const [isGenerating, setIsGenerating] = useState(false);
-	const scrollRef = useRef<HTMLDivElement>(null);
+const WELCOME: Message = {
+    id: "msg1",
+    role: "assistant",
+    content: "Hello! I'm your VibeCodium agent. Select a file and describe a change — I'll propose it inline in the editor for you to Accept or Reject.",
+};
 
-	// Auto-scroll to bottom
-	useEffect(() => {
-		if (scrollRef.current) {
-			scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-		}
-	}, [messages]);
+export default function VibeChat({ activeFile, projectId, token, onPendingUpdate }: VibeChatProps) {
+    const [messages, setMessages] = useState<Message[]>([WELCOME]);
+    const [input, setInput] = useState("");
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const pendingNotifiedRef = useRef<string | null>(null);
 
-	const handleSubmit = (e: React.FormEvent) => {
-		e.preventDefault();
-		if (!input.trim() || isGenerating) return;
+    const { streamingText, isStreaming, pendingUpdate, sendInstruction, clearPending } = useAgentStream();
 
-		const userMsg: Message = { id: Date.now().toString(), role: "user", content: input };
-		setMessages((prev) => [...prev, userMsg]);
-		setInput("");
-		setIsGenerating(true);
+    // Auto-scroll
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [messages, streamingText]);
 
-		// Mock the SSE stream response
-		setTimeout(() => mockStreamResponse(), 600);
-	};
+    // When stream finishes, commit the streamed text as a final message
+    useEffect(() => {
+        if (isStreaming || !streamingText) return;
 
-	const mockStreamResponse = () => {
-		const aid = "ast_" + Date.now();
-		const responseTokens = "I will edit the server file to add a new health check route as you requested.".split(" ");
-        
-        // Add empty assistant message
-		setMessages((prev) => [...prev, { id: aid, role: "assistant", content: "", tools: [] }]);
+        // Only commit once per stream cycle
+        setMessages(prev => {
+            // Remove any existing in-progress message
+            const withoutStream = prev.filter(m => m.id !== "__streaming__");
+            return [...withoutStream, {
+                id: `msg_${Date.now()}`,
+                role: "assistant",
+                content: streamingText,
+                hasSuggestion: !!pendingUpdate,
+            }];
+        });
+    }, [isStreaming]);
 
-		let i = 0;
-		const tokenInterval = setInterval(() => {
-			if (i < responseTokens.length) {
-				setMessages((prev) =>
-					prev.map((m) =>
-                        m.id === aid ? { ...m, content: m.content + (i > 0 ? " " : "") + responseTokens[i] } : m
-                    )
-				);
-				i++;
-			} else {
-				clearInterval(tokenInterval);
-                
-                // Now simulate tool call
-                setTimeout(() => mockToolCall(aid), 500);
-			}
-		}, 80);
-	};
+    // Bubble up new pending updates once (avoid re-notifying on re-render)
+    useEffect(() => {
+        if (!pendingUpdate) return;
+        if (pendingNotifiedRef.current === pendingUpdate.id) return;
+        pendingNotifiedRef.current = pendingUpdate.id;
+        onPendingUpdate(pendingUpdate);
+    }, [pendingUpdate, onPendingUpdate]);
 
-    const mockToolCall = (assistantId: string) => {
-        const toolId = "tc_" + Date.now();
-        setMessages((prev) => 
-            prev.map(m => m.id === assistantId ? {
-                ...m,
-                tools: [...(m.tools || []), { id: toolId, name: "write_file", args: { path: "server/index.ts" }, status: "pending" }]
-            } : m)
-        );
+    // While streaming, keep a live "streaming" message up to date
+    useEffect(() => {
+        if (!isStreaming) return;
+        setMessages(prev => {
+            const hasStream = prev.some(m => m.id === "__streaming__");
+            if (hasStream) {
+                return prev.map(m => m.id === "__streaming__" ? { ...m, content: streamingText } : m);
+            }
+            return [...prev, { id: "__streaming__", role: "assistant", content: streamingText }];
+        });
+    }, [streamingText, isStreaming]);
 
-        // Simulate tool complete
-        setTimeout(() => {
-            setMessages((prev) => 
-                prev.map(m => m.id === assistantId ? {
-                    ...m,
-                    content: m.content + "\n\nI've proposed a change to `server/index.ts`. Please check the editor to Accept or Reject my edit.",
-                    tools: m.tools?.map(t => t.id === toolId ? { ...t, status: "done" } : t)
-                } : m)
-            );
-            setIsGenerating(false);
-        }, 2000);
-    }
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!input.trim() || isStreaming) return;
 
-	return (
-		<div className="flex flex-col h-full bg-[#09090b] text-[#c9d1d9] border-l border-[#27272a]">
-			{/* Header */}
-			<div className="flex items-center justify-between p-3 border-b border-[#27272a] shrink-0 bg-[#09090b]">
-				<h2 className="font-semibold text-xs tracking-wider uppercase text-gray-400">Agent Chat</h2>
-                {isGenerating && (
+        const userMsg: Message = { id: Date.now().toString(), role: "user", content: input };
+        setMessages(prev => [...prev, userMsg]);
+        const instruction = input;
+        setInput("");
+        clearPending();
+
+        if (!activeFile || !token || !projectId) {
+            setMessages(prev => [...prev, {
+                id: `err_${Date.now()}`,
+                role: "assistant",
+                content: "⚠️ Please select a file in the editor first, then try again.",
+            }]);
+            return;
+        }
+
+        await sendInstruction({
+            token,
+            projectId,
+            filePath: activeFile.path,
+            fileContent: activeFile.content ?? "",
+            instruction,
+        });
+    };
+
+    const renderMessageContent = (content: string) => {
+        // Strip the XML block from display — the diff overlay handles it visually
+        const cleaned = content
+            .replace(/<suggested_change[\s\S]*?<\/suggested_change>/g, "")
+            .trim();
+        return cleaned || content;
+    };
+
+    return (
+        <div className="flex flex-col h-full bg-[#09090b] text-[#c9d1d9] border-l border-[#27272a]">
+            {/* Header */}
+            <div className="flex items-center justify-between p-3 border-b border-[#27272a] shrink-0 bg-[#09090b]">
+                <div className="flex items-center gap-2">
+                    <Sparkles size={13} className="text-purple-400" />
+                    <h2 className="font-semibold text-xs tracking-wider uppercase text-gray-400">Agent Chat</h2>
+                </div>
+                {isStreaming && (
                     <span className="flex items-center gap-1.5 text-[10px] text-purple-400 font-medium px-2 py-0.5 bg-purple-500/10 rounded-full animate-pulse border border-purple-500/20">
                         <Loader2 size={10} className="animate-spin" /> THINKING
                     </span>
                 )}
-			</div>
+                {activeFile && !isStreaming && (
+                    <span className="text-[10px] text-gray-600 font-mono truncate max-w-[100px]" title={activeFile.path}>
+                        {activeFile.path.split("/").pop()}
+                    </span>
+                )}
+            </div>
 
-			{/* Messages */}
-			<div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth">
-				<AnimatePresence initial={false}>
-					{messages.map((msg) => (
-						<motion.div
-							key={msg.id}
-							initial={{ opacity: 0, y: 10, scale: 0.95 }}
-							animate={{ opacity: 1, y: 0, scale: 1 }}
-							className={`flex flex-col gap-2 relative ${msg.role === "user" ? "items-end" : "items-start"}`}
-						>
-							<div className={`flex items-start gap-2 max-w-[90%] ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-								<div className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center border shadow-sm ${msg.role === "user" ? "bg-blue-600/20 text-blue-400 border-blue-500/30" : "bg-gradient-to-br from-purple-500/20 to-indigo-500/20 text-purple-400 border-purple-500/30"}`}>
-									{msg.role === "user" ? <User size={14} /> : <Bot size={14} />}
-								</div>
-								<div className={`text-sm py-1.5 px-3 rounded-lg leading-relaxed shadow-sm  ${msg.role === "user" ? "bg-blue-500/10 text-blue-100 border border-blue-500/20" : "text-gray-300"}`}>
-									{msg.content}
-								</div>
-							</div>
+            {/* Messages */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth">
+                <AnimatePresence initial={false}>
+                    {messages.map((msg) => (
+                        <motion.div
+                            key={msg.id}
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            className={`flex flex-col gap-2 relative ${msg.role === "user" ? "items-end" : "items-start"}`}
+                        >
+                            <div className={`flex items-start gap-2 max-w-[90%] ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+                                <div className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center border shadow-sm ${msg.role === "user" ? "bg-blue-600/20 text-blue-400 border-blue-500/30" : "bg-gradient-to-br from-purple-500/20 to-indigo-500/20 text-purple-400 border-purple-500/30"}`}>
+                                    {msg.role === "user" ? <User size={14} /> : <Bot size={14} />}
+                                </div>
+                                <div className={`text-sm py-1.5 px-3 rounded-lg leading-relaxed shadow-sm whitespace-pre-wrap ${msg.role === "user" ? "bg-blue-500/10 text-blue-100 border border-blue-500/20" : "text-gray-300"}`}>
+                                    {renderMessageContent(msg.content)}
+                                    {msg.id === "__streaming__" && (
+                                        <span className="inline-block w-1.5 h-3.5 bg-purple-400 ml-0.5 animate-pulse rounded-sm" />
+                                    )}
+                                    {msg.hasSuggestion && (
+                                        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-purple-400 font-semibold bg-purple-500/10 border border-purple-500/20 rounded px-2 py-1">
+                                            <Sparkles size={10} />
+                                            Change proposed — see editor for Accept/Reject
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
 
                             {/* Tool Calls */}
                             {msg.tools && msg.tools.length > 0 && (
@@ -139,10 +179,8 @@ export default function VibeChat() {
                                             {tool.name === "write_file" && <FileEdit size={12} className="text-yellow-500" />}
                                             {tool.name === "execute_command" && <TerminalSquare size={12} className="text-green-500" />}
                                             {tool.name === "read_file" && <Search size={12} className="text-blue-500" />}
-                                            
                                             <span className="text-gray-300 font-semibold">{tool.name}</span>
                                             <span className="truncate text-gray-500 max-w-[120px]">{JSON.stringify(tool.args)}</span>
-                                            
                                             <div className="ml-auto flex items-center shrink-0">
                                                 {tool.status === "pending" ? (
                                                     <Loader2 size={12} className="animate-spin text-purple-400" />
@@ -154,40 +192,46 @@ export default function VibeChat() {
                                     ))}
                                 </div>
                             )}
-						</motion.div>
-					))}
-				</AnimatePresence>
-			</div>
+                        </motion.div>
+                    ))}
+                </AnimatePresence>
+            </div>
 
-			{/* Input */}
-			<div className="p-3 bg-[#09090b] border-t border-[#27272a] shrink-0">
-				<form onSubmit={handleSubmit} className="flex flex-col gap-2 relative">
-					<textarea
-						value={input}
-						onChange={(e) => setInput(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" && !e.shiftKey) {
-								e.preventDefault();
-								handleSubmit(e);
-							}
-						}}
-						placeholder={isGenerating ? "Agent is typing..." : "Ask VibeCodium..."}
-						className="w-full bg-[#09090b] border border-[#27272a] rounded-lg p-3 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/50 resize-none placeholder:text-gray-600 shadow-inner"
-						rows={3}
-                        disabled={isGenerating}
-					/>
-					<button
-						type="submit"
-						disabled={!input.trim() || isGenerating}
-						className="absolute bottom-3 right-3 p-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-md disabled:opacity-50 disabled:hover:bg-purple-600 transition-colors shadow-sm"
-					>
-						<Send size={14} />
-					</button>
-				</form>
+            {/* Input */}
+            <div className="p-3 bg-[#09090b] border-t border-[#27272a] shrink-0">
+                <form onSubmit={handleSubmit} className="flex flex-col gap-2 relative">
+                    <textarea
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSubmit(e);
+                            }
+                        }}
+                        placeholder={
+                            !activeFile
+                                ? "Select a file first..."
+                                : isStreaming
+                                ? "Agent is thinking..."
+                                : "Describe a change to make..."
+                        }
+                        className="w-full bg-[#09090b] border border-[#27272a] rounded-lg p-3 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/50 resize-none placeholder:text-gray-600 shadow-inner"
+                        rows={3}
+                        disabled={isStreaming}
+                    />
+                    <button
+                        type="submit"
+                        disabled={!input.trim() || isStreaming || !activeFile}
+                        className="absolute bottom-3 right-3 p-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-md disabled:opacity-50 disabled:hover:bg-purple-600 transition-colors shadow-sm"
+                    >
+                        <Send size={14} />
+                    </button>
+                </form>
                 <div className="text-center mt-2 text-[10px] text-gray-600">
                     Press <kbd className="px-1 py-0.5 bg-[#09090b] border border-[#27272a] rounded">Enter</kbd> to send, <kbd className="px-1 py-0.5 bg-[#09090b] border border-[#27272a] rounded">Shift+Enter</kbd> for newline
                 </div>
-			</div>
-		</div>
-	);
+            </div>
+        </div>
+    );
 }

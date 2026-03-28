@@ -1,9 +1,10 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import MonacoEditor, { useMonaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { Bot, Check, X } from "lucide-react";
 import type { ProjectFile } from "./Workspace";
 import { useSocket } from "../contexts/SocketProvider";
+import type { PendingUpdate } from "../hooks/useAgentStream";
 
 function safeCssId(id: string) {
     return id.replace(/[^a-zA-Z0-9]/g, "_");
@@ -20,16 +21,20 @@ interface EditorAreaProps {
     userId?: string;
     remoteCodeUpdate?: RemoteCodeUpdate | null;
     remoteCursorUpdate?: RemoteCursorUpdate | null;
+    pendingUpdate?: PendingUpdate | null;
+    onPendingResolved?: () => void;
+    projectId?: string | null;
 }
 
-export default function EditorArea({ 
+export default function EditorArea({
     openFiles, onSelectFile, onCloseFile,
-    activeFile, userId, remoteCodeUpdate, remoteCursorUpdate 
+    activeFile, userId, remoteCodeUpdate, remoteCursorUpdate,
+    pendingUpdate, onPendingResolved,
 }: EditorAreaProps) {
-	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-	const monaco = useMonaco();
-	const [showPending, setShowPending] = useState(false);
-	const [code, setCode] = useState("");
+    const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+    const monaco = useMonaco();
+    const [code, setCode] = useState("");
+
     const { send } = useSocket();
     const sendRef = useRef(send);
     useEffect(() => { sendRef.current = send; }, [send]);
@@ -37,7 +42,6 @@ export default function EditorArea({
     const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
     const isRemoteUpdate = useRef(false);
     const injectedStyles = useRef<Set<string>>(new Set());
-    // Keep activeFile in a ref so cursor/send closures always see the current value
     const activeFileRef = useRef(activeFile);
     useEffect(() => { activeFileRef.current = activeFile; }, [activeFile]);
 
@@ -45,7 +49,6 @@ export default function EditorArea({
     useEffect(() => {
         if (activeFile) {
             setCode(activeFile.content || "");
-            setShowPending(false);
             decorationsRef.current?.clear();
         } else {
             setCode("");
@@ -71,19 +74,11 @@ export default function EditorArea({
         if (editorRef.current) {
             const model = editorRef.current.getModel();
             if (model && model.getValue() !== remoteCodeUpdate.content) {
-                // Determine current cursor positions
                 const selections = editorRef.current.getSelections();
-                
-                // Directly set the value instead of relying on value={code} prop
                 model.setValue(remoteCodeUpdate.content);
-                
-                // Restore selections if possible
-                if (selections) {
-                    editorRef.current.setSelections(selections);
-                }
+                if (selections) editorRef.current.setSelections(selections);
             }
         }
-        
         setTimeout(() => { isRemoteUpdate.current = false; }, 50);
     }, [remoteCodeUpdate, userId]);
 
@@ -123,11 +118,10 @@ export default function EditorArea({
         }]);
     }, [remoteCursorUpdate, userId, monaco]);
 
-	const handleEditorDidMount = (ed: editor.IStandaloneCodeEditor) => {
-		editorRef.current = ed;
+    const handleEditorDidMount = (ed: editor.IStandaloneCodeEditor) => {
+        editorRef.current = ed;
         decorationsRef.current = ed.createDecorationsCollection([]);
 
-        // Broadcast cursor position on every move
         ed.onDidChangeCursorPosition((e) => {
             if (activeFileRef.current) {
                 sendRef.current({
@@ -137,16 +131,12 @@ export default function EditorArea({
                 });
             }
         });
-	};
+    };
 
     const handleCodeChange = (val: string | undefined) => {
         const text = val || "";
         setCode(text);
-
-        // Don't echo back remote changes
         if (isRemoteUpdate.current) return;
-
-        // Broadcast to other users
         if (activeFileRef.current) {
             sendRef.current({
                 type: "code_change",
@@ -156,8 +146,50 @@ export default function EditorArea({
         }
     };
 
-	const acceptEdit = () => setShowPending(false);
-	const rejectEdit = () => setShowPending(false);
+    // ── Diff lines for the inline overlay ──────────────────────────────────
+    const diffLines = useCallback((original: string, suggested: string) => {
+        const oLines = original.split("\n");
+        const sLines = suggested.split("\n");
+        const result: { type: "remove" | "add" | "equal"; text: string }[] = [];
+        for (const l of oLines) result.push({ type: "remove", text: l });
+        for (const l of sLines) result.push({ type: "add", text: l });
+        return result;
+    }, []);
+
+    // ── Accept / Reject handlers ────────────────────────────────────────────
+    const handleAccept = useCallback(() => {
+        if (!pendingUpdate) return;
+        const newContent = pendingUpdate.suggestedContent;
+
+        // Apply to editor
+        setCode(newContent);
+        if (editorRef.current) {
+            const model = editorRef.current.getModel();
+            if (model) {
+                isRemoteUpdate.current = true;
+                model.setValue(newContent);
+                setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+            }
+        }
+        // Persist active file content locally
+        if (activeFileRef.current) {
+            activeFileRef.current.content = newContent;
+        }
+
+        // Broadcast agent_accepted to all collaborators
+        sendRef.current({
+            type: "agent_accepted",
+            filePath: pendingUpdate.filePath,
+            content: newContent,
+            updateId: pendingUpdate.id,
+        });
+
+        onPendingResolved?.();
+    }, [pendingUpdate, onPendingResolved]);
+
+    const handleReject = useCallback(() => {
+        onPendingResolved?.();
+    }, [onPendingResolved]);
 
     const language = activeFile?.path.endsWith(".tsx") || activeFile?.path.endsWith(".ts")
         ? "typescript"
@@ -168,21 +200,32 @@ export default function EditorArea({
         : activeFile?.path.endsWith(".py") ? "python"
         : "javascript";
 
-	return (
-		<div className="flex flex-col h-full bg-[#09090b] text-[#c9d1d9] relative">
-			<div className="flex bg-[#09090b] border-b border-[#27272a] shrink-0 overflow-x-auto no-scrollbar scroll-smooth">
+    const hasPending = !!pendingUpdate && pendingUpdate.status === "pending";
+
+    // Escape key rejects the pending diff
+    useEffect(() => {
+        if (!hasPending) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") handleReject(); };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [hasPending, handleReject]);
+
+    return (
+        <div className="flex flex-col h-full bg-[#09090b] text-[#c9d1d9] relative">
+            {/* Tab bar */}
+            <div className="flex bg-[#09090b] border-b border-[#27272a] shrink-0 overflow-x-auto no-scrollbar scroll-smooth">
                 {openFiles.map(file => {
                     const isActive = activeFile?.path === file.path;
                     const ext = file.path.split('.').pop()?.toUpperCase() || '';
                     const isJS = ext === 'JS' || ext === 'TS' || ext === 'TSX' || ext === 'JSX';
-                    
+
                     return (
-                        <div 
+                        <div
                             key={file.path}
                             onClick={() => onSelectFile(file)}
                             className={`flex items-center gap-2 px-3 py-1.5 border-r border-[#27272a] cursor-pointer max-w-[200px] min-w-[120px] group transition-colors ${
-                                isActive 
-                                    ? "bg-[#18181b] border-t-[3px] border-t-cyan-500 text-gray-200" 
+                                isActive
+                                    ? "bg-[#18181b] border-t-[3px] border-t-cyan-500 text-gray-200"
                                     : "bg-[#09090b] text-gray-500 hover:bg-[#18181b] hover:text-gray-300 border-t-[3px] border-t-transparent"
                             }`}
                         >
@@ -190,7 +233,7 @@ export default function EditorArea({
                                 {isJS ? 'JS' : ext.substring(0, 3)}
                             </span>
                             <span className="text-xs truncate flex-1 font-medium">{file.path.split("/").pop()}</span>
-                            <button 
+                            <button
                                 onClick={(e) => onCloseFile(file, e)}
                                 className={`p-0.5 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity ${isActive ? "hover:bg-[#27272a] text-gray-400" : "hover:bg-[#27272a] text-gray-500"}`}
                             >
@@ -199,9 +242,9 @@ export default function EditorArea({
                         </div>
                     );
                 })}
-			</div>
+            </div>
 
-			<div className="flex-1 relative">
+            <div className="flex-1 relative">
                 {activeFile ? (
                     <MonacoEditor
                         height="100%"
@@ -216,6 +259,7 @@ export default function EditorArea({
                             scrollBeyondLastLine: false,
                             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                             padding: { top: 16 },
+                            readOnly: hasPending, // lock editor while diff is shown
                         }}
                         onMount={handleEditorDidMount}
                     />
@@ -225,7 +269,6 @@ export default function EditorArea({
                             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-[#09090b] text-3xl font-bold mb-6 shadow-[0_0_30px_rgba(34,211,238,0.2)]">iT</div>
                             <h2 className="text-2xl font-bold text-gray-300 mb-2 font-['Space_Grotesk']">iTECify Editor</h2>
                             <p className="text-gray-500 text-sm mb-10">Select a file from the explorer to begin coding.</p>
-                            
                             <div className="flex flex-col items-start text-xs text-gray-500 gap-3 font-mono">
                                 <div className="flex items-center justify-between w-56"><span className="text-gray-600">Show Explorer</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-gray-400">⌘ E</span></div>
                                 <div className="flex items-center justify-between w-56"><span className="text-gray-600">Toggle Terminal</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-gray-400">⌘ J</span></div>
@@ -235,34 +278,66 @@ export default function EditorArea({
                     </div>
                 )}
 
-                {showPending && activeFile && (
-                    <div className="absolute top-[80px] left-[40px] right-8 bg-[#09090b]/80 backdrop-blur-sm border-2 border-purple-500/50 rounded-lg overflow-hidden shadow-2xl flex flex-col z-20">
-                        <div className="flex items-center justify-between bg-purple-500/10 px-3 py-2 border-b border-purple-500/20">
+                {/* ── Inline Agent Diff Overlay ────────────────────────────── */}
+                {hasPending && pendingUpdate && (
+                    <div className="absolute inset-4 top-6 bg-[#0d0d0f]/95 backdrop-blur-md border border-purple-500/40 rounded-xl overflow-hidden shadow-[0_0_60px_rgba(168,85,247,0.15)] flex flex-col z-20 animate-in fade-in duration-200">
+                        {/* Header bar */}
+                        <div className="flex items-center justify-between px-4 py-2.5 bg-purple-900/20 border-b border-purple-500/20 shrink-0">
                             <div className="flex items-center gap-2 text-purple-300 font-medium text-xs">
                                 <Bot size={14} className="text-purple-400" />
-                                <span>Agent proposes changes targeting lines 5-9</span>
+                                <span>Agent proposes changes to <code className="text-purple-200 bg-purple-500/10 px-1.5 py-0.5 rounded font-mono text-[11px]">{pendingUpdate.filePath.split("/").pop()}</code></span>
                             </div>
                             <div className="flex items-center gap-2">
-                                <button onClick={rejectEdit} className="bg-red-500/20 hover:bg-red-500/30 text-red-300 px-2 py-1 flex items-center gap-1 rounded text-xs transition-colors border border-red-500/30">
+                                <button
+                                    onClick={handleReject}
+                                    className="bg-red-500/10 hover:bg-red-500/25 text-red-300 px-3 py-1.5 flex items-center gap-1.5 rounded-lg text-xs font-semibold transition-all border border-red-500/20 hover:border-red-500/40"
+                                >
                                     <X size={12} /> Reject
                                 </button>
-                                <button onClick={acceptEdit} className="bg-green-500/20 hover:bg-green-500/30 text-green-300 px-2 py-1 flex items-center gap-1 rounded text-xs transition-colors border border-green-500/30">
+                                <button
+                                    onClick={handleAccept}
+                                    className="bg-green-500/10 hover:bg-green-500/25 text-green-300 px-3 py-1.5 flex items-center gap-1.5 rounded-lg text-xs font-semibold transition-all border border-green-500/20 hover:border-green-500/40 shadow-[0_0_12px_rgba(34,197,94,0.1)]"
+                                >
                                     <Check size={12} /> Accept
                                 </button>
                             </div>
                         </div>
-                        <div className="p-3 text-sm font-mono leading-relaxed bg-[#09090b] relative">
-                            <div className="text-red-400/80 bg-red-400/10 -mx-3 px-3 py-0.5 line-through decoration-red-400/50">
-                                // Mock Code removal
+
+                        {/* Diff content */}
+                        <div className="flex-1 overflow-auto p-4 font-mono text-xs leading-6">
+                            <div className="mb-3 text-[10px] uppercase tracking-widest text-gray-600 font-sans flex items-center gap-3">
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500/70"></span> Before</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500/70"></span> After</span>
                             </div>
-                            <div className="text-green-400 bg-green-400/10 -mx-3 px-3 py-0.5 border-l-2 border-green-400 mt-1">
-                                // Neural Generated Injection<br/>
-                                console.log("Refactored by iTECify Neural Agent")
-                            </div>
+                            {diffLines(pendingUpdate.originalContent, pendingUpdate.suggestedContent).map((line, i) => (
+                                <div
+                                    key={i}
+                                    className={`flex gap-3 px-2 py-0.5 rounded-sm ${
+                                        line.type === "remove"
+                                            ? "bg-red-500/8 text-red-300/80 line-through decoration-red-400/40"
+                                            : line.type === "add"
+                                            ? "bg-green-500/8 text-green-300 border-l-2 border-green-500/50"
+                                            : "text-gray-500"
+                                    }`}
+                                >
+                                    <span className={`shrink-0 select-none font-bold ${line.type === "remove" ? "text-red-600" : line.type === "add" ? "text-green-600" : "text-gray-700"}`}>
+                                        {line.type === "remove" ? "−" : line.type === "add" ? "+" : " "}
+                                    </span>
+                                    <span className="whitespace-pre-wrap break-all">{line.text}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Footer hint */}
+                        <div className="shrink-0 px-4 py-2 border-t border-purple-500/10 bg-purple-900/10 text-[10px] text-gray-600 flex items-center justify-between">
+                            <span>Accepting will apply this change and sync to all collaborators</span>
+                            <span className="flex items-center gap-2">
+                                <kbd className="px-1.5 py-0.5 bg-[#18181b] border border-[#27272a] rounded text-gray-500">Esc</kbd> to reject
+                            </span>
                         </div>
                     </div>
                 )}
-			</div>
-		</div>
-	);
+            </div>
+        </div>
+    );
 }
