@@ -34,6 +34,7 @@ export default function EditorArea({
     const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
     const monaco = useMonaco();
     const [code, setCode] = useState("");
+    const [isRetro, setIsRetro] = useState(false);
 
     const { send } = useSocket();
     const sendRef = useRef(send);
@@ -44,6 +45,53 @@ export default function EditorArea({
     const injectedStyles = useRef<Set<string>>(new Set());
     const activeFileRef = useRef(activeFile);
     useEffect(() => { activeFileRef.current = activeFile; }, [activeFile]);
+
+    // Konami code Easter Egg
+    const konamiIndex = useRef(0);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const konamiCode = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+            if (e.key === konamiCode[konamiIndex.current] || e.key.toLowerCase() === konamiCode[konamiIndex.current].toLowerCase()) {
+                konamiIndex.current++;
+                if (konamiIndex.current === konamiCode.length) {
+                    setIsRetro(prev => !prev);
+                    konamiIndex.current = 0;
+                    // Play level up sound effect
+                    new Audio('https://www.myinstants.com/media/sounds/1up.mp3').play().catch(() => {});
+                }
+            } else {
+                konamiIndex.current = 0;
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
+    // Define retro theme
+    useEffect(() => {
+        if (monaco) {
+            monaco.editor.defineTheme('retro', {
+                base: 'vs-dark',
+                inherit: false,
+                rules: [
+                    { token: '', foreground: '00FF00', background: '000000' },
+                    { token: 'keyword', foreground: '00FF00', fontStyle: 'bold' },
+                    { token: 'string', foreground: '33FF33' },
+                    { token: 'number', foreground: 'AAFFAA' },
+                    { token: 'comment', foreground: '008800' },
+                ],
+                colors: {
+                    'editor.background': '#000000',
+                    'editor.foreground': '#00FF00',
+                    'editorCursor.foreground': '#00FF00',
+                    'editor.lineHighlightBackground': '#002200',
+                    'editorLineNumber.foreground': '#008800',
+                    'editor.selectionBackground': '#004400',
+                }
+            });
+        }
+    }, [monaco]);
 
     // Sync code when active file changes
     useEffect(() => {
@@ -251,7 +299,7 @@ export default function EditorArea({
                     <MonacoEditor
                         height="100%"
                         language={language}
-                        theme="vs-dark"
+                        theme={isRetro ? "retro" : "vs-dark"}
                         value={code}
                         onChange={handleCodeChange}
                         options={{
@@ -259,7 +307,7 @@ export default function EditorArea({
                             minimap: { enabled: false },
                             automaticLayout: true,
                             scrollBeyondLastLine: false,
-                            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                            fontFamily: isRetro ? "'Courier New', monospace" : "'JetBrains Mono', 'Fira Code', monospace",
                             padding: { top: 16 },
                             readOnly: hasPending, // lock editor while diff is shown
                         }}

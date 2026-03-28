@@ -55,6 +55,11 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
                 ws.onmessage = (event) => {
                     if (typeof event.data === "string") {
                         term.write(event.data);
+                        if (event.data.includes("SECURITY BLOCK")) {
+                            new Audio("https://www.myinstants.com/media/sounds/error.mp3").play().catch(() => {});
+                        } else if (event.data.includes("Execution Timeout")) {
+                            new Audio("https://www.myinstants.com/media/sounds/buzzer.mp3").play().catch(() => {});
+                        }
                     } else if (event.data instanceof Blob) {
                         const reader = new FileReader();
                         reader.onload = () => {
