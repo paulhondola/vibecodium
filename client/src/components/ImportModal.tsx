@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Github, X, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
+import { API_BASE } from "@/lib/config";
 
 interface ImportModalProps {
 	isOpen: boolean;
@@ -27,7 +28,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
 		try {
 			const token = await getAccessTokenSilently();
 			
-			const res = await fetch("http://localhost:3000/api/projects/import", {
+			const res = await fetch(`${API_BASE}/api/projects/import`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",

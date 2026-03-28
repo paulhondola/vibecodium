@@ -3,6 +3,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { ArrowLeft, LogOut, Activity, FolderGit2, Star, Zap } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
+import { API_BASE } from "@/lib/config";
 
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
@@ -23,8 +24,8 @@ function ProfilePage() {
       getAccessTokenSilently().then(token => {
         const headers = { Authorization: `Bearer ${token}` };
         return Promise.all([
-          fetch(`http://localhost:3000/api/github/users/${user.nickname}`, { headers }).then(res => res.json()),
-          fetch(`http://localhost:3000/api/github/search/commits?q=author:${user.nickname}`, { headers }).then(res => res.json())
+          fetch(`${API_BASE}/api/github/users/${user.nickname}`, { headers }).then(res => res.json()),
+          fetch(`${API_BASE}/api/github/search/commits?q=author:${user.nickname}`, { headers }).then(res => res.json())
         ]);
       })
       .then(([userData, commitData]) => {
