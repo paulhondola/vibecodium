@@ -8,9 +8,9 @@ agentRoutes.use("/*", async (c, next) => {
     return authMiddleware(c, next);
 });
 
-const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-const GROQ_API_KEY = process.env.GROQ_API_KEY ?? process.env.LLM_API_KEY ?? "";
-const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
+const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
+const LLM_KEY = process.env.LLM_KEY ?? "";
+const LLM_MODEL = process.env.LLM_MODEL ?? "deepseek-chat";
 
 const SYSTEM_PROMPT = `You are a surgical coding agent inside iTECify, a collaborative IDE.
 The user will share a file and an instruction. Your task: suggest the MINIMAL change needed.
@@ -61,8 +61,8 @@ agentRoutes.post("/suggest", async (c) => {
             return c.json({ error: "Missing instruction or filePath" }, 400);
         }
 
-        if (!GROQ_API_KEY) {
-            return c.json({ error: "GROQ_API_KEY not configured" }, 500);
+        if (!LLM_KEY) {
+            return c.json({ error: "LLM_KEY not configured" }, 500);
         }
 
         const userMessage = `File: \`${body.filePath}\`
@@ -73,14 +73,14 @@ ${body.fileContent || "(empty file)"}
 
 Instruction: ${body.instruction}`;
 
-        const groqRes = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
+        const groqRes = await fetch(`${LLM_BASE_URL}/chat/completions`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${GROQ_API_KEY}`,
+                Authorization: `Bearer ${LLM_KEY}`,
             },
             body: JSON.stringify({
-                model: GROQ_MODEL,
+                model: LLM_MODEL,
                 messages: [
                     { role: "system", content: SYSTEM_PROMPT },
                     { role: "user", content: userMessage },

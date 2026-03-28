@@ -14,15 +14,12 @@ import { syncProjectFilesToDisk } from "./utils/sync";
 import { db } from "./db";
 import { files, snapshots } from "./db/schema";
 
-const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.groq.com/openai/v1";
-const LLM_API_KEY = process.env.LLM_API_KEY ?? "";
-const LLM_MODEL = process.env.LLM_MODEL ?? "llama-3.3-70b-versatile";
+const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
+const LLM_KEY = process.env.LLM_KEY ?? "";
+const LLM_MODEL = process.env.LLM_MODEL ?? "deepseek-chat";
 
 const LOCAL_BASE_URL = "http://localhost:1234/v1";
 const LOCAL_MODEL = process.env.LOCAL_MODEL ?? "qwen2.5-coder-32b-instruct";
-const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-const GROQ_API_KEY = process.env.GROQ_API_KEY ?? process.env.LLM_API_KEY ?? "";
-const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
 
 async function pingProvider(baseURL: string, apiKey: string, model: string) {
 	const res = await fetch(`${baseURL}/chat/completions`, {
@@ -78,10 +75,10 @@ export const app = new Hono()
 	.get("/", c => c.text("Hello Hono!"))
 	.get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
     .get("/api/ping-llm", async (c) => {
-        if (!LLM_API_KEY) return c.json({ success: false, error: "LLM_API_KEY is not set" }, 500);
+        if (!LLM_KEY) return c.json({ success: false, error: "LLM_KEY is not set" }, 500);
         const res = await fetch(`${LLM_BASE_URL}/chat/completions`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${LLM_API_KEY}` },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${LLM_KEY}` },
             body: JSON.stringify({ model: LLM_MODEL, messages: [{ role: "user", content: "Reply with exactly: pong" }], max_tokens: 10 }),
             signal: AbortSignal.timeout(15_000),
         });
@@ -97,12 +94,12 @@ export const app = new Hono()
             const reply = await pingProvider(LOCAL_BASE_URL, "lm-studio", LOCAL_MODEL);
             return c.json({ success: true, provider: "local", model: LOCAL_MODEL, reply });
         } catch (localErr) {
-            if (!GROQ_API_KEY) return c.json({ success: false, error: "Local LM Studio unreachable and GROQ_API_KEY is not set" }, 503);
+            if (!LLM_KEY) return c.json({ success: false, error: "Local LM Studio unreachable and LLM_KEY is not set" }, 503);
             try {
-                const reply = await pingProvider(GROQ_BASE_URL, GROQ_API_KEY, GROQ_MODEL);
-                return c.json({ success: true, provider: "groq", model: GROQ_MODEL, reply });
+                const reply = await pingProvider(LLM_BASE_URL, LLM_KEY, LLM_MODEL);
+                return c.json({ success: true, provider: "deepseek", model: LLM_MODEL, reply });
             } catch (remoteErr) {
-                return c.json({ success: false, error: "Both providers failed", local: String(localErr), groq: String(remoteErr) }, 503);
+                return c.json({ success: false, error: "Both providers failed", local: String(localErr), deepseek: String(remoteErr) }, 503);
             }
         }
     })
