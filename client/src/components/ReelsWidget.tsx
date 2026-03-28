@@ -255,7 +255,7 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 					return (
 						<div
 							key={`${reel.id}_${index}`}
-							ref={(el) => reel.videoId ? handleVideoRef(reel.id, el) : null}
+							ref={(el) => { if (reel.videoId) handleVideoRef(reel.id, el); }}
 							data-reel-id={reel.id}
 							data-reel-index={index}
 							className="snap-start snap-always h-full w-full relative flex items-center justify-center bg-black"
