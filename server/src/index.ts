@@ -201,14 +201,16 @@ interface TerminalRoom {
     proc: ReturnType<typeof Bun.spawn>; // docker exec subprocess
 }
 
-const termClients = new Map<string, Set<import("bun").ServerWebSocket<WSData>>>();
-const termRooms   = new Map<string, TerminalRoom>();
+const termClients     = new Map<string, Set<import("bun").ServerWebSocket<WSData>>>();
+const termRooms       = new Map<string, TerminalRoom>();
+const termLineBuffers = new Map<string, string>(); // per-room line edit buffer
 
 async function stopTerminal(roomId: string): Promise<void> {
     const room    = termRooms.get(roomId);
     const clients = termClients.get(roomId);
     termRooms.delete(roomId);
     termClients.delete(roomId);
+    termLineBuffers.delete(roomId);
 
     clients?.forEach(c => {
         try { c.send("\r\n\x1b[33m[Container stopped]\x1b[0m\r\n"); } catch (_) {}
@@ -455,22 +457,38 @@ export default {
                     }
                 } catch { /* not JSON — treat as raw stdin */ }
 
-                // Translate xterm CR → LF (no PTY driver to do it for us)
-                const input = message === "\r" ? "\n" : message;
-
-                // Server-side echo (no PTY = no automatic echo from shell)
+                // Server-side line buffering (no PTY = no kernel line discipline)
+                // We echo characters locally and only flush the line to the shell on Enter.
                 const broadcastAll = (msg: string) =>
                     termClients.get(ws.data.projectId)?.forEach(c => { try { c.send(msg); } catch (_) {} });
-                if (input === "\n") {
-                    broadcastAll("\r\n");
-                } else if (input === "\x7f" || input === "\b") {
-                    broadcastAll("\b \b");
-                } else if (input.length === 1 && input.charCodeAt(0) >= 32) {
-                    broadcastAll(input);
-                }
 
-                // Forward to shell stdin
-                try { room.proc.stdin.write(input); } catch (_) {}
+                const roomId = ws.data.projectId;
+
+                if (message === "\r" || message === "\n") {
+                    // Enter — flush buffered line to shell
+                    const line = (termLineBuffers.get(roomId) ?? "") + "\n";
+                    termLineBuffers.set(roomId, "");
+                    broadcastAll("\r\n");
+                    try { room.proc.stdin.write(line); } catch (_) {}
+                } else if (message === "\x7f" || message === "\b") {
+                    // Backspace — pop last char from buffer, erase on screen
+                    const buf = termLineBuffers.get(roomId) ?? "";
+                    if (buf.length > 0) {
+                        termLineBuffers.set(roomId, buf.slice(0, -1));
+                        broadcastAll("\b \b");
+                    }
+                } else if (message.startsWith("\x1b")) {
+                    // Escape sequences (arrow keys, etc.) — forward directly, don't buffer
+                    try { room.proc.stdin.write(message); } catch (_) {}
+                } else if (message.length === 1 && message.charCodeAt(0) < 32) {
+                    // Other control chars (Ctrl+C, Ctrl+D, etc.) — forward directly
+                    try { room.proc.stdin.write(message); } catch (_) {}
+                } else {
+                    // Printable chars — append to buffer and echo
+                    const buf = termLineBuffers.get(roomId) ?? "";
+                    termLineBuffers.set(roomId, buf + message);
+                    broadcastAll(message);
+                }
                 return;
             }
 
