@@ -343,7 +343,14 @@ export default {
                 }
 
                 // Standard pub/sub forward
-                if (payload.type === "code_change" || payload.type === "cursor_move" || payload.type === "file_focus") {
+                if (
+                    payload.type === "code_change" ||
+                    payload.type === "cursor_move" ||
+                    payload.type === "file_focus" ||
+                    payload.type === "file_created" ||
+                    payload.type === "file_deleted" ||
+                    payload.type === "file_renamed"
+                ) {
                     // Normalize standard schema implicitly replacing "data.type" to "_update" pattern exactly as UI expects
                     const outType = payload.type === "code_change" ? "code_update" : payload.type === "cursor_move" ? "cursor_update" : "file_focus_update";
                     const outbound = {
