@@ -20,13 +20,21 @@ interface GithubRepo {
   language: string | null;
 }
 
+interface DBProject {
+  _id: string;
+  userId: string;
+  name: string;
+  repoUrl: string;
+  createdAt: string;
+}
+
 function DashboardPage() {
   const { user, isAuthenticated, isLoading, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
 
   const [repos, setRepos] = useState<GithubRepo[]>([]);
   const [isFetchingRepos, setIsFetchingRepos] = useState(false);
-  const [externalRepos, setExternalRepos] = useState<GithubRepo[]>([]);
+  const [savedProjects, setSavedProjects] = useState<DBProject[]>([]);
   const [isFetchingExternal, setIsFetchingExternal] = useState(false);
   const [importingRepoId, setImportingRepoId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,33 +58,20 @@ function DashboardPage() {
         })
         .finally(() => setIsFetchingRepos(false));
 
-      // Fetch external repositories
-      const externalReposKey = `external_repos_${user.nickname}`;
-      const savedReposStr = localStorage.getItem(externalReposKey);
-      if (savedReposStr) {
-        try {
-          const savedUrls: string[] = JSON.parse(savedReposStr);
-          if (savedUrls.length > 0) {
-            setIsFetchingExternal(true);
-            Promise.all(savedUrls.map(url => {
-              try {
-                  const urlObj = new URL(url);
-                  const parts = urlObj.pathname.split('/').filter(Boolean);
-                  if (parts.length >= 2) {
-                    return fetch(`https://api.github.com/repos/${parts[0]}/${parts[1]}`)
-                      .then(res => res.ok ? res.json() : null)
-                      .catch(() => null);
-                  }
-              } catch(e){}
-              return Promise.resolve(null);
-            }))
-            .then(results => {
-              setExternalRepos(results.filter(r => r !== null));
-            })
-            .finally(() => setIsFetchingExternal(false));
-          }
-        } catch(e) { /* ignore parse error */ }
-      }
+      // Fetch saved projects from MongoDB
+      setIsFetchingExternal(true);
+      getAccessTokenSilently()
+        .then(token => fetch("http://localhost:3000/api/projects", {
+            headers: { Authorization: `Bearer ${token}` }
+        }))
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && Array.isArray(data.projects)) {
+                setSavedProjects(data.projects);
+            }
+        })
+        .catch(console.error)
+        .finally(() => setIsFetchingExternal(false));
     }
   }, [user?.nickname]);
 
@@ -137,6 +132,40 @@ function DashboardPage() {
           </div>
         </div>
       );
+  };
+
+  const renderSavedProjectCard = (project: DBProject) => {
+    const date = new Date(project.createdAt);
+
+    return (
+        <div 
+          key={project._id}
+          onClick={() => navigate({ to: "/", search: { w: project._id } })}
+          className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-[rgba(59,130,246,0.2)] rounded-2xl p-6 flex flex-col group hover:border-[rgba(59,130,246,0.6)] hover:shadow-[0_0_30px_rgba(59,130,246,0.15)] transition-all duration-300 relative overflow-hidden cursor-pointer"
+        >
+          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500">
+            <FolderGit2 size={80} className="text-[#3B82F6]" />
+          </div>
+          
+          <div className="relative z-10 flex-1 flex flex-col">
+            <h3 className="text-lg font-bold font-['Space_Grotesk'] text-white group-hover:text-[#3B82F6] transition-colors truncate pr-4 mb-2">
+              {project.name}
+            </h3>
+            
+            <p className="text-sm text-slate-400 mb-6 flex-1 line-clamp-2 font-mono text-[10px]">
+              {project.repoUrl}
+            </p>
+
+            <div className="flex items-center gap-4 text-slate-500 text-xs font-mono mb-4">
+              <div className="flex items-center gap-1.5"><Clock size={14} /> Imported on {date.toLocaleDateString()}</div>
+            </div>
+
+            <div className="w-full mt-auto py-2 rounded-xl font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all bg-[rgba(59,130,246,0.1)] text-[#3B82F6] border border-[rgba(59,130,246,0.3)]">
+              Open Workspace
+            </div>
+          </div>
+        </div>
+    );
   };
 
   const handleImport = async (repo: GithubRepo) => {
@@ -249,7 +278,7 @@ function DashboardPage() {
         )}
 
         {/* External Repositories */}
-        {externalRepos.length > 0 && (
+        {savedProjects.length > 0 && (
             <div className="mt-16 border-t border-white/10 pt-10 mb-6">
               <div className="flex items-center gap-3 mb-6">
                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-[rgba(59,130,246,0.1)] border border-[rgba(59,130,246,0.2)] rounded-full">
@@ -268,7 +297,7 @@ function DashboardPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {externalRepos.map(repo => renderRepoCard(repo))}
+                   {savedProjects.map(project => renderSavedProjectCard(project))}
                 </div>
               )}
             </div>

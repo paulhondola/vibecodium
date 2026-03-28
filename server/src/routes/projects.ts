@@ -5,6 +5,9 @@ import { projects, files } from "../db/schema";
 import { eq } from "drizzle-orm";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import mongoose from "mongoose";
+import { connectMongo } from "../db/mongoose";
+import { Project } from "../db/models/Project";
 
 const projectsRoutes = new Hono();
 
@@ -43,8 +46,26 @@ function getAllFilesRecursive(dir: string, baseDir: string): { path: string; con
     return results;
 }
 
+projectsRoutes.get("/", async (c) => {
+    try {
+        await connectMongo();
+        const user = (c.get as any)("user");
+        if (!user || (!user.sub && !user.nickname)) {
+            return c.json({ error: "Unauthorized user" }, 401);
+        }
+
+        const userId = user.sub || user.nickname;
+        const userProjects = await Project.find({ userId }).sort({ createdAt: -1 });
+
+        return c.json({ success: true, projects: userProjects }, 200);
+    } catch (err: any) {
+        return c.json({ error: `Failed to fetch projects: ${err.message}` }, 500);
+    }
+});
+
 projectsRoutes.post("/import", async (c) => {
 	try {
+        await connectMongo();
 		const payload = await c.req.json();
 		const repoUrl = payload.repoUrl as string;
 		
@@ -56,7 +77,10 @@ projectsRoutes.post("/import", async (c) => {
             return c.json({ error: "Only GitHub URLs are supported." }, 400);
         }
 
-		const projectId = crypto.randomUUID();
+        const user = (c.get as any)("user");
+        const userId = user ? (user.sub || user.nickname) : "anonymous";
+
+		const projectId = new mongoose.Types.ObjectId().toString();
 		const targetDir = `/tmp/vibecodium/${projectId}`;
 
 		console.log(`Cloning ${repoUrl} to ${targetDir}...`);
@@ -79,11 +103,11 @@ projectsRoutes.post("/import", async (c) => {
 
         const projectName = repoUrl.split("/").pop()?.replace(".git", "") || "Untitled";
         
-        await db.insert(projects).values({
-            id: projectId,
+        await Project.create({
+            _id: projectId,
+            userId: userId,
             name: projectName,
-            repoUrl: repoUrl,
-            createdAt: new Date().toISOString()
+            repoUrl: repoUrl
         });
 
         // Maximum chunk sizes roughly to 100 on sqlite batching
