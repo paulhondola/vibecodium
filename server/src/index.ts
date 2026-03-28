@@ -13,6 +13,8 @@ import githubRoutes from "./routes/github";
 import { syncProjectFilesToDisk } from "./utils/sync";
 import { db } from "./db";
 import { files, snapshots } from "./db/schema";
+import * as nodePath from "node:path";
+import { eq } from "drizzle-orm";
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
 const LLM_KEY = process.env.LLM_KEY ?? "";
@@ -158,6 +160,69 @@ export const app = new Hono()
     });
 
 // ──────────────────────────────────────────
+// Docker Terminal Engine
+// ──────────────────────────────────────────
+
+// Extension → Docker image mapping (reuses existing batch images where possible)
+const EXT_TO_IMAGE: Record<string, string> = {
+    ".py":  "python:3.10-alpine",
+    ".rs":  "rust:1.68.2-alpine",
+    ".cpp": "gcc:10.2.0",
+    ".cc":  "gcc:10.2.0",
+    ".c":   "gcc:10.2.0",
+    ".go":  "golang:1.21-alpine",
+};
+
+function detectTerminalImage(filePaths: string[]): string {
+    for (const fp of filePaths) {
+        const ext = nodePath.extname(fp).toLowerCase();
+        if (EXT_TO_IMAGE[ext]) return EXT_TO_IMAGE[ext]!;
+    }
+    return "node:20-alpine"; // default for JS/TS projects
+}
+
+// Heuristic security scan — blocks obvious destructive patterns before container start
+const VULN_PATTERNS: RegExp[] = [
+    /rm\s+-rf\s+[/~]/,
+    /:\(\)\s*\{\s*:\s*\|\s*:.*\}/,         // fork bomb
+    /dd\s+if=\/dev\/(zero|urandom|mem)/,
+    />\s*\/dev\/sd[a-z]/,
+    /mkfs\s/,
+    /shred\s/,
+];
+
+function hasVulnerability(content: string): boolean {
+    return VULN_PATTERNS.some(re => re.test(content));
+}
+
+// Per-room state for the collaborative Docker terminal
+interface TerminalRoom {
+    container: Docker.Container;
+    stream: any; // hijacked raw TCP socket from container.attach
+}
+
+const termClients = new Map<string, Set<import("bun").ServerWebSocket<WSData>>>();
+const termRooms   = new Map<string, TerminalRoom>();
+
+async function stopTerminal(roomId: string): Promise<void> {
+    const room    = termRooms.get(roomId);
+    const clients = termClients.get(roomId);
+    termRooms.delete(roomId);
+    termClients.delete(roomId);
+
+    clients?.forEach(c => {
+        try { c.send("\r\n\x1b[33m[Container stopped]\x1b[0m\r\n"); } catch (_) {}
+    });
+
+    if (room) {
+        try { room.stream?.destroy(); } catch (_) {}
+        try { await room.container.stop({ t: 5 }); } catch (_) {}
+        try { await room.container.remove(); } catch (_) {}
+        console.log(`[Terminal] Cleaned up container for room ${roomId}`);
+    }
+}
+
+// ──────────────────────────────────────────
 // Bun.serve Engine
 // ──────────────────────────────────────────
 const COLORS = ["#A855F7", "#3B82F6", "#10B981", "#F59E0B", "#EC4899", "#EF4444", "#14B8A6", "#F97316"];
@@ -169,7 +234,6 @@ interface WSData {
     isHost: boolean;
     color: string;
     type: "collab" | "terminal";
-    termProc?: ReturnType<typeof import("bun").spawn>;
 }
 
 // Room tracking for host resolution
@@ -183,21 +247,12 @@ export default {
 	async fetch(req: Request, server: import("bun").Server<WSData>) {
         const url = new URL(req.url);
 
-        // Terminals
+        // Terminals — Docker-backed collaborative sandbox
         if (url.pathname === "/ws/terminal") {
             const roomId = url.searchParams.get("roomId") || "default";
-            // Spawn shell instantly
-            const shells = [process.env.SHELL, "/bin/zsh", "/bin/bash", "/bin/sh"].filter(Boolean) as string[];
-            let proc: ReturnType<typeof import("bun").spawn> | null = null;
-            for (const shell of shells) {
-                try {
-                    proc = Bun.spawn([shell, "-i"], { stdin: "pipe", stdout: "pipe", stderr: "pipe", env: { ...process.env, TERM: "xterm-256color" }, cwd: process.cwd(), });
-                    break;
-                } catch {}
-            }
-            if (proc && server.upgrade(req, { data: { type: "terminal", projectId: roomId, clientId: crypto.randomUUID(), userName: "terminal", termProc: proc, color: "", isHost: false } })) {
-                return; 
-            }
+            if (server.upgrade(req, {
+                data: { type: "terminal", projectId: roomId, clientId: crypto.randomUUID(), userName: "terminal", color: "", isHost: false }
+            })) return;
             return new Response("Upgrade failed", { status: 500 });
         }
 
@@ -227,14 +282,113 @@ export default {
             const data = ws.data;
             if (data.type === "terminal") {
                 ws.subscribe(`term_${data.projectId}`);
-                // Pipe terminal output to websocket manually using async loops:
+                const roomId = data.projectId;
+
+                // Register client
+                if (!termClients.has(roomId)) termClients.set(roomId, new Set());
+                termClients.get(roomId)!.add(ws);
+
+                // If room already running, just attach to the broadcast stream
+                if (termRooms.has(roomId)) {
+                    ws.send("\x1b[90m[Joined existing terminal session]\x1b[0m\r\n");
+                    return;
+                }
+
+                // ── First client: bootstrap Docker container ──
                 (async () => {
-                    const proc = data.termProc!;
-                    try { for await (const chunk of proc.stdout as AsyncIterable<Uint8Array>) { ws.send(new TextDecoder().decode(chunk)); } } catch {}
-                })();
-                (async () => {
-                    const proc = data.termProc!;
-                    try { for await (const chunk of proc.stderr as AsyncIterable<Uint8Array>) { ws.send(new TextDecoder().decode(chunk)); } } catch {}
+                    const broadcastToRoom = (msg: string) =>
+                        termClients.get(roomId)?.forEach(c => { try { c.send(msg); } catch (_) {} });
+
+                    let container: Docker.Container | null = null;
+                    try {
+                        broadcastToRoom("\x1b[1;36m[iTECify]\x1b[0m Syncing project files...\r\n");
+                        const hostDir = await syncProjectFilesToDisk(roomId);
+
+                        // Load file list for language detection + security scan
+                        const projectFiles = await db
+                            .select({ path: files.path, content: files.content })
+                            .from(files)
+                            .where(eq(files.projectId, roomId));
+
+                        // Security scan — block before any container starts
+                        for (const f of projectFiles) {
+                            if (f.content && hasVulnerability(f.content)) {
+                                broadcastToRoom("\x1b[1;31m[SECURITY BLOCK]\x1b[0m Dangerous pattern detected in project files. Execution refused.\r\n");
+                                termClients.get(roomId)?.forEach(c => c.close(1008, "Security policy violation"));
+                                return;
+                            }
+                        }
+
+                        // Pick image from file extensions
+                        const image = detectTerminalImage(projectFiles.map(f => f.path));
+                        broadcastToRoom(`\x1b[90mImage: ${image}  |  ${hostDir} → /usr/src/app\x1b[0m\r\n`);
+
+                        // Pull image (instant if already cached)
+                        broadcastToRoom("\x1b[90mPulling image...\x1b[0m\r\n");
+                        await new Promise<void>((res, rej) => {
+                            docker.pull(image, (err: Error | null, pullStream: any) => {
+                                if (err) return rej(err);
+                                docker.modem.followProgress(pullStream, (e: Error | null) => e ? rej(e) : res());
+                            });
+                        });
+
+                        // Create container — 512 MB RAM, 50% CPU cap, PID limit, bind mount
+                        container = await docker.createContainer({
+                            Image: image,
+                            Cmd: ["/bin/sh"],
+                            Tty: true,
+                            OpenStdin: true,
+                            StdinOnce: false,
+                            WorkingDir: "/usr/src/app",
+                            HostConfig: {
+                                Memory: 512 * 1024 * 1024,
+                                MemorySwap: 512 * 1024 * 1024,
+                                CpuQuota: 50000,
+                                CpuPeriod: 100000,
+                                PidsLimit: 50,
+                                Binds: [`${hostDir}:/usr/src/app`],
+                                AutoRemove: false,
+                            },
+                        });
+                        await container.start();
+
+                        // Attach — hijacked raw socket (TTY=true → no multiplexing header)
+                        const stream = await container.attach({
+                            stream: true,
+                            stdin: true,
+                            stdout: true,
+                            stderr: true,
+                            hijack: true,
+                        }) as any;
+
+                        termRooms.set(roomId, { container, stream });
+
+                        // Pipe container output → all connected clients
+                        stream.on("data", (chunk: Buffer) => {
+                            broadcastToRoom(chunk.toString("utf-8"));
+                        });
+                        stream.on("end", () => {
+                            broadcastToRoom("\r\n\x1b[33m[Container exited]\x1b[0m\r\n");
+                            stopTerminal(roomId);
+                        });
+                        stream.on("error", (e: Error) => {
+                            broadcastToRoom(`\r\n\x1b[31m[Stream error: ${e.message}]\x1b[0m\r\n`);
+                        });
+
+                        broadcastToRoom("\x1b[1;32m[Ready]\x1b[0m Sandbox started. Working dir: \x1b[33m/usr/src/app\x1b[0m\r\n\r\n");
+
+                    } catch (e: any) {
+                        // Cleanup partially-created container on error
+                        if (container) {
+                            try { await container.stop({ t: 0 }); } catch (_) {}
+                            try { await container.remove(); } catch (_) {}
+                        }
+                        termClients.get(roomId)?.forEach(c => {
+                            try { c.send(`\x1b[1;31m[Error]\x1b[0m ${e.message}\r\n`); } catch (_) {}
+                            c.close(1011, e.message);
+                        });
+                        console.error("[Terminal] Container start failed:", e.message);
+                    }
                 })();
                 return;
             }
@@ -275,9 +429,22 @@ export default {
 
         message(ws: import("bun").ServerWebSocket<WSData>, message: string) {
             if (ws.data.type === "terminal") {
-                const sink = ws.data.termProc!.stdin as import("bun").FileSink;
-                sink.write(message);
-                sink.flush();
+                const room = termRooms.get(ws.data.projectId);
+                if (!room) return;
+                // JSON control messages
+                try {
+                    const msg = JSON.parse(message);
+                    if (msg.type === "resize" && msg.rows && msg.cols) {
+                        room.container.resize({ h: msg.rows, w: msg.cols }).catch(() => {});
+                        return;
+                    }
+                    if (msg.type === "stop") {
+                        stopTerminal(ws.data.projectId);
+                        return;
+                    }
+                } catch { /* not JSON — treat as raw stdin */ }
+                // Forward raw keystrokes to container stdin
+                try { room.stream.write(message); } catch (_) {}
                 return;
             }
 
@@ -405,7 +572,13 @@ export default {
         close(ws: import("bun").ServerWebSocket<WSData>) {
             if (ws.data.type === "terminal") {
                 ws.unsubscribe(`term_${ws.data.projectId}`);
-                try { ws.data.termProc!.kill(); } catch {}
+                const roomId = ws.data.projectId;
+                const clients = termClients.get(roomId);
+                if (clients) {
+                    clients.delete(ws);
+                    // Stop container when the last client disconnects
+                    if (clients.size === 0) stopTerminal(roomId);
+                }
                 return;
             }
 

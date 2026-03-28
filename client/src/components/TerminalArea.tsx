@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
-import { Terminal as TerminalIcon, RefreshCw, Lock } from "lucide-react";
+import { Terminal as TerminalIcon, StopCircle, Lock, RefreshCw } from "lucide-react";
 
 export default function TerminalArea({ projectId }: { projectId: string | null }) {
 	const terminalRef = useRef<HTMLDivElement>(null);
@@ -10,11 +10,11 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
 	const wsInstance = useRef<WebSocket | null>(null);
     const [activeTab, setActiveTab] = useState<"terminal" | "preview">("terminal");
     const [previewUrl, setPreviewUrl] = useState("localhost:3000");
+    const [isConnected, setIsConnected] = useState(false);
 
 	useEffect(() => {
 		if (!terminalRef.current || activeTab !== "terminal") return;
 
-        // Small delay to ensure the container is actually rendered and has dimensions
         const initTimeout = setTimeout(() => {
             if (!terminalRef.current) return;
 
@@ -34,21 +34,22 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
             term.loadAddon(fitAddon);
             term.open(terminalRef.current!);
 
-            // Delay fit() so the DOM has had time to layout
             requestAnimationFrame(() => {
                 try { fitAddon.fit(); } catch (_) {}
             });
 
             termInstance.current = term;
-            term.writeln("\x1b[1;36m➜\x1b[0m \x1b[90mTerminal ready. Connecting...\x1b[0m");
+            term.writeln("\x1b[1;36m➜\x1b[0m \x1b[90mConnecting to iTECify sandbox...\x1b[0m");
 
-            // Try connecting WS — but don't crash if server doesn't support it
             try {
                 const ws = new WebSocket(`ws://localhost:3000/ws/terminal?roomId=${projectId || "default"}`);
                 wsInstance.current = ws;
 
                 ws.onopen = () => {
+                    setIsConnected(true);
                     term.clear();
+                    // Send initial terminal dimensions
+                    sendResize(ws, term);
                 };
 
                 ws.onmessage = (event) => {
@@ -64,21 +65,27 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
                     }
                 };
 
-                ws.onerror = () => {
-                    term.writeln("\x1b[33m⚠ Terminal WS unavailable — node-pty not installed on server.\x1b[0m");
-                    term.writeln("\x1b[90mYou can still use the editor for collaboration.\x1b[0m");
+                ws.onclose = () => {
+                    setIsConnected(false);
+                    term.writeln("\r\n\x1b[33m[Disconnected]\x1b[0m");
                 };
 
+                ws.onerror = () => {
+                    term.writeln("\x1b[31m⚠ Terminal connection failed.\x1b[0m");
+                };
+
+                // Forward keystrokes to container stdin
                 const disposableData = term.onData((data) => {
                     if (ws.readyState === WebSocket.OPEN) ws.send(data);
                 });
 
+                // Send resize on window resize
                 const handleResize = () => {
                     try { fitAddon.fit(); } catch (_) {}
+                    if (ws.readyState === WebSocket.OPEN) sendResize(ws, term);
                 };
                 window.addEventListener("resize", handleResize);
 
-                // Store cleanup refs
                 (term as any)._cleanup = () => {
                     window.removeEventListener("resize", handleResize);
                     disposableData.dispose();
@@ -86,9 +93,9 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
                     term.dispose();
                 };
             } catch (_) {
-                term.writeln("\x1b[33m⚠ Could not connect to terminal server.\x1b[0m");
+                term.writeln("\x1b[31m⚠ Could not connect to terminal server.\x1b[0m");
             }
-        }, 50); // 50ms delay for DOM readiness
+        }, 50);
 
 		return () => {
             clearTimeout(initTimeout);
@@ -98,10 +105,16 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
                 else termInstance.current.dispose();
                 termInstance.current = null;
             }
+            setIsConnected(false);
 		};
 	}, [activeTab, projectId]);
 
-
+    const handleStop = () => {
+        const ws = wsInstance.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "stop" }));
+        }
+    };
 
 	return (
 		<div className="flex flex-col h-full bg-[#09090b] text-white">
@@ -109,12 +122,26 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
 				<div className="flex items-center gap-1">
                     <button
                         onClick={() => setActiveTab("terminal")}
-                        className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors text-xs font-medium uppercase tracking-wider ${activeTab === "terminal" ? 'border-cyan-400 text-cyan-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                        className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors text-xs font-medium uppercase tracking-wider ${activeTab === "terminal" ? "border-cyan-400 text-cyan-400" : "border-transparent text-gray-500 hover:text-gray-300"}`}
                     >
                         <TerminalIcon size={14} /> Terminal
                     </button>
 				</div>
-                
+
+                <div className="flex items-center gap-2 pr-2">
+                    {/* Status dot */}
+                    <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.6)]" : "bg-gray-600"}`} />
+                    {/* Stop button */}
+                    {isConnected && (
+                        <button
+                            onClick={handleStop}
+                            title="Stop container"
+                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors border border-transparent hover:border-red-500/20"
+                        >
+                            <StopCircle size={11} /> Stop
+                        </button>
+                    )}
+                </div>
 			</div>
 
             {activeTab === "terminal" && (
@@ -153,4 +180,11 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
             )}
 		</div>
 	);
+}
+
+function sendResize(ws: WebSocket, term: Terminal) {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    try {
+        ws.send(JSON.stringify({ type: "resize", rows: term.rows, cols: term.cols }));
+    } catch (_) {}
 }
