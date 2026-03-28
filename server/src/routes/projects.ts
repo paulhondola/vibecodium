@@ -78,14 +78,14 @@ projectsRoutes.get("/user/:userId", async (c) => {
 });
 
 projectsRoutes.post("/import", async (c) => {
-	try {
+    try {
         await connectMongo();
-		const payload = await c.req.json();
-		const repoUrl = payload.repoUrl as string;
-		
-		if (!repoUrl) {
-			return c.json({ error: "Missing repoUrl parameter" }, 400);
-		}
+        const payload = await c.req.json();
+        const repoUrl = payload.repoUrl as string;
+        
+        if (!repoUrl) {
+            return c.json({ error: "Missing repoUrl parameter" }, 400);
+        }
 
         if (!repoUrl.startsWith("https://github.com/")) {
             return c.json({ error: "Only GitHub URLs are supported." }, 400);
@@ -97,19 +97,62 @@ projectsRoutes.post("/import", async (c) => {
         // Check if the user already imported this repository
         const existingProject = await Project.findOne({ userId, repoUrl });
         if (existingProject) {
+            const projectId = existingProject._id.toString();
+            const targetDir = existingProject.localPath || `/tmp/vibecodium/${projectId}`;
+            
+            // Check if files exist in SQLite
+            const sqliteFiles = await db.select({ id: files.id })
+                .from(files)
+                .where(eq(files.projectId, projectId))
+                .limit(1);
+
+            if (sqliteFiles.length === 0 && fs.existsSync(targetDir)) {
+                console.log(`Re-indexing existing project ${projectId}...`);
+                
+                // Ensure project entry exists in SQLite
+                await db.insert(projects).values({
+                    id: projectId,
+                    name: existingProject.projectName,
+                    repoUrl: existingProject.repoUrl,
+                    createdAt: existingProject.createdAt.toISOString()
+                }).onConflictDoNothing();
+
+                const allFiles = getAllFilesRecursive(targetDir, targetDir);
+                const BATCH_SIZE = 100;
+                for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
+                    const batch = allFiles.slice(i, i + BATCH_SIZE);
+                    const filesToInsert = batch.map((f) => ({
+                        id: crypto.randomUUID(),
+                        projectId: projectId,
+                        path: f.path,
+                        content: f.content,
+                        updatedAt: Math.floor(Date.now() / 1000)
+                    }));
+                    await db.insert(files).values(filesToInsert);
+                }
+                
+                return c.json({
+                    success: true,
+                    message: "Repository re-indexed successfully",
+                    projectId: projectId,
+                    name: existingProject.projectName,
+                    filesCount: allFiles.length
+                }, 200);
+            }
+
             return c.json({
                 success: true,
                 message: "Repository already imported",
-                projectId: existingProject._id.toString(),
+                projectId: projectId,
                 name: existingProject.projectName,
             }, 200);
         }
 
-		const projectId = new mongoose.Types.ObjectId().toString();
-		const targetDir = `/tmp/vibecodium/${projectId}`;
+        const projectId = new mongoose.Types.ObjectId().toString();
+        const targetDir = `/tmp/vibecodium/${projectId}`;
         const projectName = repoUrl.split("/").pop()?.replace(".git", "") || "Untitled";
 
-		console.log(`Cloning ${repoUrl} to ${targetDir}...`);
+        console.log(`Cloning ${repoUrl} to ${targetDir}...`);
         
         // 1. Save entry to MongoDB with status "cloning"
         await Project.create({
@@ -122,12 +165,12 @@ projectsRoutes.post("/import", async (c) => {
 
         fs.mkdirSync("/tmp/vibecodium", { recursive: true });
 
-		const proc = Bun.spawn(["git", "clone", repoUrl, targetDir], {
+        const proc = Bun.spawn(["git", "clone", repoUrl, targetDir], {
             stdout: "pipe",
             stderr: "pipe"
         });
 
-		const exitCode = await proc.exited;
+        const exitCode = await proc.exited;
 
         if (exitCode !== 0) {
             const errorText = await new Response(proc.stderr).text();
@@ -137,6 +180,14 @@ projectsRoutes.post("/import", async (c) => {
 
         // 2. Clone finished successfully. Update status to "ready" and localPath
         await Project.findByIdAndUpdate(projectId, { status: "ready", localPath: targetDir });
+
+        // Also insert into SQLite projects table for referential integrity
+        await db.insert(projects).values({
+            id: projectId,
+            name: projectName,
+            repoUrl: repoUrl,
+            createdAt: new Date().toISOString()
+        }).onConflictDoNothing();
 
         const allFiles = getAllFilesRecursive(targetDir, targetDir);
 
@@ -154,17 +205,17 @@ projectsRoutes.post("/import", async (c) => {
             await db.insert(files).values(filesToInsert);
         }
 
-		return c.json({
-			success: true,
-			message: "Repository imported and indexed successfully",
-			projectId: projectId,
+        return c.json({
+            success: true,
+            message: "Repository imported and indexed successfully",
+            projectId: projectId,
             name: projectName,
             filesCount: allFiles.length
-		}, 200);
+        }, 200);
 
-	} catch (error: any) {
-		return c.json({ error: `Internal Server Error: ${error.message}` }, 500);
-	}
+    } catch (error: any) {
+        return c.json({ error: `Internal Server Error: ${error.message}` }, 500);
+    }
 });
 
 projectsRoutes.get("/:id/files", async (c) => {
@@ -491,3 +542,4 @@ projectsRoutes.get("/:id/commits", async (c) => {
 });
 
 export default projectsRoutes;
+
