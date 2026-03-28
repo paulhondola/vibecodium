@@ -26,6 +26,8 @@ function DashboardPage() {
 
   const [repos, setRepos] = useState<GithubRepo[]>([]);
   const [isFetchingRepos, setIsFetchingRepos] = useState(false);
+  const [externalRepos, setExternalRepos] = useState<GithubRepo[]>([]);
+  const [isFetchingExternal, setIsFetchingExternal] = useState(false);
   const [importingRepoId, setImportingRepoId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,8 +49,95 @@ function DashboardPage() {
           setError("Network error bridging to GitHub.");
         })
         .finally(() => setIsFetchingRepos(false));
+
+      // Fetch external repositories
+      const externalReposKey = `external_repos_${user.nickname}`;
+      const savedReposStr = localStorage.getItem(externalReposKey);
+      if (savedReposStr) {
+        try {
+          const savedUrls: string[] = JSON.parse(savedReposStr);
+          if (savedUrls.length > 0) {
+            setIsFetchingExternal(true);
+            Promise.all(savedUrls.map(url => {
+              try {
+                  const urlObj = new URL(url);
+                  const parts = urlObj.pathname.split('/').filter(Boolean);
+                  if (parts.length >= 2) {
+                    return fetch(`https://api.github.com/repos/${parts[0]}/${parts[1]}`)
+                      .then(res => res.ok ? res.json() : null)
+                      .catch(() => null);
+                  }
+              } catch(e){}
+              return Promise.resolve(null);
+            }))
+            .then(results => {
+              setExternalRepos(results.filter(r => r !== null));
+            })
+            .finally(() => setIsFetchingExternal(false));
+          }
+        } catch(e) { /* ignore parse error */ }
+      }
     }
   }, [user?.nickname]);
+
+  const renderRepoCard = (repo: GithubRepo) => {
+      const date = new Date(repo.updated_at);
+      const isImporting = importingRepoId === repo.id;
+
+      return (
+        <div 
+          key={repo.id}
+          className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-white/5 rounded-2xl p-6 flex flex-col group hover:border-[rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.1)] transition-all duration-300 relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500">
+            <FolderGit2 size={80} className="text-[#10B981]" />
+          </div>
+          
+          <div className="relative z-10 flex-1 flex flex-col">
+            <div className="flex items-start justify-between mb-4">
+              <h3 className="text-lg font-bold font-['Space_Grotesk'] text-white group-hover:text-[#10B981] transition-colors truncate pr-4">
+                {repo.full_name || repo.name}
+              </h3>
+              {repo.language && (
+                <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded bg-white/5 text-slate-300 border border-white/10 shrink-0">
+                  {repo.language}
+                </span>
+              )}
+            </div>
+            
+            <p className="text-sm text-slate-400 mb-6 flex-1 line-clamp-2">
+              {repo.description || "No description provided format for this data cluster."}
+            </p>
+
+            <div className="flex items-center gap-4 text-slate-500 text-xs font-mono mb-6">
+              <div className="flex items-center gap-1.5"><Star size={14} /> {repo.stargazers_count}</div>
+              <div className="flex items-center gap-1.5"><GitFork size={14} /> {repo.forks_count}</div>
+              <div className="flex items-center gap-1.5"><Clock size={14} /> {date.toLocaleDateString()}</div>
+            </div>
+
+            <button
+              onClick={() => handleImport(repo)}
+              disabled={isImporting || importingRepoId !== null}
+              className={`w-full py-3 rounded-xl font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
+                isImporting 
+                ? "bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30 cursor-wait" 
+                : importingRepoId !== null
+                  ? "bg-white/5 text-slate-600 border border-transparent cursor-not-allowed"
+                  : "bg-white/5 hover:bg-[#10B981] hover:text-[#02040a] text-white border border-white/10"
+              }`}
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Extrapolating...
+                </>
+              ) : (
+                <>Instantiate</>
+              )}
+            </button>
+          </div>
+        </div>
+      );
+  };
 
   const handleImport = async (repo: GithubRepo) => {
     setImportingRepoId(repo.id);
@@ -149,71 +238,40 @@ function DashboardPage() {
         )}
 
         {isFetchingRepos ? (
-          <div className="flex-1 flex flex-col items-center justify-center py-20">
+          <div className="flex flex-col items-center justify-center py-20">
             <Loader2 size={40} className="animate-spin text-[#10B981] mb-6" />
             <div className="text-slate-400 font-['Space_Grotesk'] tracking-widest uppercase text-xs">Scanning remote clusters...</div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {repos.map(repo => {
-              const date = new Date(repo.updated_at);
-              const isImporting = importingRepoId === repo.id;
-
-              return (
-                <div 
-                  key={repo.id}
-                  className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-white/5 rounded-2xl p-6 flex flex-col group hover:border-[rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.1)] transition-all duration-300 relative overflow-hidden"
-                >
-                  <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500">
-                    <FolderGit2 size={80} className="text-[#10B981]" />
-                  </div>
-                  
-                  <div className="relative z-10 flex-1 flex flex-col">
-                    <div className="flex items-start justify-between mb-4">
-                      <h3 className="text-lg font-bold font-['Space_Grotesk'] text-white group-hover:text-[#10B981] transition-colors truncate pr-4">
-                        {repo.name}
-                      </h3>
-                      {repo.language && (
-                        <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded bg-white/5 text-slate-300 border border-white/10 shrink-0">
-                          {repo.language}
-                        </span>
-                      )}
-                    </div>
-                    
-                    <p className="text-sm text-slate-400 mb-6 flex-1 line-clamp-2">
-                      {repo.description || "No description provided format for this data cluster."}
-                    </p>
-
-                    <div className="flex items-center gap-4 text-slate-500 text-xs font-mono mb-6">
-                      <div className="flex items-center gap-1.5"><Star size={14} /> {repo.stargazers_count}</div>
-                      <div className="flex items-center gap-1.5"><GitFork size={14} /> {repo.forks_count}</div>
-                      <div className="flex items-center gap-1.5"><Clock size={14} /> {date.toLocaleDateString()}</div>
-                    </div>
-
-                    <button
-                      onClick={() => handleImport(repo)}
-                      disabled={isImporting || importingRepoId !== null}
-                      className={`w-full py-3 rounded-xl font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
-                        isImporting 
-                        ? "bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30 cursor-wait" 
-                        : importingRepoId !== null
-                          ? "bg-white/5 text-slate-600 border border-transparent cursor-not-allowed"
-                          : "bg-white/5 hover:bg-[#10B981] hover:text-[#02040a] text-white border border-white/10"
-                      }`}
-                    >
-                      {isImporting ? (
-                        <>
-                          <Loader2 size={16} className="animate-spin" /> Extrapolating...
-                        </>
-                      ) : (
-                        <>Instantiate</>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            {repos.map(repo => renderRepoCard(repo))}
           </div>
+        )}
+
+        {/* External Repositories */}
+        {externalRepos.length > 0 && (
+            <div className="mt-16 border-t border-white/10 pt-10 mb-6">
+              <div className="flex items-center gap-3 mb-6">
+                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-[rgba(59,130,246,0.1)] border border-[rgba(59,130,246,0.2)] rounded-full">
+                    <CloudRain size={12} className="text-[#3B82F6]" />
+                    <span className="text-[10px] font-black text-[#3B82F6] uppercase tracking-[0.3em]">External Nodes</span>
+                 </div>
+                 <h2 className="text-2xl font-['Space_Grotesk'] font-bold tracking-tighter text-white">
+                   Saved Remote Clusters
+                 </h2>
+              </div>
+              
+              {isFetchingExternal ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <Loader2 size={40} className="animate-spin text-[#3B82F6] mb-6" />
+                  <div className="text-slate-400 font-['Space_Grotesk'] tracking-widest uppercase text-xs">Syncing External Topology...</div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   {externalRepos.map(repo => renderRepoCard(repo))}
+                </div>
+              )}
+            </div>
         )}
       </motion.div>
     </div>
