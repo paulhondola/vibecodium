@@ -13,14 +13,14 @@ import MatrixRain from "./MatrixRain";
 import ReactionOverlay from "./ReactionOverlay";
 import CodeRoastModal from "./CodeRoastModal";
 import { API_BASE } from "@/lib/config";
-import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, ChevronDown, Wrench, CloudMessage, Rocket, ExternalLink, X, Key } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, ChevronDown, Wrench, Key, Rocket, ExternalLink, X } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
+import { useNavigate } from "@tanstack/react-router";
 import { SocketProvider, useSocket } from "../contexts/SocketProvider";
 import type { PendingUpdate, AgentFileAction } from "../hooks/useAgentStream";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "@tanstack/react-router";
 
 export interface ProjectFile {
     id: string;

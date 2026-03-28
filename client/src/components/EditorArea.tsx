@@ -36,8 +36,6 @@ export default function EditorArea({
     const monaco = useMonaco();
     const [code, setCode] = useState("");
     const [isRetro, setIsRetro] = useState(false);
-    const [editorMode, setEditorMode] = useState<'default' | 'vim' | 'emacs'>('default');
-    const vimInstanceRef = useRef<any>(null);
 
     // Power Mode state
     const [combo, setCombo] = useState(0);
@@ -238,12 +236,6 @@ export default function EditorArea({
         editorRef.current = ed;
         decorationsRef.current = ed.createDecorationsCollection([]);
 
-        if (editorMode === 'vim') {
-            vimInstanceRef.current = initVimMode(ed, document.getElementById('vim-status'));
-        } else if (editorMode === 'emacs') {
-            vimInstanceRef.current = emacsMode(ed, document.getElementById('vim-status'));
-        }
-
         ed.onDidChangeCursorPosition((e) => {
             if (activeFileRef.current) {
                 sendRef.current({
@@ -384,29 +376,6 @@ export default function EditorArea({
 
     const hasPending = !!pendingUpdate && pendingUpdate.status === "pending";
 
-    useEffect(() => {
-        if (editorRef.current) {
-            if (editorMode === 'vim') {
-                if (vimInstanceRef.current) vimInstanceRef.current.dispose();
-                vimInstanceRef.current = initVimMode(editorRef.current, document.getElementById('vim-status'));
-            } else if (editorMode === 'emacs') {
-                if (vimInstanceRef.current) vimInstanceRef.current.dispose();
-                try { vimInstanceRef.current = emacsMode(editorRef.current, document.getElementById('vim-status')); } catch(e) {}
-            } else {
-                if (vimInstanceRef.current) {
-                    vimInstanceRef.current.dispose();
-                    vimInstanceRef.current = null;
-                }
-            }
-        }
-        return () => {
-            if (vimInstanceRef.current) {
-                vimInstanceRef.current.dispose();
-                vimInstanceRef.current = null;
-            }
-        }
-    }, [editorMode]);
-
     // Escape key rejects the pending diff
     useEffect(() => {
         if (!hasPending) return;
@@ -448,21 +417,8 @@ export default function EditorArea({
                     );
                 })}
                 
-                {/* Editor Mode Selection */}
-                <div className="ml-auto p-1.5 flex items-center shrink-0 border-l border-[#27272a] gap-2">
-                    <select 
-                        value={editorMode}
-                        onChange={(e) => setEditorMode(e.target.value as any)}
-                        className="bg-[#18181b] border border-[#27272a] text-[#c9d1d9] text-[10px] uppercase font-bold px-2 py-1 rounded cursor-pointer outline-none"
-                    >
-                        <option value="default">Default</option>
-                        <option value="vim">Vim</option>
-                        <option value="emacs">Emacs</option>
-                    </select>
-                </div>
-
                 {/* Time Travel Toggle Button */}
-                <div className="p-1.5 flex items-center shrink-0 border-l border-[#27272a]">
+                <div className="ml-auto p-1.5 flex items-center shrink-0 border-l border-[#27272a]">
                     <button
                         onClick={() => setIsTimeTravelOpen(prev => !prev)}
                         className={`text-[10px] px-2 py-1 flex items-center gap-1.5 rounded transition font-medium tracking-wide ${isTimeTravelOpen ? "bg-cyan-500/20 text-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.2)]" : "text-gray-400 hover:text-gray-200 hover:bg-[#27272a]"}`}
@@ -549,8 +505,6 @@ export default function EditorArea({
                         }}
                         onMount={handleEditorDidMount}
                     />
-
-                    <div id="vim-status" className="absolute bottom-4 left-4 z-50 font-mono text-xs bg-black/80 px-2 py-0.5 rounded text-white shadow-lg pointer-events-none empty:hidden" />
                     
                     {/* ── Time-Travel Slider Overlay ── */}
                     {isTimeTravelOpen && (

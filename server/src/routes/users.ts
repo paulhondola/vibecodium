@@ -28,16 +28,16 @@ router.get("/match", authMiddleware, async (c) => {
 router.get("/tokens", authMiddleware, async (c) => {
     try {
         const currentUser = c.get("user");
-        const tokens = await db.select().from(user_tokens).where(eq(user_tokens.auth0Id, currentUser.sub));
+        const [token] = await db.select().from(user_tokens).where(eq(user_tokens.auth0Id, currentUser.sub));
         
-        if (tokens.length === 0) {
+        if (!token) {
             return c.json({ success: true, githubToken: null, vercelToken: null });
         }
 
         return c.json({ 
             success: true, 
-            githubToken: tokens[0].githubToken ? "****" + tokens[0].githubToken.slice(-4) : null,
-            vercelToken: tokens[0].vercelToken ? "****" + tokens[0].vercelToken.slice(-4) : null
+            githubToken: token.githubToken ? "****" + token.githubToken.slice(-4) : null,
+            vercelToken: token.vercelToken ? "****" + token.vercelToken.slice(-4) : null
         });
     } catch (error: any) {
         return c.json({ success: false, error: error.message }, 500);

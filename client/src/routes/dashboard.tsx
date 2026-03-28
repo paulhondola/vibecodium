@@ -180,7 +180,7 @@ function DashboardPage() {
     }
   };
 
-  const scrollToSection = (ref: React.RefObject<HTMLDivElement>) => {
+  const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -257,7 +257,7 @@ function DashboardPage() {
       {/* TopAppBar */}
       <header className="fixed top-0 z-[100] flex justify-between items-center w-full px-8 h-14 bg-[rgba(10,12,20,0.8)] backdrop-blur-xl border-b border-[rgba(168,85,247,0.1)]">
         <div className="flex items-center gap-12">
-          <div className="text-xl font-bold tracking-tighter text-[#A855F7] font-['Space_Grotesk'] flex items-center gap-2 cursor-pointer" onClick={() => navigate({ to: "/" })}>
+          <div className="text-xl font-bold tracking-tighter text-[#A855F7] font-['Space_Grotesk'] flex items-center gap-2 cursor-pointer" onClick={() => navigate({ to: "/", search: { w: undefined } })}>
             <span className="material-symbols-outlined text-[#A855F7] fill-1 animate-pulse">terminal</span>
             VibeCodium
           </div>
@@ -409,7 +409,6 @@ function DashboardPage() {
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {getFilteredProjects().slice(0, 5).map(project => {
-                  const date = new Date(project.createdAt);
                   return (
                     <div
                       key={project._id}
