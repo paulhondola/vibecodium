@@ -61,6 +61,23 @@ export default function EditorArea({ activeFile, collabWs, userId, remoteCodeUpd
         isRemoteUpdate.current = true;
         setCode(remoteCodeUpdate.content);
         if (activeFileRef.current) activeFileRef.current.content = remoteCodeUpdate.content;
+
+        if (editorRef.current) {
+            const model = editorRef.current.getModel();
+            if (model && model.getValue() !== remoteCodeUpdate.content) {
+                // Determine current cursor positions
+                const selections = editorRef.current.getSelections();
+                
+                // Directly set the value instead of relying on value={code} prop
+                model.setValue(remoteCodeUpdate.content);
+                
+                // Restore selections if possible
+                if (selections) {
+                    editorRef.current.setSelections(selections);
+                }
+            }
+        }
+        
         setTimeout(() => { isRemoteUpdate.current = false; }, 50);
     }, [remoteCodeUpdate, userId]);
 
@@ -107,10 +124,10 @@ export default function EditorArea({ activeFile, collabWs, userId, remoteCodeUpd
         // Broadcast cursor position on every move
         ed.onDidChangeCursorPosition((e) => {
             const ws = collabWs?.current;
-            if (ws && ws.readyState === WebSocket.OPEN && activeFile) {
+            if (ws && ws.readyState === WebSocket.OPEN && activeFileRef.current) {
                 ws.send(JSON.stringify({
                     type: "cursor_move",
-                    filePath: activeFile.path,
+                    filePath: activeFileRef.current.path,
                     position: { lineNumber: e.position.lineNumber, column: e.position.column }
                 }));
             }
@@ -126,10 +143,10 @@ export default function EditorArea({ activeFile, collabWs, userId, remoteCodeUpd
 
         // Broadcast to other users
         const ws = collabWs?.current;
-        if (ws && ws.readyState === WebSocket.OPEN && activeFile) {
+        if (ws && ws.readyState === WebSocket.OPEN && activeFileRef.current) {
             ws.send(JSON.stringify({
                 type: "code_change",
-                filePath: activeFile.path,
+                filePath: activeFileRef.current.path,
                 content: text
             }));
         }
