@@ -1,16 +1,46 @@
-import { Heart, X, Flame, MapPin, Code2 } from "lucide-react";
-import { useState } from "react";
+import { Heart, X, Flame, MapPin, Code2, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useAuth0 } from "@auth0/auth0-react";
 
-const BOGUS_PROFILES = [
-    { id: 1, name: "Chad", age: 24, bio: "I use Arch btw. Looking for someone to rewrite my Node.js backend in Rust.", language: "Rust", distance: "2 miles away", image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Chad" },
-    { id: 2, name: "Emily", age: 26, bio: "React developer. If you don't use functional components, swipe left.", language: "TypeScript", distance: "5 miles away", image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Emily" },
-    { id: 3, name: "Bob", age: 31, bio: "Java Enterprise Edition. I like long walks on the beach and AbstractSingletonProxyFactoryBeans.", language: "Java", distance: "12 miles away", image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob" },
-    { id: 4, name: "Alice", age: 22, bio: "Python enthusiast. Ask me about machine learning.", language: "Python", distance: "1 mile away", image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alice" },
-];
+interface MatchUser {
+    auth0Id: string;
+    name: string;
+    email: string;
+    picture: string;
+    bio: string;
+    language: string;
+    location: string;
+}
 
 export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [matchMode, setMatchMode] = useState(false);
+    const [users, setUsers] = useState<MatchUser[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const { getAccessTokenSilently } = useAuth0();
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchUsers = async () => {
+            try {
+                const token = await getAccessTokenSilently();
+                const res = await fetch("http://localhost:3000/api/users/match", {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (data.success && isMounted) {
+                    setUsers(data.users || []);
+                }
+            } catch (err) {
+                console.error("Failed to fetch match users:", err);
+            } finally {
+                if (isMounted) setIsLoading(false);
+            }
+        };
+        fetchUsers();
+        return () => { isMounted = false; };
+    }, [getAccessTokenSilently]);
 
     const handleSwipe = (direction: 'left' | 'right') => {
         if (direction === 'right' && Math.random() > 0.5) {
@@ -24,7 +54,18 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
         }
     };
 
-    if (currentIndex >= BOGUS_PROFILES.length) {
+    if (isLoading) {
+        return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-8 flex flex-col items-center">
+                    <Loader2 size={32} className="animate-spin text-pink-500 mb-4" />
+                    <p className="text-white font-medium">Finding hot coders in your area...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (currentIndex >= users.length) {
         return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
                 <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-8 max-w-sm w-full text-center relative shadow-2xl">
@@ -39,7 +80,10 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
         );
     }
 
-    const profile = BOGUS_PROFILES[currentIndex];
+    const profile = users[currentIndex];
+    
+    // Generate a pseudo-random age based on ID length
+    const pseudoAge = 20 + (profile.auth0Id ? (profile.auth0Id.length % 15) : 4);
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -49,7 +93,7 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
                         <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-rose-500 italic mb-4 -rotate-12">IT'S A MATCH!</h2>
                         <p className="text-white mb-8 text-lg font-medium">You and {profile.name} both love avoiding documentation.</p>
                         <div className="flex gap-4">
-                            <img src={profile.image} alt={profile.name} className="w-24 h-24 rounded-full border-4 border-pink-500 bg-white" />
+                            <img src={profile.picture} alt={profile.name} className="w-24 h-24 rounded-full border-4 border-pink-500 bg-white" />
                             <div className="w-24 h-24 rounded-full border-4 border-pink-500 flex items-center justify-center bg-gradient-to-br from-cyan-400 to-blue-600 font-bold text-2xl text-black">
                                 iT
                             </div>
@@ -72,19 +116,19 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
                 <div className="flex-1 p-4 relative overflow-hidden flex flex-col">
                     <div className="flex-1 bg-white rounded-2xl overflow-hidden relative shadow-md flex flex-col h-full border border-gray-200">
                         <div className="h-64 bg-gradient-to-br from-pink-100 to-purple-200 flex items-center justify-center shrink-0">
-                            <img src={profile.image} alt={profile.name} className="w-48 h-48 drop-shadow-xl" />
+                            <img src={profile.picture} alt={profile.name} className="w-48 h-48 drop-shadow-xl rounded-2xl" />
                         </div>
                         <div className="flex-1 p-5 flex flex-col justify-start bg-white text-black">
                             <h3 className="text-2xl font-black flex items-baseline gap-2">
-                                {profile.name} <span className="text-lg font-normal text-gray-500">{profile.age}</span>
+                                {profile.name} <span className="text-lg font-normal text-gray-500">{pseudoAge}</span>
                             </h3>
                             <div className="flex items-center gap-1 text-gray-500 mt-1 text-xs font-medium uppercase tracking-wider">
-                                <MapPin size={12} /> {profile.distance}
+                                <MapPin size={12} /> {profile.location}
                             </div>
                             <div className="flex items-center gap-1 text-pink-500 bg-pink-50 w-fit px-2 py-1 rounded-md mt-2 text-sm font-bold mb-3 border border-pink-100">
                                 <Code2 size={14} /> Writes {profile.language}
                             </div>
-                            <p className="text-gray-700 font-medium leading-snug">
+                            <p className="text-gray-700 font-medium leading-snug break-words">
                                 "{profile.bio}"
                             </p>
                         </div>

@@ -33,3 +33,14 @@ export const sessions = sqliteTable("sessions", {
     createdBy: text("created_by").notNull(),
     label:     text("label"),
 });
+
+export const users = sqliteTable("users", {
+    auth0Id: text("auth0_id").primaryKey(),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    picture: text("picture"),
+    bio: text("bio"),
+    language: text("language"),
+    location: text("location"),
+    createdAt: integer("created_at").notNull(),
+});

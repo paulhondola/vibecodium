@@ -10,6 +10,7 @@ import sessionsRoutes from "./routes/sessions";
 import reelsRoutes from "./routes/reels";
 import agentRoutes from "./routes/agent";
 import githubRoutes from "./routes/github";
+import usersRouter from "./routes/users";
 import { syncProjectFilesToDisk } from "./utils/sync";
 import { db } from "./db";
 import { files, snapshots } from "./db/schema";
@@ -75,6 +76,7 @@ export const app = new Hono()
 	.route("/api/reels", reelsRoutes)
 	.route("/api/agent", agentRoutes)
 	.route("/api/github", githubRoutes)
+	.route("/api/users", usersRouter)
 	.get("/", c => c.text("Hello Hono!"))
 	.get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
 
