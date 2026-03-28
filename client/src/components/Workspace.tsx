@@ -1,5 +1,5 @@
 import FileExplorer from "./FileExplorer";
-import ActionHistory from "./ActionHistory";
+import ActivityFeed from "./ActivityFeed";
 import EditorArea from "./EditorArea";
 import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
@@ -282,7 +282,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                 />
                                 </div>
                                 <div className="h-[220px] shrink-0 border-t border-[#27272a] overflow-y-auto shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
-                                    <ActionHistory />
+                                    <ActivityFeed projectId={projectId} />
                                 </div>
                             </Panel>
                             <PanelResizeHandle className="w-1 hover:bg-cyan-500/50 transition-colors z-50 cursor-col-resize" />
