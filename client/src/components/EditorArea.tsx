@@ -296,14 +296,40 @@ export default function EditorArea({
         onPendingResolved?.();
     }, [onPendingResolved]);
 
-    const language = activeFile?.path.endsWith(".tsx") || activeFile?.path.endsWith(".ts")
-        ? "typescript"
-        : activeFile?.path.endsWith(".json") ? "json"
-        : activeFile?.path.endsWith(".md") ? "markdown"
-        : activeFile?.path.endsWith(".css") ? "css"
-        : activeFile?.path.endsWith(".html") ? "html"
-        : activeFile?.path.endsWith(".py") ? "python"
-        : "javascript";
+    const getFileLanguage = (path: string | undefined) => {
+        if (!path) return "javascript";
+        const parts = path.split('.');
+        if (parts.length < 2) return "plaintext";
+        const ext = parts.pop()?.toLowerCase();
+        
+        switch (ext) {
+            case "ts": case "tsx": return "typescript";
+            case "js": case "jsx": return "javascript";
+            case "json": return "json";
+            case "md": case "mdx": return "markdown";
+            case "css": case "scss": case "sass": case "less": return "css";
+            case "html": case "htm": return "html";
+            case "vue": return "vue";
+            case "py": case "pyw": return "python";
+            case "java": return "java";
+            case "go": return "go";
+            case "c": return "c";
+            case "cpp": case "cxx": case "cc": case "h": case "hpp": return "cpp";
+            case "cs": return "csharp";
+            case "rs": return "rust";
+            case "php": return "php";
+            case "rb": return "ruby";
+            case "pl": case "pm": return "perl";
+            case "sql": return "sql";
+            case "sh": case "bash": return "shell";
+            case "yaml": case "yml": return "yaml";
+            case "xml": return "xml";
+            case "txt": return "plaintext";
+            default: return "javascript";
+        }
+    };
+
+    const language = getFileLanguage(activeFile?.path);
 
     const hasPending = !!pendingUpdate && pendingUpdate.status === "pending";
 
