@@ -1,113 +1,214 @@
 import { Hono } from "hono";
 
-// Sample brainrot reels data (can be replaced with DB later)
-// Using public test videos that allow hotlinking
-const REELS_DATABASE = [
-	{
-		id: "1",
-		videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-		thumbnail: "https://storage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg",
-		title: "Big Buck Bunny",
-		credits: "Blender Foundation",
-		duration: 15
-	},
-	{
-		id: "2",
-		videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-		thumbnail: "https://storage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg",
-		title: "Elephants Dream",
-		credits: "Blender Foundation",
-		duration: 12
-	},
-	{
-		id: "3",
-		videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-		thumbnail: "https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg",
-		title: "For Bigger Blazes",
-		credits: "Google",
-		duration: 10
-	},
-	{
-		id: "4",
-		videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-		thumbnail: "https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerEscapes.jpg",
-		title: "For Bigger Escapes",
-		credits: "Google",
-		duration: 14
-	},
-	{
-		id: "5",
-		videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-		thumbnail: "https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerFun.jpg",
-		title: "For Bigger Fun",
-		credits: "Google",
-		duration: 20
-	},
-	{
-		id: "6",
-		videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-		thumbnail: "https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerJoyrides.jpg",
-		title: "For Bigger Joyrides",
-		credits: "Google",
-		duration: 8
-	},
-	{
-		id: "7",
-		videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
-		thumbnail: "https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerMeltdowns.jpg",
-		title: "For Bigger Meltdowns",
-		credits: "Google",
-		duration: 11
-	},
-	{
-		id: "8",
-		videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-		thumbnail: "https://storage.googleapis.com/gtv-videos-bucket/sample/images/Sintel.jpg",
-		title: "Sintel",
-		credits: "Blender Foundation",
-		duration: 13
-	},
-	{
-		id: "9",
-		videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4",
-		thumbnail: "https://storage.googleapis.com/gtv-videos-bucket/sample/images/SubaruOutbackOnStreetAndDirt.jpg",
-		title: "Subaru Outback",
-		credits: "Google",
-		duration: 16
-	},
-	{
-		id: "10",
-		videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-		thumbnail: "https://storage.googleapis.com/gtv-videos-bucket/sample/images/TearsOfSteel.jpg",
-		title: "Tears of Steel",
-		credits: "Blender Foundation",
-		duration: 9
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || "";
+
+interface YouTubeVideo {
+	id: { kind: string; videoId: string };
+	snippet: {
+		title: string;
+		description: string;
+		channelTitle: string;
+		publishedAt: string;
+		thumbnails: {
+			high: { url: string; width: number; height: number };
+			medium: { url: string };
+			default: { url: string };
+		};
+	};
+}
+
+interface YouTubeSearchResponse {
+	items: YouTubeVideo[];
+	nextPageToken?: string;
+	pageInfo: {
+		totalResults: number;
+		resultsPerPage: number;
+	};
+}
+
+// Cache to reduce API calls
+const cache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+function getCached(key: string) {
+	const cached = cache.get(key);
+	if (!cached) return null;
+	if (Date.now() - cached.timestamp > CACHE_TTL) {
+		cache.delete(key);
+		return null;
 	}
+	return cached.data;
+}
+
+function setCache(key: string, data: any) {
+	cache.set(key, { data, timestamp: Date.now() });
+}
+
+// Search queries for variety (rotate based on page)
+const SEARCH_QUERIES = [
+	"coding shorts",
+	"programming memes",
+	"tech shorts",
+	"developer life",
+	"software engineering",
+	"funny coding",
+	"javascript tips",
+	"python tricks",
+	"web development",
+	"brainrot coding",
 ];
 
 const reelsRoutes = new Hono()
 	// GET /api/reels?page=1&limit=5
-	.get("/", (c) => {
-		const page = parseInt(c.req.query("page") || "1");
-		const limit = parseInt(c.req.query("limit") || "5");
+	.get("/", async (c) => {
+		try {
+			if (!YOUTUBE_API_KEY) {
+				return c.json(
+					{
+						success: false,
+						error: "YOUTUBE_API_KEY not configured",
+						reels: [],
+						hasMore: false,
+					},
+					500
+				);
+			}
 
-		const startIndex = (page - 1) * limit;
-		const endIndex = startIndex + limit;
+			const page = parseInt(c.req.query("page") || "1");
+			const limit = parseInt(c.req.query("limit") || "10");
 
-		// Use sequential order with unique IDs per page to prevent duplicates
-		const paginatedReels = REELS_DATABASE.slice(startIndex, endIndex).map((reel, idx) => ({
-			...reel,
-			id: `${page}_${reel.id}` // Unique ID per page to prevent React key conflicts
-		}));
+			// Rotate search query based on page for variety
+			const queryIndex = (page - 1) % SEARCH_QUERIES.length;
+			const searchQuery = SEARCH_QUERIES[queryIndex];
 
-		return c.json({
-			success: true,
-			reels: paginatedReels,
-			page,
-			limit,
-			total: REELS_DATABASE.length,
-			hasMore: endIndex < REELS_DATABASE.length
-		});
+			const cacheKey = `youtube_shorts_${searchQuery}_${page}_${limit}`;
+			const cached = getCached(cacheKey);
+			if (cached) {
+				return c.json(cached);
+			}
+
+			// YouTube API: Search for Shorts (vertical videos under 60s)
+			const apiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoDuration=short&q=${encodeURIComponent(
+				searchQuery
+			)}&maxResults=${limit}&key=${YOUTUBE_API_KEY}`;
+
+			const response = await fetch(apiUrl);
+
+			if (!response.ok) {
+				throw new Error(`YouTube API error: ${response.status}`);
+			}
+
+			const data = (await response.json()) as YouTubeSearchResponse;
+
+			// Transform to our format
+			const reels = data.items.map((video, idx) => ({
+				id: `yt_${video.id.videoId}_${searchQuery}_${page}_${idx}_${Date.now()}`,
+				videoId: video.id.videoId,
+				videoUrl: `https://www.youtube.com/embed/${video.id.videoId}`,
+				embedUrl: `https://www.youtube.com/embed/${video.id.videoId}?autoplay=1&mute=1&loop=1&playlist=${video.id.videoId}&controls=0&modestbranding=1&rel=0`,
+				thumbnail: video.snippet.thumbnails.high.url,
+				title: video.snippet.title,
+				credits: video.snippet.channelTitle,
+				description: video.snippet.description,
+				publishedAt: video.snippet.publishedAt,
+			}));
+
+			const result = {
+				success: true,
+				reels,
+				page,
+				limit,
+				query: searchQuery,
+				total: data.pageInfo.totalResults,
+				hasMore: true, // Always true with rotating queries
+			};
+
+			setCache(cacheKey, result);
+			return c.json(result);
+		} catch (error: any) {
+			console.error("YouTube Shorts API error:", error);
+			return c.json(
+				{
+					success: false,
+					error: error.message,
+					reels: [],
+					hasMore: false,
+				},
+				500
+			);
+		}
+	})
+
+	// GET /api/reels/trending - Popular shorts
+	.get("/trending", async (c) => {
+		try {
+			if (!YOUTUBE_API_KEY) {
+				return c.json(
+					{
+						success: false,
+						error: "YOUTUBE_API_KEY not configured",
+						reels: [],
+						hasMore: false,
+					},
+					500
+				);
+			}
+
+			const page = parseInt(c.req.query("page") || "1");
+			const limit = parseInt(c.req.query("limit") || "10");
+
+			const cacheKey = `youtube_trending_${page}_${limit}`;
+			const cached = getCached(cacheKey);
+			if (cached) {
+				return c.json(cached);
+			}
+
+			// Get most popular shorts in tech category
+			const apiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoDuration=short&order=viewCount&videoCategoryId=28&maxResults=${limit}&key=${YOUTUBE_API_KEY}`;
+
+			const response = await fetch(apiUrl);
+
+			if (!response.ok) {
+				throw new Error(`YouTube API error: ${response.status}`);
+			}
+
+			const data = (await response.json()) as YouTubeSearchResponse;
+
+			const reels = data.items.map((video, idx) => ({
+				id: `yt_trending_${video.id.videoId}_${page}_${idx}_${Date.now()}`,
+				videoId: video.id.videoId,
+				videoUrl: `https://www.youtube.com/embed/${video.id.videoId}`,
+				embedUrl: `https://www.youtube.com/embed/${video.id.videoId}?autoplay=1&mute=1&loop=1&playlist=${video.id.videoId}&controls=0&modestbranding=1&rel=0`,
+				thumbnail: video.snippet.thumbnails.high.url,
+				title: video.snippet.title,
+				credits: video.snippet.channelTitle,
+				description: video.snippet.description,
+				publishedAt: video.snippet.publishedAt,
+			}));
+
+			const result = {
+				success: true,
+				reels,
+				page,
+				limit,
+				category: "trending",
+				hasMore: true,
+			};
+
+			setCache(cacheKey, result);
+			return c.json(result);
+		} catch (error: any) {
+			console.error("YouTube Trending API error:", error);
+			return c.json(
+				{
+					success: false,
+					error: error.message,
+					reels: [],
+					hasMore: false,
+				},
+				500
+			);
+		}
 	});
 
 export default reelsRoutes;
