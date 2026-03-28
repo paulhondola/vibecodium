@@ -198,7 +198,8 @@ function hasVulnerability(content: string): boolean {
 // Per-room state for the collaborative Docker terminal
 interface TerminalRoom {
     container: Docker.Container;
-    proc: ReturnType<typeof Bun.spawn>; // docker exec subprocess
+    proc: ReturnType<typeof Bun.spawn>;
+    sink: import("bun").FileSink; // typed stdin pipe
 }
 
 const termClients     = new Map<string, Set<import("bun").ServerWebSocket<WSData>>>();
@@ -362,7 +363,8 @@ export default {
                             { stdin: "pipe", stdout: "pipe", stderr: "pipe" }
                         );
 
-                        termRooms.set(roomId, { container, proc });
+                        const sink = proc.stdin as import("bun").FileSink;
+                        termRooms.set(roomId, { container, proc, sink });
 
                         // Pipe stdout → clients (normalize bare LF → CRLF for xterm)
                         (async () => {
@@ -469,7 +471,7 @@ export default {
                     const line = (termLineBuffers.get(roomId) ?? "") + "\n";
                     termLineBuffers.set(roomId, "");
                     broadcastAll("\r\n");
-                    try { room.proc.stdin.write(line); } catch (_) {}
+                    try { room.sink.write(line); } catch (_) {}
                 } else if (message === "\x7f" || message === "\b") {
                     // Backspace — pop last char from buffer, erase on screen
                     const buf = termLineBuffers.get(roomId) ?? "";
@@ -479,10 +481,10 @@ export default {
                     }
                 } else if (message.startsWith("\x1b")) {
                     // Escape sequences (arrow keys, etc.) — forward directly, don't buffer
-                    try { room.proc.stdin.write(message); } catch (_) {}
+                    try { room.sink.write(message); } catch (_) {}
                 } else if (message.length === 1 && message.charCodeAt(0) < 32) {
                     // Other control chars (Ctrl+C, Ctrl+D, etc.) — forward directly
-                    try { room.proc.stdin.write(message); } catch (_) {}
+                    try { room.sink.write(message); } catch (_) {}
                 } else {
                     // Printable chars — append to buffer and echo
                     const buf = termLineBuffers.get(roomId) ?? "";
