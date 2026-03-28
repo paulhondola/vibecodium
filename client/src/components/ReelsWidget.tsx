@@ -3,11 +3,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 interface Reel {
 	id: string;
+	videoId?: string;
 	videoUrl: string;
+	embedUrl?: string;
 	thumbnail: string;
 	title: string;
 	credits: string;
-	duration: number;
+	duration?: number;
+	description?: string;
 }
 
 interface ReelsWidgetProps {
@@ -23,6 +26,7 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 	const [hasMore, setHasMore] = useState(true);
 	const [isMuted, setIsMuted] = useState(true);
 	const [isMinimized, setIsMinimized] = useState(false);
+	const [currentVisibleIndex, setCurrentVisibleIndex] = useState(0);
 
 	const containerRef = useRef<HTMLDivElement>(null);
 	const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -77,27 +81,40 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 		wasLoadingRef.current = isAgentLoading;
 	}, [isAgentLoading, isMinimized, onMinimize]);
 
-	// IntersectionObserver for autoplay
+	// IntersectionObserver for autoplay and tracking visible reel
 	useEffect(() => {
 		observerRef.current = new IntersectionObserver(
 			(entries) => {
 				entries.forEach((entry) => {
-					const video = entry.target as HTMLVideoElement;
+					const element = entry.target as HTMLElement;
+					const reelId = element.dataset.reelId;
+					const reelIndex = element.dataset.reelIndex;
+
+					if (!reelId) return;
 
 					if (entry.isIntersecting && entry.intersectionRatio >= 0.75) {
-						// Video is 75% visible - play it
-						video.play().catch(() => {
-							// Autoplay might be blocked, that's ok
-						});
+						// Update current visible index
+						if (reelIndex) {
+							setCurrentVisibleIndex(parseInt(reelIndex));
+						}
 
-						// Preload next 2 videos
-						const currentIndex = reels.findIndex(r => r.id === video.dataset.reelId);
-						for (let i = 1; i <= 2; i++) {
-							const nextReel = reels[currentIndex + i];
-							if (nextReel) {
-								const nextVideo = videoRefs.current.get(nextReel.id);
-								if (nextVideo) {
-									nextVideo.load(); // Trigger preload
+						// Find current reel index for infinite scroll
+						const currentIndex = reels.findIndex(r => r.id === reelId);
+
+						// Only handle direct video playback (not YouTube iframes)
+						if (element instanceof HTMLVideoElement) {
+							element.play().catch(() => {
+								// Autoplay might be blocked, that's ok
+							});
+
+							// Preload next 2 videos
+							for (let i = 1; i <= 2; i++) {
+								const nextReel = reels[currentIndex + i];
+								if (nextReel && !nextReel.videoId) { // Only preload direct videos
+									const nextVideo = videoRefs.current.get(nextReel.id);
+									if (nextVideo) {
+										nextVideo.load();
+									}
 								}
 							}
 						}
@@ -107,8 +124,10 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 							fetchReels(currentPage + 1);
 						}
 					} else {
-						// Video not visible - pause it
-						video.pause();
+						// Video not visible - pause it (only for direct videos)
+						if (element instanceof HTMLVideoElement) {
+							element.pause();
+						}
 					}
 				});
 			},
@@ -137,9 +156,9 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [onClose]);
 
-	const handleVideoRef = (reelId: string, el: HTMLVideoElement | null) => {
+	const handleVideoRef = (reelId: string, el: HTMLVideoElement | HTMLDivElement | null) => {
 		if (el) {
-			videoRefs.current.set(reelId, el);
+			videoRefs.current.set(reelId, el as HTMLVideoElement);
 			observerRef.current?.observe(el);
 		} else {
 			const video = videoRefs.current.get(reelId);
@@ -151,11 +170,19 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 	};
 
 	const toggleMute = () => {
-		setIsMuted(!isMuted);
-		// Apply to all videos
+		const newMutedState = !isMuted;
+		setIsMuted(newMutedState);
+
+		// Apply to all direct videos
 		videoRefs.current.forEach((video) => {
-			video.muted = !isMuted;
+			if (video instanceof HTMLVideoElement) {
+				video.muted = newMutedState;
+			}
 		});
+
+		// Force refresh YouTube iframes with new mute state
+		// (YouTube embeds need src change to update mute param)
+		setReels(prev => [...prev]);
 	};
 
 	if (isMinimized) {
@@ -220,30 +247,58 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 					}
 				`}</style>
 
-				{reels.map((reel) => (
-					<div
-						key={reel.id}
-						className="snap-start snap-always h-full w-full relative flex items-center justify-center bg-black"
-					>
-						<video
-							ref={(el) => handleVideoRef(reel.id, el)}
-							data-reel-id={reel.id}
-							src={reel.videoUrl}
-							poster={reel.thumbnail}
-							loop
-							muted={isMuted}
-							playsInline
-							preload="metadata"
-							className="w-full h-full object-contain"
-						/>
+				{reels.map((reel, index) => {
+					// Only render YouTube iframe if it's the current visible one or adjacent ones
+					const shouldRenderYouTube = !reel.videoId || Math.abs(index - currentVisibleIndex) <= 1;
 
-						{/* Video Info Overlay */}
-						<div className="absolute bottom-4 left-4 right-4 text-white">
-							<h3 className="font-bold text-sm drop-shadow-lg">{reel.title}</h3>
-							<p className="text-xs text-gray-300 drop-shadow-lg">{reel.credits}</p>
+					return (
+						<div
+							key={`${reel.id}_${index}`}
+							ref={(el) => reel.videoId ? handleVideoRef(reel.id, el) : null}
+							data-reel-id={reel.id}
+							data-reel-index={index}
+							className="snap-start snap-always h-full w-full relative flex items-center justify-center bg-black"
+						>
+							{reel.videoId ? (
+								shouldRenderYouTube ? (
+									// YouTube embed - only render if visible or adjacent
+									<iframe
+										key={`iframe_${index}_${currentVisibleIndex}`}
+										src={`https://www.youtube.com/embed/${reel.videoId}?autoplay=${index === currentVisibleIndex ? 1 : 0}&mute=${isMuted ? 1 : 0}&loop=1&playlist=${reel.videoId}&controls=1&modestbranding=1&rel=0&enablejsapi=1`}
+										className="w-full h-full border-none"
+										allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+										allowFullScreen
+										title={reel.title}
+									/>
+								) : (
+									// Placeholder with thumbnail for off-screen reels
+									<div className="w-full h-full flex items-center justify-center bg-black">
+										<img src={reel.thumbnail} alt={reel.title} className="w-full h-full object-contain" />
+									</div>
+								)
+							) : (
+								// Direct video file
+								<video
+									ref={(el) => handleVideoRef(reel.id, el)}
+									data-reel-id={reel.id}
+									src={reel.videoUrl}
+									poster={reel.thumbnail}
+									loop
+									muted={isMuted}
+									playsInline
+									preload="metadata"
+									className="w-full h-full object-contain"
+								/>
+							)}
+
+							{/* Video Info Overlay */}
+							<div className="absolute bottom-4 left-4 right-4 text-white pointer-events-none">
+								<h3 className="font-bold text-sm drop-shadow-lg line-clamp-2 bg-black/50 px-2 py-1 rounded">{reel.title}</h3>
+								<p className="text-xs text-gray-300 drop-shadow-lg bg-black/50 px-2 py-0.5 rounded mt-1">{reel.credits}</p>
+							</div>
 						</div>
-					</div>
-				))}
+					);
+				})}
 
 				{/* Loading Indicator */}
 				{isLoading && (
