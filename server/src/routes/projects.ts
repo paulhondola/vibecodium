@@ -9,6 +9,7 @@ import mongoose from "mongoose";
 import { connectMongo } from "../db/mongoose";
 import { Project } from "../db/models/Project";
 import { syncProjectFilesToDisk } from "../utils/sync";
+import { getUserTokens } from "../utils/tokens";
 
 const projectsRoutes = new Hono();
 
@@ -279,6 +280,25 @@ projectsRoutes.post("/:id/push", async (c) => {
         const projectId = c.req.param("id");
         if (!projectId) return c.json({ error: "Missing projectId" }, 400);
 
+        const user = (c.get as any)("user");
+        const userId = user?.sub || user?.nickname;
+        
+        if (!userId) {
+            return c.json({ error: "Unauthorized" }, 401);
+        }
+
+        // Check for GitHub Token
+        const tokens = await getUserTokens(userId);
+        let githubToken = tokens.githubToken || process.env.GITHUB_TOKEN_REPO || process.env.GITHUB_TOKEN;
+
+        if (!githubToken || githubToken === "undefined") {
+            return c.json({ 
+                success: false, 
+                error: "GITHUB_TOKEN_REQUIRED", 
+                message: "You need to register your GitHub Token in your profile to commit and push changes." 
+            }, 403);
+        }
+
         // Fetch project from MongoDB to get repoUrl (if needed)
         await connectMongo();
         const project = await Project.findById(projectId);
@@ -299,7 +319,18 @@ projectsRoutes.post("/:id/push", async (c) => {
         const gitCommit = Bun.spawn(["git", "commit", "-m", "Auto-Save Sandbox Commit"], { cwd: targetDir });
         await gitCommit.exited;
 
-        const gitPush = Bun.spawn(["git", "push", "--force"], { cwd: targetDir, stdout: "pipe", stderr: "pipe" });
+        // Use the user's token for pushing
+        const repoUrl = project.repoUrl;
+        let authenticatedUrl = repoUrl;
+        if (repoUrl.startsWith("https://github.com/")) {
+            authenticatedUrl = repoUrl.replace("https://github.com/", `https://${githubToken}@github.com/`);
+        }
+
+        const gitPush = Bun.spawn(["git", "push", authenticatedUrl, "HEAD:main", "--force"], { 
+            cwd: targetDir, 
+            stdout: "pipe", 
+            stderr: "pipe" 
+        });
         const exitCode = await gitPush.exited;
         
         const stdout = await new Response(gitPush.stdout).text();
@@ -427,12 +458,16 @@ projectsRoutes.post("/create-repo", async (c) => {
 
         if (!name) return c.json({ error: "Repository name is required" }, 400);
 
-        // Get GitHub token from environment
-        const githubToken = process.env.GITHUB_TOKEN_REPO;
+        // Check for GitHub Token
+        const tokens = await getUserTokens(userId);
+        const githubToken = tokens.githubToken || process.env.GITHUB_TOKEN_REPO || process.env.GITHUB_TOKEN;
+
         if (!githubToken || githubToken === "undefined") {
-            return c.json({
-                error: "GitHub integration not configured. Please set GITHUB_TOKEN_REPO in .env"
-            }, 500);
+            return c.json({ 
+                success: false, 
+                error: "GITHUB_TOKEN_REQUIRED", 
+                message: "You need to register your GitHub Token in your profile to create repositories." 
+            }, 403);
         }
 
         // Get GitHub username from Auth0 user

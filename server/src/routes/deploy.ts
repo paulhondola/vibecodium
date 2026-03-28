@@ -6,17 +6,37 @@ import { scanCode } from "../security/scanner";
 import { rooms, broadcast } from "../ws/collaboration";
 import { connectMongo } from "../db/mongoose";
 import { Project } from "../db/models/Project";
+import { getUserTokens } from "../utils/tokens";
+import { authMiddleware } from "../middleware/authMiddleware";
 
 const deployRoutes = new Hono();
+
+// Require Auth0 login but skip OPTIONS preflight
+deployRoutes.use("/*", async (c, next) => {
+    if (c.req.method === "OPTIONS") return next();
+    return authMiddleware(c, next);
+});
 
 const VERCEL_API = "https://api.vercel.com";
 
 deployRoutes.post("/:projectId", async (c) => {
     const projectId = c.req.param("projectId");
-    const token = process.env.VERCEL_TOKEN;
+    const user = (c.get as any)("user");
+    const userId = user?.sub || user?.nickname;
+
+    if (!userId) {
+        return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const tokens = await getUserTokens(userId);
+    const token = tokens.vercelToken || process.env.VERCEL_TOKEN;
 
     if (!token) {
-        return c.json({ error: "VERCEL_TOKEN is not configured in .env" }, 500);
+        return c.json({ 
+            success: false, 
+            error: "VERCEL_TOKEN_REQUIRED", 
+            message: "You need to register your Vercel Token in your profile to deploy websites." 
+        }, 403);
     }
 
     const room = rooms.get(projectId);

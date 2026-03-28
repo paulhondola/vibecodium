@@ -44,3 +44,9 @@ export const users = sqliteTable("users", {
     location: text("location"),
     createdAt: integer("created_at").notNull(),
 });
+
+export const user_tokens = sqliteTable("user_tokens", {
+    auth0Id: text("auth0_id").primaryKey().references(() => users.auth0Id),
+    githubToken: text("github_token"),
+    vercelToken: text("vercel_token"),
+});

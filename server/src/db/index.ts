@@ -53,4 +53,10 @@ CREATE TABLE IF NOT EXISTS users (
     location TEXT,
     created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS user_tokens (
+    auth0_id TEXT PRIMARY KEY REFERENCES users(auth0_id),
+    github_token TEXT,
+    vercel_token TEXT
+);
 `);
