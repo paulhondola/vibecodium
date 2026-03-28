@@ -266,34 +266,23 @@ function DashboardPage() {
           </div>
         )}
 
-        {isFetchingRepos ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 size={40} className="animate-spin text-[#10B981] mb-6" />
-            <div className="text-slate-400 font-['Space_Grotesk'] tracking-widest uppercase text-xs">Scanning remote clusters...</div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {repos.map(repo => renderRepoCard(repo))}
-          </div>
-        )}
-
-        {/* External Repositories */}
-        {savedProjects.length > 0 && (
-            <div className="mt-16 border-t border-white/10 pt-10 mb-6">
+        {/* Recently Opened Projects — shown first */}
+        {(isFetchingExternal || savedProjects.length > 0) && (
+            <div className="mb-16">
               <div className="flex items-center gap-3 mb-6">
                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-[rgba(59,130,246,0.1)] border border-[rgba(59,130,246,0.2)] rounded-full">
                     <CloudRain size={12} className="text-[#3B82F6]" />
-                    <span className="text-[10px] font-black text-[#3B82F6] uppercase tracking-[0.3em]">External Nodes</span>
+                    <span className="text-[10px] font-black text-[#3B82F6] uppercase tracking-[0.3em]">Recent</span>
                  </div>
                  <h2 className="text-2xl font-['Space_Grotesk'] font-bold tracking-tighter text-white">
-                   Saved Remote Clusters
+                   Recently Opened
                  </h2>
               </div>
-              
+
               {isFetchingExternal ? (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <Loader2 size={40} className="animate-spin text-[#3B82F6] mb-6" />
-                  <div className="text-slate-400 font-['Space_Grotesk'] tracking-widest uppercase text-xs">Syncing External Topology...</div>
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 size={32} className="animate-spin text-[#3B82F6] mb-4" />
+                  <div className="text-slate-400 font-['Space_Grotesk'] tracking-widest uppercase text-xs">Syncing projects...</div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -302,6 +291,30 @@ function DashboardPage() {
               )}
             </div>
         )}
+
+        {/* GitHub Repositories — import section */}
+        <div className="border-t border-white/10 pt-10">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.2)] rounded-full">
+              <CloudRain size={12} className="text-[#10B981]" />
+              <span className="text-[10px] font-black text-[#10B981] uppercase tracking-[0.3em]">Import</span>
+            </div>
+            <h2 className="text-2xl font-['Space_Grotesk'] font-bold tracking-tighter text-white">
+              GitHub Repositories
+            </h2>
+          </div>
+
+          {isFetchingRepos ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 size={40} className="animate-spin text-[#10B981] mb-6" />
+              <div className="text-slate-400 font-['Space_Grotesk'] tracking-widest uppercase text-xs">Scanning remote clusters...</div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {repos.map(repo => renderRepoCard(repo))}
+            </div>
+          )}
+        </div>
       </motion.div>
     </div>
   );
