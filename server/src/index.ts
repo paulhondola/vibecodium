@@ -15,6 +15,7 @@ import { db } from "./db";
 import { files, snapshots } from "./db/schema";
 import * as nodePath from "node:path";
 import { eq } from "drizzle-orm";
+import { scanCode, hasCriticalVulnerability, type ScanResult } from "./security/scanner";
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
 const LLM_KEY = process.env.LLM_KEY ?? "";
@@ -76,6 +77,36 @@ export const app = new Hono()
 	.route("/api/github", githubRoutes)
 	.get("/", c => c.text("Hello Hono!"))
 	.get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
+
+	// Security Scanning Endpoint
+	.post("/api/scan", async (c) => {
+		try {
+			const body = await c.req.json<{ projectId: string }>();
+			if (!body.projectId) {
+				return c.json({ success: false, error: "Missing projectId" }, 400);
+			}
+
+			// Fetch all project files
+			const projectFiles = await db
+				.select({ path: files.path, content: files.content })
+				.from(files)
+				.where(eq(files.projectId, body.projectId));
+
+			const filesToScan = projectFiles
+				.filter((f) => f.content)
+				.map((f) => ({ path: f.path, content: f.content! }));
+
+			const scanResult = await scanCode(filesToScan);
+
+			return c.json({
+				success: true,
+				scan: scanResult,
+			});
+		} catch (error: any) {
+			console.error("Security scan error:", error);
+			return c.json({ success: false, error: error.message }, 500);
+		}
+	})
     .get("/api/ping-llm", async (c) => {
         if (!LLM_KEY) return c.json({ success: false, error: "LLM_KEY is not set" }, 500);
         const res = await fetch(`${LLM_BASE_URL}/chat/completions`, {
@@ -106,10 +137,19 @@ export const app = new Hono()
         }
     })
     .post("/execute", async (c) => {
-        // [Docker Execute Code Redacted for brevity but identical]
         try {
             const body = await c.req.json<ExecuteRequest>();
             if (!body.language || !body.version || !body.code) return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: "Missing language, version, or code." }, 400);
+
+			// Security scan before execution
+			if (hasCriticalVulnerability(body.code)) {
+				return c.json<ExecuteResponse>({
+					success: false,
+					stdout: "",
+					stderr: "🛡️ SECURITY BLOCK: Critical vulnerability detected in code.\nExecution refused for safety.\n\nRun a full scan for details.",
+					error: "Security policy violation"
+				}, 403);
+			}
             
             const imageName = LANGUAGE_IMAGES[body.language];
             const getCmd = EXEC_COMMANDS[body.language];
@@ -179,20 +219,6 @@ function detectTerminalImage(filePaths: string[]): string {
         if (EXT_TO_IMAGE[ext]) return EXT_TO_IMAGE[ext]!;
     }
     return "node:20-alpine"; // default for JS/TS projects
-}
-
-// Heuristic security scan — blocks obvious destructive patterns before container start
-const VULN_PATTERNS: RegExp[] = [
-    /rm\s+-rf\s+[/~]/,
-    /:\(\)\s*\{\s*:\s*\|\s*:.*\}/,         // fork bomb
-    /dd\s+if=\/dev\/(zero|urandom|mem)/,
-    />\s*\/dev\/sd[a-z]/,
-    /mkfs\s/,
-    /shred\s/,
-];
-
-function hasVulnerability(content: string): boolean {
-    return VULN_PATTERNS.some(re => re.test(content));
 }
 
 // Per-room state for the collaborative Docker terminal
@@ -314,13 +340,27 @@ export default {
                             .where(eq(files.projectId, roomId));
 
                         // Security scan — block before any container starts
-                        for (const f of projectFiles) {
-                            if (f.content && hasVulnerability(f.content)) {
-                                broadcastToRoom("\x1b[1;31m[SECURITY BLOCK]\x1b[0m Dangerous pattern detected in project files. Execution refused.\r\n");
-                                termClients.get(roomId)?.forEach(c => c.close(1008, "Security policy violation"));
-                                return;
-                            }
-                        }
+						const scanResult = await scanCode(
+							projectFiles
+								.filter((f) => f.content)
+								.map((f) => ({ path: f.path, content: f.content! }))
+						);
+
+						if (!scanResult.safe) {
+							broadcastToRoom("\x1b[1;31m[🛡️ SECURITY BLOCK]\x1b[0m Critical vulnerabilities detected:\r\n\r\n");
+							scanResult.vulnerabilities
+								.filter((v) => v.severity === "critical" || v.severity === "high")
+								.forEach((v) => {
+									broadcastToRoom(`  \x1b[31m● ${v.severity.toUpperCase()}\x1b[0m: ${v.description}\r\n`);
+									broadcastToRoom(`    Code: ${v.code}\r\n`);
+									broadcastToRoom(`    Fix: ${v.recommendation}\r\n\r\n`);
+								});
+							broadcastToRoom("\x1b[33mExecution refused for safety. Fix issues and try again.\x1b[0m\r\n");
+							termClients.get(roomId)?.forEach(c => c.close(1008, "Security policy violation"));
+							return;
+						}
+
+						broadcastToRoom(`\x1b[32m✓ Security scan passed\x1b[0m (${scanResult.scannedFiles} files, ${scanResult.scannedLines} lines, ${scanResult.scanDuration}ms)\r\n`);
 
                         // Pick image from file extensions
                         const image = detectTerminalImage(projectFiles.map(f => f.path));
