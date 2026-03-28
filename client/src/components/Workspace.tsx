@@ -304,7 +304,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 					</button>
 					<div className="w-[1px] h-4 bg-[#27272a]"></div>
 					<div className="flex items-center gap-2">
-						<div className="w-5 h-5 rounded-sm bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-black text-[10px] font-bold">iT</div>
 						<span className="font-semibold text-sm text-gray-200">{projectName ?? (projectId ? `Project ${projectId.slice(0, 8)}` : "itec-project")}</span>
                         
                         <div className="ml-6 flex items-center bg-[#09090b] rounded-lg p-0.5 border border-[#27272a]">
