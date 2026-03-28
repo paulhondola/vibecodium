@@ -229,7 +229,18 @@ bun run type-check
 
 # Run tests across all workspaces
 bun run test
+
+# Manually rebuild sandbox Docker images
+bun run setup:docker
 ```
+
+## Sandbox Environment
+
+Vibecodium uses isolated Docker containers to safely execute user code. These environments are based on custom Dockerfiles located in `server/docker/`.
+
+The necessary Docker images (`vibecodium-rust`, `vibecodium-python`, etc.) are automatically built during `bun install` via the `postinstall` script. If you need to rebuild them manually, you can run `bun run setup:docker`.
+
+**Note:** Ensure Docker Desktop or a compatible Docker engine is running on your machine.
 
 ### Deployment
 

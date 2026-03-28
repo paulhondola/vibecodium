@@ -1,0 +1,7 @@
+FROM rust:1.68.2-alpine
+
+RUN apk add --no-cache musl-dev
+
+WORKDIR /usr/src/app
+
+CMD ["sleep", "infinity"]
