@@ -329,4 +329,61 @@ projectsRoutes.patch("/:id/files/rename", async (c) => {
     }
 });
 
+// ── GitHub Integration ───────────────────────────────────────────────────────
+projectsRoutes.get("/:id/commits", async (c) => {
+    try {
+        const projectId = c.req.param("id");
+        if (!projectId) return c.json({ error: "Missing projectId" }, 400);
+
+        await connectMongo();
+        const project = await Project.findById(projectId).select("repoUrl");
+        if (!project || !project.repoUrl) {
+            return c.json({ error: "Project or repoUrl not found" }, 404);
+        }
+
+        const urlStr = project.repoUrl.replace(".git", "");
+        const urlParams = urlStr.split("github.com/");
+        if (urlParams.length < 2) {
+            return c.json({ error: "Invalid GitHub URL format" }, 400);
+        }
+        
+        const [owner, repo] = urlParams[1].split("/");
+        if (!owner || !repo) {
+            return c.json({ error: "Could not extract owner/repo from URL" }, 400);
+        }
+
+        const headers: Record<string, string> = {
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "iTECify-App"
+        };
+        
+        if (process.env.GITHUB_TOKEN && process.env.GITHUB_TOKEN !== "undefined") {
+            headers["Authorization"] = `Bearer ${process.env.GITHUB_TOKEN}`;
+        }
+
+        const ghResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits`, { headers });
+
+        if (!ghResponse.ok) {
+            return c.json({ error: `GitHub API error: ${ghResponse.statusText}` }, 500);
+        }
+
+        const commitsData = await ghResponse.json() as any[];
+
+        const parsedCommits = commitsData.slice(0, 50).map((commitItem: any) => ({
+            sha: commitItem.sha,
+            message: commitItem.commit?.message?.split("\n")[0] || "No message",
+            author: {
+                name: commitItem.commit?.author?.name || "Unknown",
+                avatar: commitItem.author?.avatar_url || null
+            },
+            date: commitItem.commit?.author?.date || null
+        }));
+
+        return c.json({ success: true, commits: parsedCommits }, 200);
+
+    } catch (err: any) {
+        return c.json({ error: err.message }, 500);
+    }
+});
+
 export default projectsRoutes;
