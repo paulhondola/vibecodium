@@ -36,7 +36,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.9",
     "bun-types": "latest",
-    "turbo": "^2.6.3"
+    "turbo": "^2.8.21"
   },
   "peerDependencies": {
     "typescript": "^5.8.3"
