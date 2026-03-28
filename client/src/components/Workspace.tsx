@@ -86,7 +86,14 @@ export default function Workspace({ onBack, projectId }: { onBack: () => void, p
 
         ws.onclose = () => { wsRef.current = null; };
 
-        return () => ws.close();
+        return () => {
+            if (ws.readyState === WebSocket.CONNECTING) {
+                // Prevent browser "interrupted" error returning in React 18 Strict Mode double-mount
+                ws.addEventListener("open", () => ws.close());
+            } else {
+                ws.close();
+            }
+        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [projectId, user?.sub]);
 
