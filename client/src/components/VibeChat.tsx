@@ -110,6 +110,18 @@ export default function VibeChat({ activeFile, projectId, token, onPendingUpdate
             setInput("");
             return;
         }
+        if (cmd === "/matrix") {
+            document.body.classList.add("matrix-mode");
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: input }, { id: Date.now().toString() + "_a", role: "assistant", content: "Wake up, Neo... The Matrix has you." }]);
+            setInput("");
+            return;
+        }
+        if (cmd === "/nomatrix") {
+            document.body.classList.remove("matrix-mode");
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: input }, { id: Date.now().toString() + "_a", role: "assistant", content: "Returning to reality." }]);
+            setInput("");
+            return;
+        }
         if (cmd === "/optimist") {
             document.body.style.filter = "none";
             setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: input }, { id: Date.now().toString() + "_a", role: "assistant", content: "✨ Optimism restored. Everything is awesome! Back to building." }]);

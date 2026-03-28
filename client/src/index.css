@@ -239,3 +239,27 @@
 .animate-glow-line {
   animation: glowLine 3s ease-in-out infinite;
 }
+
+/* Matrix Mode Easter Egg */
+body.matrix-mode {
+  background-color: #000 !important;
+  color: #00FF41 !important;
+  font-family: 'Courier New', Courier, monospace !important;
+}
+
+body.matrix-mode * {
+  border-color: #008F11 !important;
+}
+
+body.matrix-mode .bg-\[\#09090b\], 
+body.matrix-mode .bg-\[\#18181b\], 
+body.matrix-mode .bg-\[\#1e1e24\] {
+  background-color: rgba(0, 10, 0, 0.9) !important;
+}
+
+body.matrix-mode .text-gray-200, 
+body.matrix-mode .text-gray-400, 
+body.matrix-mode .text-cyan-400, 
+body.matrix-mode .text-\[\#c9d1d9\] {
+  color: #00FF41 !important;
+}

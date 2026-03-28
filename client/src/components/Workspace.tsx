@@ -6,6 +6,8 @@ import VibeChat from "./VibeChat";
 import ReelsWidget from "./ReelsWidget";
 import SecurityScanModal from "./SecurityScanModal";
 import RubberDuck from "./RubberDuck";
+import WhiteboardArea from "./WhiteboardArea";
+import PomodoroTimer from "./PomodoroTimer";
 import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -34,6 +36,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [showSidebar, setShowSidebar] = useState(true);
     const [showTerminal, setShowTerminal] = useState(true);
     const [showChat, setShowChat] = useState(true);
+    const [showWhiteboard, setShowWhiteboard] = useState(false);
 
     // Collab
     const { isConnected, lastMessage } = useSocket();
@@ -284,6 +287,23 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 						<div className="w-5 h-5 rounded-sm bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-black text-[10px] font-bold">iT</div>
 						<span className="font-semibold text-sm text-gray-200">{projectName ?? (projectId ? `Project ${projectId.slice(0, 8)}` : "itec-project")}</span>
                         
+                        <div className="ml-6 flex items-center bg-[#09090b] rounded-lg p-0.5 border border-[#27272a]">
+                            <button 
+                                onClick={() => setShowWhiteboard(false)}
+                                className={`px-3 py-1 flex items-center gap-2 rounded-md text-xs font-semibold transition-all ${!showWhiteboard ? "bg-[#27272a] text-cyan-400" : "text-gray-500 hover:text-gray-300"}`}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                                Code
+                            </button>
+                            <button 
+                                onClick={() => setShowWhiteboard(true)}
+                                className={`px-3 py-1 flex items-center gap-2 rounded-md text-xs font-semibold transition-all ${showWhiteboard ? "bg-[#27272a] text-yellow-400" : "text-gray-500 hover:text-gray-300"}`}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                                Whiteboard
+                            </button>
+                        </div>
+					</div>
                         {/* Panel Toggles */}
                         <div className="flex items-center gap-1 ml-4 bg-[#18181b] p-0.5 rounded border border-[#27272a]">
                             <button onClick={() => setShowSidebar(!showSidebar)} className={`p-1 rounded hover:bg-[#27272a] ${showSidebar ? "text-cyan-400" : "text-gray-500"} transition-colors`} title="Toggle Sidebar">
@@ -307,7 +327,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                             </span>
                         )}
 					</div>
-				</div>
 
 				<div className="flex items-center gap-4">
                     {/* Connected users */}
@@ -320,6 +339,10 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                             ))}
                         </div>
                     )}
+
+                    <div className="mx-2 flex items-center">
+                        <PomodoroTimer />
+                    </div>
 
                     {/* Collaborate button */}
                     <button
@@ -396,18 +419,24 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                     <Panel defaultSize={55} className="flex flex-col min-w-0 bg-[#09090b] relative">
                         <PanelGroup orientation="vertical" className="w-full h-full">
                             <Panel defaultSize={showTerminal ? 70 : 100} minSize={30} className="relative overflow-hidden">
-                                <EditorArea
-                                    openFiles={openFiles}
-                                    activeFile={activeFile}
-                                    onSelectFile={handleSelectFile}
-                                    onCloseFile={handleCloseFile}
-                                    userId={user?.sub ? `${user.sub}_local` : "anon_local"}
-                                    remoteCodeUpdate={remoteCodeUpdate}
-                                    remoteCursorUpdate={remoteCursorUpdate}
-                                    pendingUpdate={pendingUpdate}
-                                    onPendingResolved={() => setPendingUpdate(null)}
-                                    projectId={projectId}
-                                />
+                                {showWhiteboard ? (
+                                    <div className="w-full h-full bg-[#1e1e24] overflow-hidden flex flex-col">
+                                        <WhiteboardArea projectId={projectId} />
+                                    </div>
+                                ) : (
+                                    <EditorArea 
+                                        openFiles={openFiles}
+                                        activeFile={activeFile}
+                                        onSelectFile={handleSelectFile}
+                                        onCloseFile={handleCloseFile}
+                                        userId={user?.sub ? `${user.sub}_local` : "anon_local"}
+                                        remoteCodeUpdate={remoteCodeUpdate}
+                                        remoteCursorUpdate={remoteCursorUpdate}
+                                        pendingUpdate={pendingUpdate}
+                                        onPendingResolved={() => setPendingUpdate(null)}
+                                        projectId={projectId}
+                                    />
+                                )}
                             </Panel>
                             
                             {showTerminal && (
