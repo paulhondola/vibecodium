@@ -9,7 +9,7 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const { user, isAuthenticated, isLoading, logout } = useAuth0();
+  const { user, isAuthenticated, isLoading, logout, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
 
   const [githubRepoCount, setGithubRepoCount] = useState<number | null>(null);
@@ -20,12 +20,13 @@ function ProfilePage() {
     if (user?.nickname) {
       setIsLoadingStats(true);
       
-      Promise.all([
-        fetch(`https://api.github.com/users/${user.nickname}`).then(res => res.json()),
-        fetch(`https://api.github.com/search/commits?q=author:${user.nickname}`, {
-          headers: { Accept: "application/vnd.github.cloak-preview" }
-        }).then(res => res.json())
-      ])
+      getAccessTokenSilently().then(token => {
+        const headers = { Authorization: `Bearer ${token}` };
+        return Promise.all([
+          fetch(`http://localhost:3000/api/github/users/${user.nickname}`, { headers }).then(res => res.json()),
+          fetch(`http://localhost:3000/api/github/search/commits?q=author:${user.nickname}`, { headers }).then(res => res.json())
+        ]);
+      })
       .then(([userData, commitData]) => {
         if (userData.public_repos !== undefined) setGithubRepoCount(userData.public_repos);
         if (commitData.total_count !== undefined) setGithubCommitCount(commitData.total_count);

@@ -42,7 +42,12 @@ function DashboardPage() {
   useEffect(() => {
     if (user?.nickname) {
       setIsFetchingRepos(true);
-      fetch(`https://api.github.com/users/${user.nickname}/repos?sort=updated&per_page=50`)
+      getAccessTokenSilently()
+        .then(token =>
+          fetch(`http://localhost:3000/api/github/users/${user.nickname}/repos?sort=updated&per_page=50`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        )
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
