@@ -20,8 +20,20 @@ export const authMiddleware = createMiddleware(async (c, next) => {
         }
 
         // We use the direct /userinfo endpoint to validate the token.
-        // This is a foolproof strategy that works universally for both Opaque Tokens and JWTs
-        // without requiring the user to manually configure separate API Audiences.
+        // Extremely aggressively cache the validated token in-memory to prevent Auth0 429 Too Many Requests
+        if (!(globalThis as any).tokenCache) {
+            (globalThis as any).tokenCache = new Map<string, { user: any, expiresAt: number }>();
+        }
+        
+        const cache = (globalThis as any).tokenCache as Map<string, { user: any, expiresAt: number }>;
+        const now = Date.now();
+        const cached = cache.get(token);
+
+        if (cached && cached.expiresAt > now) {
+            c.set("user", cached.user);
+            return await next();
+        }
+
         const response = await fetch(`https://${auth0Domain}/userinfo`, {
             headers: {
                 Authorization: `Bearer ${token}`
@@ -33,6 +45,8 @@ export const authMiddleware = createMiddleware(async (c, next) => {
         }
 
         const user = await response.json();
+        
+        cache.set(token, { user, expiresAt: now + 15 * 60 * 1000 }); // 15 minutes
         
         // Set the valid decoded user payload in context
 		c.set("user", user);
