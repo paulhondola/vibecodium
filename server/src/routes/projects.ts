@@ -180,7 +180,14 @@ projectsRoutes.get("/:id/files", async (c) => {
         .from(files)
         .where(eq(files.projectId, projectId));
 
-        return c.json({ success: true, files: projectFiles });
+        // Fetch project name from MongoDB
+        await connectMongo();
+        const project = await Project.findById(projectId).select("projectName repoUrl");
+        const projectName = project?.projectName 
+            || project?.repoUrl?.split("/").pop()?.replace(".git", "")
+            || "Untitled";
+
+        return c.json({ success: true, files: projectFiles, projectName });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }

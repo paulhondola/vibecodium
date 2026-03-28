@@ -21,6 +21,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [openFiles, setOpenFiles] = useState<ProjectFile[]>([]);
     const [activeFile, setActiveFile] = useState<ProjectFile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [projectName, setProjectName] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const [showReels, setShowReels] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -54,6 +55,8 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
             .then(data => {
                 if (data.success) {
                     setFiles(data.files || []);
+                    if (data.files?.length > 0) setActiveFile(data.files[0]);
+                    if (data.projectName) setProjectName(data.projectName);
                 }
                 setIsLoading(false);
             })
@@ -160,7 +163,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 					<div className="w-[1px] h-4 bg-[#27272a]"></div>
 					<div className="flex items-center gap-2">
 						<div className="w-5 h-5 rounded-sm bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-black text-[10px] font-bold">iT</div>
-						<span className="font-semibold text-sm text-gray-200">{projectId ? `Project ${projectId.slice(0, 8)}` : "itec-project"}</span>
+						<span className="font-semibold text-sm text-gray-200">{projectName ?? (projectId ? `Project ${projectId.slice(0, 8)}` : "itec-project")}</span>
                         
                         {/* Panel Toggles */}
                         <div className="flex items-center gap-1 ml-4 bg-[#18181b] p-0.5 rounded border border-[#27272a]">
