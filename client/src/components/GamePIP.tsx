@@ -1,15 +1,17 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import SubwaySurfer3D from './SubwaySurfer3D';
-import { Maximize2, Minimize2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface GamePIPProps {
     onClose: () => void;
 }
 
 export default function GamePIP({ onClose }: GamePIPProps) {
-    const [isMinimized, setIsMinimized] = useState(false);
-    const [position, setPosition] = useState({ x: window.innerWidth - 340, y: window.innerHeight - 280 });
-    const [size, setSize] = useState({ width: 320, height: 240 });
+    const [position, setPosition] = useState({ 
+        x: Math.max(0, (window.innerWidth - 800) / 2), 
+        y: Math.max(0, (window.innerHeight - 600) / 2) 
+    });
+    const [size, setSize] = useState({ width: 800, height: 600 });
     const [isDragging, setIsDragging] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -71,18 +73,6 @@ export default function GamePIP({ onClose }: GamePIPProps) {
         onClose();
     };
 
-    if (isMinimized) {
-        return (
-            <button
-                onClick={() => setIsMinimized(false)}
-                className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl shadow-[0_0_30px_rgba(249,115,22,0.5)] hover:shadow-[0_0_40px_rgba(249,115,22,0.7)] transition-all hover:scale-110 active:scale-95 flex items-center justify-center text-white text-2xl font-bold z-[9998] border border-orange-400/30"
-                title="Open Code Runner Game"
-            >
-                🎮
-            </button>
-        );
-    }
-
     return (
         <div
             ref={pipRef}
@@ -105,26 +95,6 @@ export default function GamePIP({ onClose }: GamePIPProps) {
                     <span>CODE RUNNER</span>
                 </div>
                 <div className="flex items-center gap-1">
-                    <button
-                        onClick={() => setIsMinimized(true)}
-                        className="w-6 h-6 hover:bg-white/20 rounded flex items-center justify-center transition-colors"
-                        title="Minimize"
-                    >
-                        <Minimize2 size={14} className="text-white" />
-                    </button>
-                    <button
-                        onClick={() => {
-                            if (size.width === 320) {
-                                setSize({ width: 640, height: 480 });
-                            } else {
-                                setSize({ width: 320, height: 240 });
-                            }
-                        }}
-                        className="w-6 h-6 hover:bg-white/20 rounded flex items-center justify-center transition-colors"
-                        title="Toggle Size"
-                    >
-                        <Maximize2 size={14} className="text-white" />
-                    </button>
                     <button
                         onClick={handleGameClose}
                         className="w-6 h-6 hover:bg-red-500/50 rounded flex items-center justify-center transition-colors"
