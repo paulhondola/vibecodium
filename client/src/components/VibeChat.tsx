@@ -100,6 +100,49 @@ export default function VibeChat({ activeFile, projectId, token, onPendingUpdate
         e.preventDefault();
         if (!input.trim() || isStreaming) return;
 
+        // Easter Eggs
+        const cmd = input.trim().toLowerCase();
+        if (cmd === "/amarati") {
+            document.body.style.filter = "grayscale(80%) sepia(30%) contrast(120%) blur(0.5px)";
+            document.body.style.transition = "filter 2s";
+            new Audio("https://www.myinstants.com/media/sounds/sad-violin.mp3").play().catch(() => {});
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: input }, { id: Date.now().toString() + "_a", role: "assistant", content: "😭 Amarati mode activated. Life is pain. The codebase is broken. Expect random misery." }]);
+            setInput("");
+            return;
+        }
+        if (cmd === "/optimist") {
+            document.body.style.filter = "none";
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: input }, { id: Date.now().toString() + "_a", role: "assistant", content: "✨ Optimism restored. Everything is awesome! Back to building." }]);
+            setInput("");
+            return;
+        }
+        if (cmd === "/disco") {
+            if (!document.getElementById("disco-style")) {
+                const style = document.createElement("style");
+                style.id = "disco-style";
+                style.innerHTML = `
+                    @keyframes discoBg {
+                      0% { filter: hue-rotate(0deg); }
+                      50% { filter: hue-rotate(180deg); }
+                      100% { filter: hue-rotate(360deg); }
+                    }
+                    body { animation: discoBg 2s infinite linear !important; }
+                `;
+                document.head.appendChild(style);
+                new Audio("https://www.myinstants.com/media/sounds/darude-sandstorm.mp3").play().catch(() => {});
+            }
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: input }, { id: Date.now().toString() + "_a", role: "assistant", content: "🪩 DISCO MODE ACTIVATED! 🪩" }]);
+            setInput("");
+            return;
+        }
+        if (cmd === "/nodisco") {
+            const el = document.getElementById("disco-style");
+            if (el) el.remove();
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: input }, { id: Date.now().toString() + "_a", role: "assistant", content: "Music stopped. Back to work." }]);
+            setInput("");
+            return;
+        }
+
         const userMsg: Message = { id: Date.now().toString(), role: "user", content: input };
         setMessages(prev => [...prev, userMsg]);
         const instruction = input;
