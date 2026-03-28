@@ -42,6 +42,13 @@ export default function EditorArea({
     const [editorMode, setEditorMode] = useState<'default' | 'vim' | 'emacs'>('default');
     const vimInstanceRef = useRef<any>(null);
 
+    // Power Mode state
+    const [combo, setCombo] = useState(0);
+    const [isPowerMode, setIsPowerMode] = useState(false);
+    const [sparks, setSparks] = useState<{ id: string; x: number; y: number; color: string }[]>([]);
+    const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const editorContainerRef = useRef<HTMLDivElement>(null);
+
     // Time-Travel Debugging state
     const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
     const [snapshots, setSnapshots] = useState<{timestamp: number, content: string}[]>([]);
@@ -246,6 +253,38 @@ export default function EditorArea({
                 });
             }
         });
+
+        // Power Mode: track keystrokes for combo
+        ed.onKeyDown((e) => {
+            // Only count printable characters (not modifier-only keys)
+            if (e.code.startsWith('Key') || e.code.startsWith('Digit') || e.code === 'Space' || e.code === 'Enter' || e.code === 'Backspace') {
+                setCombo(c => {
+                    const next = c + 1;
+                    if (next >= 20) setIsPowerMode(true);
+                    return next;
+                });
+                // Reset the idle timer
+                if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
+                comboTimerRef.current = setTimeout(() => {
+                    setCombo(0);
+                    setIsPowerMode(false);
+                }, 1500);
+
+                // Spawn a spark at a random position near the cursor
+                const pos = ed.getPosition();
+                if (pos && editorContainerRef.current) {
+                    const rect = editorContainerRef.current.getBoundingClientRect();
+                    const lineHeight = (ed.getOption(66) as unknown as number) || 20;
+                    const x = Math.random() * rect.width;
+                    const y = Math.max(0, (pos.lineNumber - 1) * lineHeight);
+                    const SPARK_COLORS = ['#f97316','#facc15','#a855f7','#22d3ee','#ec4899','#10b981'];
+                    const color = SPARK_COLORS[Math.floor(Math.random() * SPARK_COLORS.length)];
+                    const id = crypto.randomUUID();
+                    setSparks(prev => [...prev, { id, x, y, color }]);
+                    setTimeout(() => setSparks(prev => prev.filter(s => s.id !== id)), 600);
+                }
+            }
+        });
     };
 
     const handleCodeChange = (val: string | undefined) => {
@@ -435,7 +474,50 @@ export default function EditorArea({
                 </div>
             </div>
 
-            <div className="flex-1 relative">
+            {/* Power Mode indicator */}
+            {combo > 10 && (
+                <div className={`absolute top-12 right-4 z-40 pointer-events-none flex flex-col items-end gap-1 transition-all duration-200 ${isPowerMode ? 'opacity-100' : 'opacity-70'}`}>
+                    <div className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded font-mono ${
+                        isPowerMode 
+                            ? 'bg-orange-500/20 text-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.5)] animate-pulse' 
+                            : 'bg-white/5 text-gray-500'
+                    }`}>
+                        {isPowerMode ? '⚡ POWER MODE' : 'COMBO'}
+                    </div>
+                    <div className={`text-4xl font-black font-mono ${isPowerMode ? 'text-orange-400 drop-shadow-[0_0_8px_rgba(249,115,22,1)]' : 'text-gray-400'}`}>
+                        x{combo}
+                    </div>
+                </div>
+            )}
+
+            <div
+                ref={editorContainerRef}
+                className="flex-1 relative"
+                style={isPowerMode ? {
+                    animation: 'shake 0.08s ease-in-out infinite alternate',
+                } : undefined}
+            >
+                {/* Sparks */}
+                {sparks.map(s => (
+                    <div
+                        key={s.id}
+                        className="absolute pointer-events-none"
+                        style={{ left: s.x, top: s.y, zIndex: 40 }}
+                    >
+                        {['', '✦', '·', '★', '•'].map((char, i) => (
+                            <span
+                                key={i}
+                                className="absolute text-sm"
+                                style={{
+                                    color: s.color,
+                                    transform: `rotate(${i * 72}deg)`,
+                                    animation: 'sparkOut 0.5s ease-out forwards',
+                                    animationDelay: `${i * 30}ms`,
+                                }}
+                            >{char}</span>
+                        ))}
+                    </div>
+                ))}
                 {activeFile ? (
                     <>
                         <MonacoEditor
@@ -575,6 +657,20 @@ export default function EditorArea({
                     </div>
                 )}
             </div>
+
+            <style>{`
+                @keyframes shake {
+                    0% { transform: translate(-1px, 0px); }
+                    25% { transform: translate(1px, 1px); }
+                    50% { transform: translate(-1px, -1px); }
+                    75% { transform: translate(1px, 0px); }
+                    100% { transform: translate(0, -1px); }
+                }
+                @keyframes sparkOut {
+                    0% { opacity: 1; transform: translate(0,0) scale(1); }
+                    100% { opacity: 0; transform: translate(var(--sx, 12px), var(--sy, -20px)) scale(0); }
+                }
+            `}</style>
         </div>
     );
 }
