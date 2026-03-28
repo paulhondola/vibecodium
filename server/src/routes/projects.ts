@@ -330,6 +330,80 @@ projectsRoutes.patch("/:id/files/rename", async (c) => {
 });
 
 // ── GitHub Integration ───────────────────────────────────────────────────────
+
+// Create a new GitHub repository
+projectsRoutes.post("/create-repo", async (c) => {
+    try {
+        const user = (c.get as any)("user");
+        const userId = user ? (user.sub || user.nickname) : null;
+        if (!userId) return c.json({ error: "Unauthorized" }, 401);
+
+        const { name, description, isPrivate } = await c.req.json<{
+            name: string;
+            description?: string;
+            isPrivate?: boolean;
+        }>();
+
+        if (!name) return c.json({ error: "Repository name is required" }, 400);
+
+        // Get GitHub token from environment
+        const githubToken = process.env.GITHUB_TOKEN_REPO;
+        if (!githubToken || githubToken === "undefined") {
+            return c.json({
+                error: "GitHub integration not configured. Please set GITHUB_TOKEN_REPO in .env"
+            }, 500);
+        }
+
+        // Get GitHub username from Auth0 user
+        const githubUsername = user.nickname;
+        if (!githubUsername) {
+            return c.json({ error: "GitHub username not found in profile" }, 400);
+        }
+
+        // Create repository via GitHub API
+        const response = await fetch("https://api.github.com/user/repos", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${githubToken}`,
+                "Content-Type": "application/json",
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "VibeCodium-App"
+            },
+            body: JSON.stringify({
+                name,
+                description: description || undefined,
+                private: isPrivate || false,
+                auto_init: true
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json() as any;
+            return c.json({
+                error: errorData.message || "Failed to create repository on GitHub"
+            }, response.status);
+        }
+
+        const repoData = await response.json() as any;
+
+        return c.json({
+            success: true,
+            repository: {
+                id: repoData.id,
+                name: repoData.name,
+                full_name: repoData.full_name,
+                html_url: repoData.html_url,
+                description: repoData.description,
+                private: repoData.private,
+                created_at: repoData.created_at
+            }
+        }, 201);
+
+    } catch (err: any) {
+        return c.json({ error: err.message }, 500);
+    }
+});
+
 projectsRoutes.get("/:id/commits", async (c) => {
     try {
         const projectId = c.req.param("id");
