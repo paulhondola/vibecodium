@@ -4,7 +4,8 @@ import EditorArea from "./EditorArea";
 import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
 import ReelsWidget from "./ReelsWidget";
-import { ArrowLeft, Loader2, Users, Check, Flame, Save } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, Save, PanelLeft, TerminalSquare, PanelRight } from "lucide-react";
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { SocketProvider, useSocket } from "../contexts/SocketProvider";
@@ -17,11 +18,17 @@ export interface ProjectFile {
 
 function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: string | null }) {
     const [files, setFiles] = useState<ProjectFile[]>([]);
+    const [openFiles, setOpenFiles] = useState<ProjectFile[]>([]);
     const [activeFile, setActiveFile] = useState<ProjectFile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [copied, setCopied] = useState(false);
     const [showReels, setShowReels] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+
+    // Panel toggles
+    const [showSidebar, setShowSidebar] = useState(true);
+    const [showTerminal, setShowTerminal] = useState(true);
+    const [showChat, setShowChat] = useState(true);
 
     // Collab
     const { isConnected, lastMessage } = useSocket();
@@ -47,7 +54,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
             .then(data => {
                 if (data.success) {
                     setFiles(data.files || []);
-                    if (data.files?.length > 0) setActiveFile(data.files[0]);
                 }
                 setIsLoading(false);
             })
@@ -107,6 +113,33 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         setIsSaving(false);
     };
 
+    const handleSelectFile = (file: ProjectFile) => {
+        setOpenFiles(prev => {
+            if (!prev.find(f => f.path === file.path)) {
+                return [...prev, file];
+            }
+            return prev;
+        });
+        setActiveFile(file);
+    };
+
+    const handleCloseFile = (file: ProjectFile, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setOpenFiles(prev => {
+            const next = prev.filter(f => f.path !== file.path);
+            if (activeFile?.path === file.path) {
+                if (next.length === 0) {
+                    setActiveFile(null);
+                } else {
+                    const closedIndex = prev.findIndex(f => f.path === file.path);
+                    const defaultIndex = Math.max(0, closedIndex - 1);
+                    setActiveFile(next[defaultIndex]);
+                }
+            }
+            return next;
+        });
+    };
+
     if (isLoading) {
         return (
             <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center text-cyan-400 gap-4">
@@ -128,6 +161,19 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 					<div className="flex items-center gap-2">
 						<div className="w-5 h-5 rounded-sm bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-black text-[10px] font-bold">iT</div>
 						<span className="font-semibold text-sm text-gray-200">{projectId ? `Project ${projectId.slice(0, 8)}` : "itec-project"}</span>
+                        
+                        {/* Panel Toggles */}
+                        <div className="flex items-center gap-1 ml-4 bg-[#18181b] p-0.5 rounded border border-[#27272a]">
+                            <button onClick={() => setShowSidebar(!showSidebar)} className={`p-1 rounded hover:bg-[#27272a] ${showSidebar ? "text-cyan-400" : "text-gray-500"} transition-colors`} title="Toggle Sidebar">
+                                <PanelLeft size={14} />
+                            </button>
+                            <button onClick={() => setShowTerminal(!showTerminal)} className={`p-1 rounded hover:bg-[#27272a] ${showTerminal ? "text-cyan-400" : "text-gray-500"} transition-colors`} title="Toggle Terminal">
+                                <TerminalSquare size={14} />
+                            </button>
+                            <button onClick={() => setShowChat(!showChat)} className={`p-1 rounded hover:bg-[#27272a] ${showChat ? "text-cyan-400" : "text-gray-500"} transition-colors`} title="Toggle Chat">
+                                <PanelRight size={14} />
+                            </button>
+                        </div>
                         {isHost && (
                             <span className="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30">
                                 HOST
@@ -192,35 +238,58 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 			</div>
 
 			<div className="flex-1 flex overflow-hidden">
-				{/* Left Sidebar */}
-				<div className="w-[220px] shrink-0 border-r border-[#27272a] flex flex-col bg-[#09090b] relative z-10">
-					<div className="flex-1 overflow-y-auto w-full">
-						<FileExplorer files={files} activeFile={activeFile} onSelect={setActiveFile} />
-					</div>
-					<div className="h-[220px] shrink-0 border-t border-[#27272a] overflow-y-auto shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
-						<ActionHistory />
-					</div>
-				</div>
+                <PanelGroup orientation="horizontal" className="w-full h-full">
+                    {/* Left Sidebar */}
+                    {showSidebar && (
+                        <>
+                            <Panel defaultSize={20} minSize={15} className="flex flex-col bg-[#09090b] relative z-10 border-r border-[#27272a]">
+                                <div className="flex-1 overflow-y-auto w-full">
+                                    <FileExplorer files={files} activeFile={activeFile} onSelect={handleSelectFile} />
+                                </div>
+                                <div className="h-[220px] shrink-0 border-t border-[#27272a] overflow-y-auto shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
+                                    <ActionHistory />
+                                </div>
+                            </Panel>
+                            <PanelResizeHandle className="w-1 hover:bg-cyan-500/50 transition-colors z-50 cursor-col-resize" />
+                        </>
+                    )}
 
-				{/* Center Area */}
-				<div className="flex-1 flex flex-col min-w-0 bg-[#09090b] relative">
-					<div className="flex-1 relative border-b border-[#27272a] overflow-hidden">
-                        <EditorArea
-							activeFile={activeFile}
-							userId={user?.sub ? `${user.sub}_local` : "anon_local"}
-							remoteCodeUpdate={remoteCodeUpdate}
-							remoteCursorUpdate={remoteCursorUpdate}
-						/>
-					</div>
-					<div className="h-[280px] shrink-0 overflow-hidden relative bg-[#09090b]">
-						<TerminalArea projectId={projectId} />
-					</div>
-				</div>
+                    {/* Center Area */}
+                    <Panel defaultSize={55} className="flex flex-col min-w-0 bg-[#09090b] relative">
+                        <PanelGroup orientation="vertical" className="w-full h-full">
+                            <Panel defaultSize={showTerminal ? 70 : 100} minSize={30} className="relative overflow-hidden">
+                                <EditorArea
+                                    openFiles={openFiles}
+                                    activeFile={activeFile}
+                                    onSelectFile={handleSelectFile}
+                                    onCloseFile={handleCloseFile}
+                                    userId={user?.sub ? `${user.sub}_local` : "anon_local"}
+                                    remoteCodeUpdate={remoteCodeUpdate}
+                                    remoteCursorUpdate={remoteCursorUpdate}
+                                />
+                            </Panel>
+                            
+                            {showTerminal && (
+                                <>
+                                    <PanelResizeHandle className="h-1 bg-[#27272a] hover:bg-cyan-500/50 transition-colors z-50 cursor-row-resize" />
+                                    <Panel defaultSize={30} minSize={15} className="relative bg-[#09090b] overflow-hidden">
+                                        <TerminalArea projectId={projectId} />
+                                    </Panel>
+                                </>
+                            )}
+                        </PanelGroup>
+                    </Panel>
 
-				{/* Right Sidebar */}
-				<div className="w-[300px] shrink-0 border-l border-[#27272a] shadow-[-5px_0_15px_rgba(0,0,0,0.5)] flex flex-col bg-[#18181b] relative z-10">
-					<VibeChat />
-				</div>
+                    {/* Right Sidebar */}
+                    {showChat && (
+                        <>
+                            <PanelResizeHandle className="w-1 hover:bg-cyan-500/50 transition-colors z-50 cursor-col-resize border-l border-[#27272a]" />
+                            <Panel defaultSize={25} minSize={20} className="flex flex-col bg-[#18181b] relative z-10 shadow-[-5px_0_15px_rgba(0,0,0,0.5)]">
+                                <VibeChat />
+                            </Panel>
+                        </>
+                    )}
+                </PanelGroup>
 			</div>
 
 			{/* Reels Widget Overlay */}

@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import MonacoEditor, { useMonaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import { Bot, Check, X, Sparkles } from "lucide-react";
+import { Bot, Check, X } from "lucide-react";
 import type { ProjectFile } from "./Workspace";
 import { useSocket } from "../contexts/SocketProvider";
 
@@ -13,13 +13,19 @@ interface RemoteCodeUpdate { filePath: string; content: string; clientId: string
 interface RemoteCursorUpdate { filePath: string; clientId: string; color: string; userName: string; position: { lineNumber: number; column: number } }
 
 interface EditorAreaProps {
+    openFiles: ProjectFile[];
+    onSelectFile: (file: ProjectFile) => void;
+    onCloseFile: (file: ProjectFile, e?: React.MouseEvent) => void;
     activeFile: ProjectFile | null;
     userId?: string;
     remoteCodeUpdate?: RemoteCodeUpdate | null;
     remoteCursorUpdate?: RemoteCursorUpdate | null;
 }
 
-export default function EditorArea({ activeFile, userId, remoteCodeUpdate, remoteCursorUpdate }: EditorAreaProps) {
+export default function EditorArea({ 
+    openFiles, onSelectFile, onCloseFile,
+    activeFile, userId, remoteCodeUpdate, remoteCursorUpdate 
+}: EditorAreaProps) {
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 	const monaco = useMonaco();
 	const [showPending, setShowPending] = useState(false);
@@ -150,11 +156,6 @@ export default function EditorArea({ activeFile, userId, remoteCodeUpdate, remot
         }
     };
 
-	const simulateAIEdit = () => {
-		if (!editorRef.current || !monaco || !activeFile) return;
-		setShowPending(true);
-	};
-
 	const acceptEdit = () => setShowPending(false);
 	const rejectEdit = () => setShowPending(false);
 
@@ -169,14 +170,35 @@ export default function EditorArea({ activeFile, userId, remoteCodeUpdate, remot
 
 	return (
 		<div className="flex flex-col h-full bg-[#09090b] text-[#c9d1d9] relative">
-			<div className="flex items-center justify-between p-2 shrink-0 bg-[#09090b] border-b border-[#27272a]">
-				<div className="flex items-center gap-1">
-					<div className="px-3 py-1 bg-[#18181b] border-t-2 border-cyan-500 text-white text-xs rounded-t-lg -mb-[9px] relative z-10 flex items-center gap-2">
-						<span className="text-yellow-400 font-bold">JS</span>
-                        {activeFile ? activeFile.path.split("/").pop() : "Welcome"}
-					</div>
-				</div>
-                
+			<div className="flex bg-[#09090b] border-b border-[#27272a] shrink-0 overflow-x-auto no-scrollbar scroll-smooth">
+                {openFiles.map(file => {
+                    const isActive = activeFile?.path === file.path;
+                    const ext = file.path.split('.').pop()?.toUpperCase() || '';
+                    const isJS = ext === 'JS' || ext === 'TS' || ext === 'TSX' || ext === 'JSX';
+                    
+                    return (
+                        <div 
+                            key={file.path}
+                            onClick={() => onSelectFile(file)}
+                            className={`flex items-center gap-2 px-3 py-1.5 border-r border-[#27272a] cursor-pointer max-w-[200px] min-w-[120px] group transition-colors ${
+                                isActive 
+                                    ? "bg-[#18181b] border-t-[3px] border-t-cyan-500 text-gray-200" 
+                                    : "bg-[#09090b] text-gray-500 hover:bg-[#18181b] hover:text-gray-300 border-t-[3px] border-t-transparent"
+                            }`}
+                        >
+                            <span className={`font-bold text-[10px] ${isActive ? (isJS ? "text-yellow-400" : "text-cyan-400") : "text-gray-600"}`}>
+                                {isJS ? 'JS' : ext.substring(0, 3)}
+                            </span>
+                            <span className="text-xs truncate flex-1 font-medium">{file.path.split("/").pop()}</span>
+                            <button 
+                                onClick={(e) => onCloseFile(file, e)}
+                                className={`p-0.5 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity ${isActive ? "hover:bg-[#27272a] text-gray-400" : "hover:bg-[#27272a] text-gray-500"}`}
+                            >
+                                <X size={12} />
+                            </button>
+                        </div>
+                    );
+                })}
 			</div>
 
 			<div className="flex-1 relative">
@@ -198,8 +220,18 @@ export default function EditorArea({ activeFile, userId, remoteCodeUpdate, remot
                         onMount={handleEditorDidMount}
                     />
                 ) : (
-                    <div className="flex h-full w-full items-center justify-center text-slate-600 font-mono text-sm max-w-sm mx-auto text-center leading-relaxed">
-                        No active file.<br/><br/>Click on a file in the Explorer pane to open it.
+                    <div className="flex h-full w-full items-center justify-center bg-[#09090b] select-none">
+                        <div className="text-center flex flex-col items-center">
+                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-[#09090b] text-3xl font-bold mb-6 shadow-[0_0_30px_rgba(34,211,238,0.2)]">iT</div>
+                            <h2 className="text-2xl font-bold text-gray-300 mb-2 font-['Space_Grotesk']">iTECify Editor</h2>
+                            <p className="text-gray-500 text-sm mb-10">Select a file from the explorer to begin coding.</p>
+                            
+                            <div className="flex flex-col items-start text-xs text-gray-500 gap-3 font-mono">
+                                <div className="flex items-center justify-between w-56"><span className="text-gray-600">Show Explorer</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-gray-400">⌘ E</span></div>
+                                <div className="flex items-center justify-between w-56"><span className="text-gray-600">Toggle Terminal</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-gray-400">⌘ J</span></div>
+                                <div className="flex items-center justify-between w-56"><span className="text-gray-600">Close Window</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-gray-400">⌘ W</span></div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
