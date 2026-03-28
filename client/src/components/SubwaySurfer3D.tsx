@@ -15,9 +15,8 @@ export default function SubwaySurfer3D({ onClose }: SubwaySurfer3DProps) {
 
     return (
         <div style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 99999,
+            width: '100%',
+            height: '100%',
             background: '#000',
         }}>
             <iframe
