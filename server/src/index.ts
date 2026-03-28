@@ -48,10 +48,10 @@ async function pingProvider(baseURL: string, apiKey: string, model: string) {
 const docker = new Docker();
 
 const LANGUAGE_IMAGES: Record<string, string> = {
-	python: "python:3.10-alpine",
-	node: "node:20-alpine",
-	"c++": "gcc:10.2.0",
-	rust: "rust:1.68.2-alpine"
+	python: "vibecodium-python:latest",
+	node: "vibecodium-node:latest",
+	"c++": "vibecodium-cpp:latest",
+	rust: "vibecodium-rust:latest"
 };
 
 const EXEC_COMMANDS: Record<string, () => string[]> = {
@@ -156,7 +156,7 @@ export const app = new Hono()
             if (!imageName || !getCmd) return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: `Unsupported language: ${body.language}` }, 400);
 
             let cmd = getCmd();
-            let hostConfig: any = { Memory: 256 * 1024 * 1024, NetworkMode: "none" };
+            let hostConfig: any = { Memory: 2048 * 1024 * 1024, NetworkMode: "none" };
             const reqBody = body as any;
             
             if (reqBody.projectId && reqBody.entryFile) {
@@ -203,14 +203,14 @@ export const app = new Hono()
 // Docker Terminal Engine
 // ──────────────────────────────────────────
 
-// Extension → Docker image mapping (reuses existing batch images where possible)
+// Extension → Docker image mapping (uses local custom images)
 const EXT_TO_IMAGE: Record<string, string> = {
-    ".py":  "python:3.10-alpine",
-    ".rs":  "rust:1.68.2-alpine",
-    ".cpp": "gcc:10.2.0",
-    ".cc":  "gcc:10.2.0",
-    ".c":   "gcc:10.2.0",
-    ".go":  "golang:1.21-alpine",
+    ".py":  "vibecodium-python:latest",
+    ".rs":  "vibecodium-rust:latest",
+    ".cpp": "vibecodium-cpp:latest",
+    ".cc":  "vibecodium-cpp:latest",
+    ".c":   "vibecodium-cpp:latest",
+    ".go":  "vibecodium-go:latest",
 };
 
 function detectTerminalImage(filePaths: string[]): string {
@@ -218,7 +218,7 @@ function detectTerminalImage(filePaths: string[]): string {
         const ext = nodePath.extname(fp).toLowerCase();
         if (EXT_TO_IMAGE[ext]) return EXT_TO_IMAGE[ext]!;
     }
-    return "node:20-alpine"; // default for JS/TS projects
+    return "vibecodium-node:latest"; // default for JS/TS projects
 }
 
 // Per-room state for the collaborative Docker terminal
@@ -368,15 +368,17 @@ export default {
 
                         // Pull image (instant if already cached)
                         // NOTE: docker.modem.followProgress hangs in Bun — drain raw stream events instead
-                        broadcastToRoom("\x1b[90mPulling image...\x1b[0m\r\n");
-                        await new Promise<void>((res, rej) => {
-                            docker.pull(image, (err: Error | null, pullStream: any) => {
-                                if (err) return rej(err);
-                                pullStream.on("data", () => {}); // drain
-                                pullStream.on("end", res);
-                                pullStream.on("error", rej);
+                        if (!image.startsWith("vibecodium-")) {
+                            broadcastToRoom("\x1b[90mPulling image...\x1b[0m\r\n");
+                            await new Promise<void>((res, rej) => {
+                                docker.pull(image, (err: Error | null, pullStream: any) => {
+                                    if (err) return rej(err);
+                                    pullStream.on("data", () => {}); // drain
+                                    pullStream.on("end", res);
+                                    pullStream.on("error", rej);
+                                });
                             });
-                        });
+                        }
 
                         // Create container — sleep infinity as PID 1 (keeps it alive for docker exec)
                         // NOTE: container.attach({hijack:true}) hangs in Bun — use Bun.spawn docker exec instead
@@ -386,8 +388,8 @@ export default {
                             Tty: false,
                             WorkingDir: "/usr/src/app",
                             HostConfig: {
-                                Memory: 512 * 1024 * 1024,
-                                MemorySwap: 512 * 1024 * 1024,
+                                Memory: 2048 * 1024 * 1024,
+                                MemorySwap: 2048 * 1024 * 1024,
                                 CpuQuota: 50000,
                                 CpuPeriod: 100000,
                                 PidsLimit: 50,
