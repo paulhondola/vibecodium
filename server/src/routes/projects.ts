@@ -235,4 +235,98 @@ projectsRoutes.post("/:id/push", async (c) => {
     }
 });
 
+// ── File Management ──────────────────────────────────────────────────────────
+
+// Create a file (or overwrite)
+projectsRoutes.post("/:id/files/create", async (c) => {
+    try {
+        const projectId = c.req.param("id");
+        const { path: filePath, content = "" } = await c.req.json<{ path: string; content?: string }>();
+        if (!projectId || !filePath) return c.json({ error: "Missing projectId or path" }, 400);
+
+        const existing = await db.select({ id: files.id })
+            .from(files)
+            .where(eq(files.projectId, projectId))
+            .then(rows => rows.find(r => r.id)); // just check if project has files
+
+        await db.insert(files).values({
+            id: crypto.randomUUID(),
+            projectId,
+            path: filePath,
+            content,
+            updatedAt: Math.floor(Date.now() / 1000),
+        }).onConflictDoUpdate({
+            target: [files.projectId, files.path],
+            set: { content, updatedAt: Math.floor(Date.now() / 1000) },
+        });
+
+        return c.json({ success: true, path: filePath });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
+});
+
+// Delete a file or all files under a folder prefix
+projectsRoutes.delete("/:id/files", async (c) => {
+    try {
+        const projectId = c.req.param("id");
+        const { path: filePath } = await c.req.json<{ path: string }>();
+        if (!projectId || !filePath) return c.json({ error: "Missing projectId or path" }, 400);
+
+        // Delete exact match (file) AND any children (folder prefix)
+        const allFiles = await db.select({ id: files.id, path: files.path })
+            .from(files)
+            .where(eq(files.projectId, projectId));
+
+        const toDelete = allFiles.filter(f =>
+            f.path === filePath || f.path.startsWith(filePath + "/")
+        );
+
+        for (const f of toDelete) {
+            await db.delete(files).where(eq(files.id, f.id));
+        }
+
+        return c.json({ success: true, deleted: toDelete.length });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
+});
+
+// Rename a file or folder (prefix rename)
+projectsRoutes.patch("/:id/files/rename", async (c) => {
+    try {
+        const projectId = c.req.param("id");
+        const { oldPath, newPath } = await c.req.json<{ oldPath: string; newPath: string }>();
+        if (!projectId || !oldPath || !newPath) return c.json({ error: "Missing fields" }, 400);
+
+        const allFiles = await db.select()
+            .from(files)
+            .where(eq(files.projectId, projectId));
+
+        const toRename = allFiles.filter(f =>
+            f.path === oldPath || f.path.startsWith(oldPath + "/")
+        );
+
+        for (const f of toRename) {
+            const renamedPath = newPath + f.path.slice(oldPath.length);
+            // Insert new, delete old (SQLite has no UPDATE on unique constraints easily)
+            await db.insert(files).values({
+                id: crypto.randomUUID(),
+                projectId,
+                path: renamedPath,
+                content: f.content,
+                updatedAt: Math.floor(Date.now() / 1000),
+            }).onConflictDoUpdate({
+                target: [files.projectId, files.path],
+                set: { content: f.content, updatedAt: Math.floor(Date.now() / 1000) },
+            });
+            await db.delete(files).where(eq(files.id, f.id));
+        }
+
+        return c.json({ success: true, renamed: toRename.length });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
+});
+
 export default projectsRoutes;

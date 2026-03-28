@@ -159,9 +159,13 @@ export default function EditorArea({
     // ── Accept / Reject handlers ────────────────────────────────────────────
     const handleAccept = useCallback(() => {
         if (!pendingUpdate) return;
-        const newContent = pendingUpdate.suggestedContent;
 
-        // Apply to editor
+        // Targeted replace: sub in only the changed section, keep the rest of the file intact
+        const currentContent = editorRef.current?.getModel()?.getValue() ?? code;
+        const newContent = currentContent.includes(pendingUpdate.originalContent)
+            ? currentContent.replace(pendingUpdate.originalContent, pendingUpdate.suggestedContent)
+            : pendingUpdate.suggestedContent; // fallback: full replace if original not found
+
         setCode(newContent);
         if (editorRef.current) {
             const model = editorRef.current.getModel();
@@ -171,12 +175,10 @@ export default function EditorArea({
                 setTimeout(() => { isRemoteUpdate.current = false; }, 50);
             }
         }
-        // Persist active file content locally
         if (activeFileRef.current) {
             activeFileRef.current.content = newContent;
         }
 
-        // Broadcast agent_accepted to all collaborators
         sendRef.current({
             type: "agent_accepted",
             filePath: pendingUpdate.filePath,
@@ -185,7 +187,7 @@ export default function EditorArea({
         });
 
         onPendingResolved?.();
-    }, [pendingUpdate, onPendingResolved]);
+    }, [pendingUpdate, code, onPendingResolved]);
 
     const handleReject = useCallback(() => {
         onPendingResolved?.();
@@ -278,62 +280,58 @@ export default function EditorArea({
                     </div>
                 )}
 
-                {/* ── Inline Agent Diff Overlay ────────────────────────────── */}
+                {/* ── Compact Inline Agent Diff Panel ─────────────────────── */}
                 {hasPending && pendingUpdate && (
-                    <div className="absolute inset-4 top-6 bg-[#0d0d0f]/95 backdrop-blur-md border border-purple-500/40 rounded-xl overflow-hidden shadow-[0_0_60px_rgba(168,85,247,0.15)] flex flex-col z-20 animate-in fade-in duration-200">
-                        {/* Header bar */}
-                        <div className="flex items-center justify-between px-4 py-2.5 bg-purple-900/20 border-b border-purple-500/20 shrink-0">
-                            <div className="flex items-center gap-2 text-purple-300 font-medium text-xs">
-                                <Bot size={14} className="text-purple-400" />
-                                <span>Agent proposes changes to <code className="text-purple-200 bg-purple-500/10 px-1.5 py-0.5 rounded font-mono text-[11px]">{pendingUpdate.filePath.split("/").pop()}</code></span>
+                    <div className="absolute bottom-4 right-4 w-[480px] max-h-[55%] bg-[#0d0d0f]/98 backdrop-blur-xl border border-purple-500/40 rounded-xl overflow-hidden shadow-[0_8px_40px_rgba(168,85,247,0.2)] flex flex-col z-30">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-3 py-2 bg-purple-900/20 border-b border-purple-500/20 shrink-0">
+                            <div className="flex items-center gap-2 text-purple-300 font-medium text-[11px]">
+                                <Bot size={12} className="text-purple-400" />
+                                <span>Suggested change in <code className="text-purple-200 bg-purple-500/10 px-1 py-0.5 rounded font-mono text-[10px]">{pendingUpdate.filePath.split("/").pop()}</code></span>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5">
                                 <button
                                     onClick={handleReject}
-                                    className="bg-red-500/10 hover:bg-red-500/25 text-red-300 px-3 py-1.5 flex items-center gap-1.5 rounded-lg text-xs font-semibold transition-all border border-red-500/20 hover:border-red-500/40"
+                                    className="bg-red-500/10 hover:bg-red-500/20 text-red-300 px-2.5 py-1 flex items-center gap-1 rounded-md text-[11px] font-semibold transition-all border border-red-500/20"
                                 >
-                                    <X size={12} /> Reject
+                                    <X size={11} /> Reject
                                 </button>
                                 <button
                                     onClick={handleAccept}
-                                    className="bg-green-500/10 hover:bg-green-500/25 text-green-300 px-3 py-1.5 flex items-center gap-1.5 rounded-lg text-xs font-semibold transition-all border border-green-500/20 hover:border-green-500/40 shadow-[0_0_12px_rgba(34,197,94,0.1)]"
+                                    className="bg-green-500/10 hover:bg-green-500/20 text-green-300 px-2.5 py-1 flex items-center gap-1 rounded-md text-[11px] font-semibold transition-all border border-green-500/20 shadow-[0_0_8px_rgba(34,197,94,0.1)]"
                                 >
-                                    <Check size={12} /> Accept
+                                    <Check size={11} /> Accept
                                 </button>
                             </div>
                         </div>
 
-                        {/* Diff content */}
-                        <div className="flex-1 overflow-auto p-4 font-mono text-xs leading-6">
-                            <div className="mb-3 text-[10px] uppercase tracking-widest text-gray-600 font-sans flex items-center gap-3">
-                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500/70"></span> Before</span>
-                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500/70"></span> After</span>
+                        {/* Diff content — scrollable */}
+                        <div className="overflow-auto p-3 font-mono text-[11px] leading-5 flex-1">
+                            <div className="mb-2 text-[9px] uppercase tracking-widest text-gray-600 font-sans flex items-center gap-3">
+                                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500/70"></span> Before</span>
+                                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500/70"></span> After</span>
                             </div>
                             {diffLines(pendingUpdate.originalContent, pendingUpdate.suggestedContent).map((line, i) => (
                                 <div
                                     key={i}
-                                    className={`flex gap-3 px-2 py-0.5 rounded-sm ${
+                                    className={`flex gap-2 px-1.5 py-px rounded-sm ${
                                         line.type === "remove"
-                                            ? "bg-red-500/8 text-red-300/80 line-through decoration-red-400/40"
-                                            : line.type === "add"
-                                            ? "bg-green-500/8 text-green-300 border-l-2 border-green-500/50"
-                                            : "text-gray-500"
+                                            ? "bg-red-500/8 text-red-300/75 line-through decoration-red-400/30"
+                                            : "bg-green-500/8 text-green-300 border-l-2 border-green-500/40"
                                     }`}
                                 >
-                                    <span className={`shrink-0 select-none font-bold ${line.type === "remove" ? "text-red-600" : line.type === "add" ? "text-green-600" : "text-gray-700"}`}>
-                                        {line.type === "remove" ? "−" : line.type === "add" ? "+" : " "}
+                                    <span className={`shrink-0 select-none w-3 text-center ${line.type === "remove" ? "text-red-600" : "text-green-600"}`}>
+                                        {line.type === "remove" ? "−" : "+"}
                                     </span>
-                                    <span className="whitespace-pre-wrap break-all">{line.text}</span>
+                                    <span className="whitespace-pre-wrap break-all">{line.text || "\u00a0"}</span>
                                 </div>
                             ))}
                         </div>
 
-                        {/* Footer hint */}
-                        <div className="shrink-0 px-4 py-2 border-t border-purple-500/10 bg-purple-900/10 text-[10px] text-gray-600 flex items-center justify-between">
-                            <span>Accepting will apply this change and sync to all collaborators</span>
-                            <span className="flex items-center gap-2">
-                                <kbd className="px-1.5 py-0.5 bg-[#18181b] border border-[#27272a] rounded text-gray-500">Esc</kbd> to reject
-                            </span>
+                        {/* Footer */}
+                        <div className="shrink-0 px-3 py-1.5 border-t border-purple-500/10 text-[9px] text-gray-600 flex items-center justify-between">
+                            <span>Accept syncs to all collaborators</span>
+                            <kbd className="px-1 py-0.5 bg-[#18181b] border border-[#27272a] rounded text-gray-500">Esc</kbd>
                         </div>
                     </div>
                 )}
