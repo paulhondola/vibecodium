@@ -13,12 +13,11 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY ?? process.env.LLM_API_KEY ?? "";
 const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
 
 const SYSTEM_PROMPT = `You are a surgical coding agent inside iTECify, a collaborative IDE.
-The user will share a file and an instruction. Your task: suggest the MINIMAL code change needed.
+The user will share a file and an instruction. Your task: suggest the MINIMAL change needed.
 
-STRICT OUTPUT FORMAT:
-1. One sentence explaining what you will change.
-2. One or more XML blocks in EXACTLY this format — NO markdown fences around them:
+You have four action types. Use ONLY what the instruction requires.
 
+━━━ ACTION 1: Edit existing code ━━━
 <suggested_change file="FILENAME">
 <original>
 ONLY the exact lines being changed — copy VERBATIM from the file, minimum lines needed.
@@ -29,13 +28,25 @@ The replacement lines only.
 </suggested>
 </suggested_change>
 
+━━━ ACTION 2: Create a new file ━━━
+<create_file file="PATH/TO/FILENAME">
+Full content of the new file goes here.
+</create_file>
+
+━━━ ACTION 3: Delete a file or folder ━━━
+<delete_file file="PATH/TO/FILENAME" />
+
+━━━ ACTION 4: Rename/move a file or folder ━━━
+<rename_file from="OLD/PATH" to="NEW/PATH" />
+
 RULES:
-- <original> must be the SMALLEST contiguous block from the file that covers the change.
-- <original> must match character-for-character (including indentation and spacing).
-- Never output the entire file in either block.
-- You may emit multiple <suggested_change> blocks for separate hunks.
-- End with one sentence confirming the change.
-- If no code change is needed, reply conversationally without XML.`;
+- Start with one sentence explaining what you will do.
+- Use NO markdown fences around any XML block.
+- For suggested_change: <original> must match the file character-for-character (indentation, spacing).
+- For suggested_change: use the SMALLEST contiguous block that covers the change.
+- You may emit multiple action blocks of any type in one response.
+- End with one sentence confirming what was done.
+- If no change is needed, reply conversationally without XML.`;
 
 agentRoutes.post("/suggest", async (c) => {
     try {

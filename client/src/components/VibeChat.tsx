@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from "react";
-import { Send, TerminalSquare, FileEdit, Search, Bot, User, Loader2, Sparkles } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Send, TerminalSquare, FileEdit, Search, Bot, User, Loader2, Sparkles, FilePlus, Trash2, FolderInput } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAgentStream, type PendingUpdate } from "../hooks/useAgentStream";
+import { useAgentStream, type PendingUpdate, type AgentFileAction } from "../hooks/useAgentStream";
 import type { ProjectFile } from "./Workspace";
 
 interface Message {
@@ -10,6 +10,7 @@ interface Message {
     content: string;
     tools?: ToolCall[];
     hasSuggestion?: boolean;
+    fileActions?: AgentFileAction[];
 }
 
 interface ToolCall {
@@ -24,6 +25,7 @@ interface VibeChatProps {
     projectId: string | null;
     token: string | null;
     onPendingUpdate: (update: PendingUpdate) => void;
+    onFileAction: (action: AgentFileAction) => void;
 }
 
 const WELCOME: Message = {
@@ -32,13 +34,14 @@ const WELCOME: Message = {
     content: "Hello! I'm your VibeCodium agent. Select a file and describe a change — I'll propose it inline in the editor for you to Accept or Reject.",
 };
 
-export default function VibeChat({ activeFile, projectId, token, onPendingUpdate }: VibeChatProps) {
+export default function VibeChat({ activeFile, projectId, token, onPendingUpdate, onFileAction }: VibeChatProps) {
     const [messages, setMessages] = useState<Message[]>([WELCOME]);
     const [input, setInput] = useState("");
     const scrollRef = useRef<HTMLDivElement>(null);
     const pendingNotifiedRef = useRef<string | null>(null);
+    const executedActionsRef = useRef<Set<string>>(new Set());
 
-    const { streamingText, isStreaming, pendingUpdate, sendInstruction, clearPending } = useAgentStream();
+    const { streamingText, isStreaming, pendingUpdate, fileActions, sendInstruction, clearPending, clearFileActions } = useAgentStream();
 
     // Auto-scroll
     useEffect(() => {
@@ -53,13 +56,13 @@ export default function VibeChat({ activeFile, projectId, token, onPendingUpdate
 
         // Only commit once per stream cycle
         setMessages(prev => {
-            // Remove any existing in-progress message
             const withoutStream = prev.filter(m => m.id !== "__streaming__");
             return [...withoutStream, {
                 id: `msg_${Date.now()}`,
                 role: "assistant",
                 content: streamingText,
                 hasSuggestion: !!pendingUpdate,
+                fileActions: fileActions.length > 0 ? [...fileActions] : undefined,
             }];
         });
     }, [isStreaming]);
@@ -71,6 +74,15 @@ export default function VibeChat({ activeFile, projectId, token, onPendingUpdate
         pendingNotifiedRef.current = pendingUpdate.id;
         onPendingUpdate(pendingUpdate);
     }, [pendingUpdate, onPendingUpdate]);
+
+    // Execute file actions (create/delete/rename) once as they arrive
+    useEffect(() => {
+        for (const action of fileActions) {
+            if (executedActionsRef.current.has(action.id)) continue;
+            executedActionsRef.current.add(action.id);
+            onFileAction(action);
+        }
+    }, [fileActions, onFileAction]);
 
     // While streaming, keep a live "streaming" message up to date
     useEffect(() => {
@@ -93,6 +105,8 @@ export default function VibeChat({ activeFile, projectId, token, onPendingUpdate
         const instruction = input;
         setInput("");
         clearPending();
+        clearFileActions();
+        executedActionsRef.current.clear();
 
         if (!activeFile || !token || !projectId) {
             setMessages(prev => [...prev, {
@@ -113,12 +127,22 @@ export default function VibeChat({ activeFile, projectId, token, onPendingUpdate
     };
 
     const renderMessageContent = (content: string) => {
-        // Strip the XML block from display — the diff overlay handles it visually
+        // Strip all XML action blocks from display — handled visually elsewhere
         const cleaned = content
             .replace(/<suggested_change[\s\S]*?<\/suggested_change>/g, "")
+            .replace(/<create_file[\s\S]*?<\/create_file>/g, "")
+            .replace(/<delete_file\s[^>]*\/>/g, "")
+            .replace(/<rename_file\s[^>]*\/>/g, "")
             .trim();
         return cleaned || content;
     };
+
+    const fileActionLabel = useCallback((action: AgentFileAction) => {
+        if (action.type === "create_file") return `Created ${action.filePath}`;
+        if (action.type === "delete_file") return `Deleted ${action.filePath}`;
+        if (action.type === "rename_file") return `Renamed ${action.filePath} → ${action.newPath}`;
+        return action.filePath;
+    }, []);
 
     return (
         <div className="flex flex-col h-full bg-[#09090b] text-[#c9d1d9] border-l border-[#27272a]">
@@ -165,6 +189,15 @@ export default function VibeChat({ activeFile, projectId, token, onPendingUpdate
                                             Change proposed — see editor for Accept/Reject
                                         </div>
                                     )}
+                                    {msg.fileActions && msg.fileActions.map(action => (
+                                        <div key={action.id} className="mt-1.5 flex items-center gap-1.5 text-[10px] font-mono bg-[#09090b] border border-[#27272a] rounded px-2 py-1 text-gray-400">
+                                            {action.type === "create_file" && <FilePlus size={10} className="text-green-400 shrink-0" />}
+                                            {action.type === "delete_file" && <Trash2 size={10} className="text-red-400 shrink-0" />}
+                                            {action.type === "rename_file" && <FolderInput size={10} className="text-yellow-400 shrink-0" />}
+                                            <span className="truncate">{fileActionLabel(action)}</span>
+                                            <span className="ml-auto text-green-500 shrink-0">✓</span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
 

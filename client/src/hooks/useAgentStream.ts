@@ -9,10 +9,19 @@ export interface PendingUpdate {
     appliedBy?: string;
 }
 
+export interface AgentFileAction {
+    id: string;
+    type: "create_file" | "delete_file" | "rename_file";
+    filePath: string;
+    content?: string;  // for create_file
+    newPath?: string;  // for rename_file
+}
+
 interface UseAgentStreamResult {
     streamingText: string;
     isStreaming: boolean;
     pendingUpdate: PendingUpdate | null;
+    fileActions: AgentFileAction[];
     sendInstruction: (params: {
         token: string;
         projectId: string;
@@ -21,6 +30,7 @@ interface UseAgentStreamResult {
         instruction: string;
     }) => Promise<void>;
     clearPending: () => void;
+    clearFileActions: () => void;
 }
 
 /**
@@ -37,15 +47,12 @@ function parseSuggestedChange(buffer: string): PendingUpdate | null {
 
     const block = buffer.slice(startIdx, endIdx + endTag.length);
 
-    // Extract file attribute
     const fileMatch = block.match(/file="([^"]+)"/);
     const filePath = fileMatch?.[1] ?? "unknown";
 
-    // Extract <original>
     const origMatch = block.match(/<original>([\s\S]*?)<\/original>/);
     const originalContent = origMatch?.[1]?.trim() ?? "";
 
-    // Extract <suggested>
     const suggMatch = block.match(/<suggested>([\s\S]*?)<\/suggested>/);
     const suggestedContent = suggMatch?.[1]?.trim() ?? "";
 
@@ -58,13 +65,60 @@ function parseSuggestedChange(buffer: string): PendingUpdate | null {
     };
 }
 
+/**
+ * Parses file management actions from the buffer.
+ * Returns only newly seen actions (using seenKeys to deduplicate).
+ */
+function parseNewFileActions(buffer: string, seenKeys: Set<string>): AgentFileAction[] {
+    const actions: AgentFileAction[] = [];
+
+    // <create_file file="PATH">content</create_file>
+    const createRe = /<create_file\s+file="([^"]+)">([\s\S]*?)<\/create_file>/g;
+    let m: RegExpExecArray | null;
+    while ((m = createRe.exec(buffer)) !== null) {
+        const key = `create:${m[1]}`;
+        if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            actions.push({ id: crypto.randomUUID(), type: "create_file", filePath: m[1], content: m[2].trim() });
+        }
+    }
+
+    // <delete_file file="PATH" />
+    const deleteRe = /<delete_file\s+file="([^"]+)"\s*\/>/g;
+    while ((m = deleteRe.exec(buffer)) !== null) {
+        const key = `delete:${m[1]}`;
+        if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            actions.push({ id: crypto.randomUUID(), type: "delete_file", filePath: m[1] });
+        }
+    }
+
+    // <rename_file from="OLD" to="NEW" />
+    const renameRe = /<rename_file\s+from="([^"]+)"\s+to="([^"]+)"\s*\/>/g;
+    while ((m = renameRe.exec(buffer)) !== null) {
+        const key = `rename:${m[1]}:${m[2]}`;
+        if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            actions.push({ id: crypto.randomUUID(), type: "rename_file", filePath: m[1], newPath: m[2] });
+        }
+    }
+
+    return actions;
+}
+
 export function useAgentStream(): UseAgentStreamResult {
     const [streamingText, setStreamingText] = useState("");
     const [isStreaming, setIsStreaming] = useState(false);
     const [pendingUpdate, setPendingUpdate] = useState<PendingUpdate | null>(null);
+    const [fileActions, setFileActions] = useState<AgentFileAction[]>([]);
     const abortRef = useRef<AbortController | null>(null);
+    const seenActionKeysRef = useRef<Set<string>>(new Set());
 
     const clearPending = useCallback(() => setPendingUpdate(null), []);
+    const clearFileActions = useCallback(() => {
+        setFileActions([]);
+        seenActionKeysRef.current.clear();
+    }, []);
 
     const sendInstruction = useCallback(async ({
         token,
@@ -79,13 +133,14 @@ export function useAgentStream(): UseAgentStreamResult {
         fileContent: string;
         instruction: string;
     }) => {
-        // Cancel any in-flight stream
         abortRef.current?.abort();
         const controller = new AbortController();
         abortRef.current = controller;
 
         setStreamingText("");
         setPendingUpdate(null);
+        setFileActions([]);
+        seenActionKeysRef.current.clear();
         setIsStreaming(true);
 
         try {
@@ -108,8 +163,9 @@ export function useAgentStream(): UseAgentStreamResult {
 
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
-            let buffer = ""; // raw accumulated full text
-            let sseBuffer = ""; // partial SSE chunk buffer
+            let buffer = "";
+            let sseBuffer = "";
+            let pendingSet = false;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -117,9 +173,8 @@ export function useAgentStream(): UseAgentStreamResult {
 
                 sseBuffer += decoder.decode(value, { stream: true });
 
-                // Split by SSE line boundaries
                 const lines = sseBuffer.split("\n");
-                sseBuffer = lines.pop() ?? ""; // keep incomplete line
+                sseBuffer = lines.pop() ?? "";
 
                 for (const line of lines) {
                     if (!line.startsWith("data: ")) continue;
@@ -134,16 +189,22 @@ export function useAgentStream(): UseAgentStreamResult {
                         buffer += delta;
                         setStreamingText(buffer);
 
-                        // Check if we have a complete suggested_change block
-                        if (!pendingUpdate && buffer.includes("</suggested_change>")) {
+                        // Detect suggested_change (only first one)
+                        if (!pendingSet && buffer.includes("</suggested_change>")) {
                             const update = parseSuggestedChange(buffer);
                             if (update) {
-                                // Override filePath with the actual active file if not matched
                                 if (update.filePath === "unknown" || update.filePath === "FILENAME") {
                                     update.filePath = filePath;
                                 }
                                 setPendingUpdate(update);
+                                pendingSet = true;
                             }
+                        }
+
+                        // Detect file management actions as they complete
+                        const newActions = parseNewFileActions(buffer, seenActionKeysRef.current);
+                        if (newActions.length > 0) {
+                            setFileActions(prev => [...prev, ...newActions]);
                         }
                     } catch {
                         // skip malformed chunks
@@ -157,7 +218,7 @@ export function useAgentStream(): UseAgentStreamResult {
         } finally {
             setIsStreaming(false);
         }
-    }, [pendingUpdate]);
+    }, []);
 
-    return { streamingText, isStreaming, pendingUpdate, sendInstruction, clearPending };
+    return { streamingText, isStreaming, pendingUpdate, fileActions, sendInstruction, clearPending, clearFileActions };
 }
