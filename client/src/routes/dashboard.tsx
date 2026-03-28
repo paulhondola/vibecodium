@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth0 } from "@auth0/auth0-react";
 import { Loader2, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import CoderMatchModal from "../components/CoderMatchModal";
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
@@ -39,6 +40,7 @@ function DashboardPage() {
   const [importingRepoId, setImportingRepoId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCoderMatch, setShowCoderMatch] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'recent'>('all');
 
@@ -312,6 +314,13 @@ function DashboardPage() {
             <span className="material-symbols-outlined text-xl">person</span>
             <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Profile</span>
           </div>
+          <div
+            onClick={() => setShowCoderMatch(true)}
+            className="flex items-center gap-5 px-6 py-3.5 rounded text-pink-500 hover:bg-pink-500/10 hover:text-pink-400 transition-all cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-xl">favorite</span>
+            <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Vibe Match</span>
+          </div>
         </nav>
         <div className="px-6 mt-auto">
           <button
@@ -524,6 +533,11 @@ function DashboardPage() {
           )}
         </section>
       </main>
+
+      {/* Vibe Match Modal */}
+      {showCoderMatch && (
+        <CoderMatchModal onClose={() => setShowCoderMatch(false)} />
+      )}
 
       {/* Create Repository Modal */}
       {showCreateModal && (
