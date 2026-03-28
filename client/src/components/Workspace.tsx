@@ -8,7 +8,9 @@ import SecurityScanModal from "./SecurityScanModal";
 import RubberDuck from "./RubberDuck";
 import WhiteboardArea from "./WhiteboardArea";
 import PomodoroTimer from "./PomodoroTimer";
-import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield } from "lucide-react";
+import SpotifyPlayer from "./SpotifyPlayer";
+import CoderMatchModal from "./CoderMatchModal";
+import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Heart } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
@@ -29,6 +31,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [projectName, setProjectName] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const [showReels, setShowReels] = useState(false);
+    const [showCoderMatch, setShowCoderMatch] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showSecurityScan, setShowSecurityScan] = useState(false);
 
@@ -364,6 +367,15 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 						Security Scan
 					</button>
 
+                    {/* Vibe Match button */}
+                    <button
+                        onClick={() => setShowCoderMatch(true)}
+                        className="text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-gradient-to-r from-rose-500 to-pink-500 hover:scale-105 text-white"
+                    >
+                        <Heart size={14} />
+                        Vibe Match
+                    </button>
+
                     {/* Vibe Reels button */}
                     <button
                         onClick={() => setShowReels(true)}
@@ -487,6 +499,14 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 					token={agentToken}
 				/>
 			)}
+
+			{/* Coder Match Modal */}
+			{showCoderMatch && (
+				<CoderMatchModal onClose={() => setShowCoderMatch(false)} />
+			)}
+
+			{/* Spotify Easter Egg */}
+			<SpotifyPlayer />
 		</div>
 	);
 }
