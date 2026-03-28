@@ -176,14 +176,7 @@ export default function EditorArea({ activeFile, userId, remoteCodeUpdate, remot
                         {activeFile ? activeFile.path.split("/").pop() : "Welcome"}
 					</div>
 				</div>
-                <div className="flex gap-2 mr-2 items-center">
-                    <button
-                        onClick={simulateAIEdit}
-                        className="flex items-center gap-1.5 px-3 py-[3px] bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded text-xs font-semibold shadow-sm transition-all"
-                    >
-                        <Sparkles size={12} /> Simulate AI Edit
-                    </button>
-                </div>
+                
 			</div>
 
 			<div className="flex-1 relative">

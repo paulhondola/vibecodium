@@ -1,6 +1,7 @@
 import { useAuth0 } from "@auth0/auth0-react";
 import { useState } from "react";
 import ImportModal from "./ImportModal";
+import { useNavigate } from "@tanstack/react-router";
 
 interface LandingPageProps {
 	onEnter: (projectId?: string) => void;
@@ -9,6 +10,7 @@ interface LandingPageProps {
 export default function LandingPage({ onEnter }: LandingPageProps) {
     const { isAuthenticated, user, isLoading, loginWithRedirect } = useAuth0();
     const [isImportModalOpen, setImportModalOpen] = useState(false);
+    const navigate = useNavigate();
 
 	return (
 		<div className="min-h-screen bg-[#02040a] text-[#f8fafc] font-['Inter'] selection:bg-[rgba(168,85,247,0.3)] selection:text-white overflow-x-hidden">
@@ -36,11 +38,16 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 						</button>
 					</div>
 					<button
-						onClick={() => onEnter()}
-						className="relative overflow-hidden px-6 py-2 rounded-lg bg-[#A855F7] font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest text-[#02040a] hover:scale-105 active:scale-95 transition-all group"
+						onClick={() => isAuthenticated ? navigate({ to: "/profile" }) : onEnter()}
+						className="relative overflow-hidden px-6 py-2 rounded-lg bg-[#A855F7] font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest text-[#02040a] hover:scale-105 active:scale-95 transition-all group flex items-center justify-center gap-2"
 					>
-						<span className="relative z-10">
-                            {isLoading ? "..." : isAuthenticated ? `Enter as ${user?.nickname || user?.name || "User"}` : "Go Live"}
+						<span className="relative z-10 flex items-center gap-1.5">
+                            {isLoading ? "..." : isAuthenticated ? (
+                                <>
+                                  <span className="material-symbols-outlined text-[16px] leading-[1]">person</span>
+                                  {user?.nickname || user?.name || "User"}
+                                </>
+                            ) : "Go Live"}
                         </span>
 						<div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
 					</button>
@@ -75,10 +82,10 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 
 						<div className="flex flex-wrap justify-center gap-6 pt-6">
 							<button
-								onClick={() => onEnter()}
+								onClick={() => isAuthenticated ? navigate({ to: "/dashboard" }) : onEnter()}
 								className="px-10 py-5 bg-[#A855F7] text-[#02040a] font-['Space_Grotesk'] font-bold rounded-xl shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:shadow-[0_0_50px_rgba(168,85,247,0.6)] hover:-translate-y-1 transition-all duration-300 uppercase tracking-widest text-sm"
 							>
-								{isLoading ? "Starting..." : isAuthenticated ? `Resume Session (${user?.name || "User"})` : "Initialize Workspace"}
+								{isLoading ? "Starting..." : isAuthenticated ? "Dashboard" : "Initialize Workspace"}
 							</button>
 							<button 
                                 onClick={() => isAuthenticated ? setImportModalOpen(true) : loginWithRedirect()}

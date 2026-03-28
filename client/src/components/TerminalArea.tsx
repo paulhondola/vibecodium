@@ -129,26 +129,8 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
                     >
                         <TerminalIcon size={14} /> Terminal
                     </button>
-                    <button
-                        onClick={() => setActiveTab("preview")}
-                        className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors text-xs font-medium uppercase tracking-wider ${activeTab === "preview" ? 'border-cyan-400 text-cyan-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
-                    >
-                        <Globe size={14} /> Live Preview
-                    </button>
 				</div>
-                <div className="flex gap-2">
-                    {activeTab === "terminal" && (
-                        <>
-                            <button onClick={handleRun} disabled={status === "running" || !wsConnected} className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-colors disabled:opacity-50">
-                                {status === "running" ? <Square size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" />}
-                                {status === "running" ? "Stop" : "Run Server"}
-                            </button>
-                            <button onClick={handleClear} disabled={!wsConnected} className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-[#27272a] transition-colors mr-2 disabled:opacity-50">
-                                <Trash2 size={12} />
-                            </button>
-                        </>
-                    )}
-                </div>
+                
 			</div>
 
             {activeTab === "terminal" && (
