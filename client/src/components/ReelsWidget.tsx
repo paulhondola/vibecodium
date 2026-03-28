@@ -1,5 +1,6 @@
 import { X, Volume2, VolumeX, Loader2, Minimize2 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { API_BASE } from "@/lib/config";
 
 interface Reel {
 	id: string;
@@ -40,7 +41,7 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 
 		setIsLoading(true);
 		try {
-			const res = await fetch(`http://localhost:3000/api/reels?page=${page}&limit=5`);
+			const res = await fetch(`${API_BASE}/api/reels?page=${page}&limit=5`);
 			const data = await res.json();
 
 			if (data.success) {

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import type { ProjectFile } from "../components/Workspace";
+import { WS_BASE } from "@/lib/config";
 
 // ──────────────────────────────────────────
 // Types
@@ -85,7 +86,7 @@ export function WebSocketProvider({ projectId, children }: { projectId: string; 
     useEffect(() => {
         if (!projectId || !user?.sub) return;
 
-        const url = new URL(`ws://localhost:3000/ws/collab/${projectId}`);
+        const url = new URL(`${WS_BASE}/ws/collab/${projectId}`);
         url.searchParams.set("clientId", myClientId);
         url.searchParams.set("userName", user.name || user.nickname || "Anonymous");
 

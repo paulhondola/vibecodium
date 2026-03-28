@@ -3,6 +3,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { Loader2, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import CoderMatchModal from "../components/CoderMatchModal";
+import { API_BASE } from "@/lib/config";
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
@@ -52,7 +53,7 @@ function DashboardPage() {
       setIsFetchingRepos(true);
       getAccessTokenSilently()
         .then(token =>
-          fetch(`http://localhost:3000/api/github/users/${user.nickname}/repos?sort=updated&per_page=50`, {
+          fetch(`${API_BASE}/api/github/users/${user.nickname}/repos?sort=updated&per_page=50`, {
             headers: { Authorization: `Bearer ${token}` }
           })
         )
@@ -73,7 +74,7 @@ function DashboardPage() {
 
       setIsFetchingExternal(true);
       getAccessTokenSilently()
-        .then(token => fetch("http://localhost:3000/api/projects", {
+        .then(token => fetch(`${API_BASE}/api/projects`, {
             headers: { Authorization: `Bearer ${token}` }
         }))
         .then(res => res.json())
@@ -93,7 +94,7 @@ function DashboardPage() {
 
     try {
       const token = await getAccessTokenSilently();
-      const res = await fetch("http://localhost:3000/api/projects/import", {
+      const res = await fetch(`${API_BASE}/api/projects/import`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -130,7 +131,7 @@ function DashboardPage() {
       const token = await getAccessTokenSilently();
 
       // Call backend to create repo
-      const response = await fetch('http://localhost:3000/api/projects/create-repo', {
+      const response = await fetch(`${API_BASE}/api/projects/create-repo`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

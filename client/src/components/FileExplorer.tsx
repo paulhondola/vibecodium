@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import type { ProjectFile } from "./Workspace";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { API_BASE } from "@/lib/config";
 
 interface FileExplorerProps {
     files: ProjectFile[];
@@ -292,7 +293,7 @@ export default function FileExplorer({ files, activeFile, onSelect, projectId, t
     const [rootInline, setRootInline] = useState<null | "newFile" | "newFolder">(null);
     const treeRoot = useMemo(() => buildTree(files || []), [files]);
 
-    const apiBase = `http://localhost:3000/api/projects/${projectId}`;
+    const apiBase = `${API_BASE}/api/projects/${projectId}`;
     const authHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` };
 
     const doCreate = useCallback(async (parentPath: string, name: string, isDir: boolean) => {

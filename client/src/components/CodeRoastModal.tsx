@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Loader2, X, Flame } from "lucide-react";
+import { API_BASE } from "@/lib/config";
 
 interface CodeRoastModalProps {
     code: string;
@@ -26,7 +27,7 @@ export default function CodeRoastModal({ code, fileName, onClose }: CodeRoastMod
         const ctrl = new AbortController();
         (async () => {
             try {
-                const res = await fetch("http://localhost:3000/api/roast", {
+                const res = await fetch(`${API_BASE}/api/roast`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ code, fileName }),
