@@ -8,6 +8,7 @@ import * as path from "node:path";
 import mongoose from "mongoose";
 import { connectMongo } from "../db/mongoose";
 import { Project } from "../db/models/Project";
+import { syncProjectFilesToDisk } from "../utils/sync";
 
 const projectsRoutes = new Hono();
 
@@ -63,6 +64,19 @@ projectsRoutes.get("/", async (c) => {
     }
 });
 
+projectsRoutes.get("/user/:userId", async (c) => {
+    try {
+        await connectMongo();
+        const userId = c.req.param("userId");
+        if (!userId) return c.json({ error: "Missing userId" }, 400);
+
+        const userProjects = await Project.find({ userId }).sort({ createdAt: -1 });
+        return c.json({ success: true, projects: userProjects }, 200);
+    } catch (err: any) {
+        return c.json({ error: `Failed to fetch user projects: ${err.message}` }, 500);
+    }
+});
+
 projectsRoutes.post("/import", async (c) => {
 	try {
         await connectMongo();
@@ -82,9 +96,19 @@ projectsRoutes.post("/import", async (c) => {
 
 		const projectId = new mongoose.Types.ObjectId().toString();
 		const targetDir = `/tmp/vibecodium/${projectId}`;
+        const projectName = repoUrl.split("/").pop()?.replace(".git", "") || "Untitled";
 
 		console.log(`Cloning ${repoUrl} to ${targetDir}...`);
         
+        // 1. Save entry to MongoDB with status "cloning"
+        await Project.create({
+            _id: projectId,
+            userId: userId,
+            projectName: projectName,
+            repoUrl: repoUrl,
+            status: "cloning"
+        });
+
         fs.mkdirSync("/tmp/vibecodium", { recursive: true });
 
 		const proc = Bun.spawn(["git", "clone", repoUrl, targetDir], {
@@ -96,19 +120,14 @@ projectsRoutes.post("/import", async (c) => {
 
         if (exitCode !== 0) {
             const errorText = await new Response(proc.stderr).text();
+            await Project.findByIdAndUpdate(projectId, { status: "error" });
             return c.json({ error: `Failed to clone repository: ${errorText}` }, 500);
         }
 
-        const allFiles = getAllFilesRecursive(targetDir, targetDir);
+        // 2. Clone finished successfully. Update status to "ready" and localPath
+        await Project.findByIdAndUpdate(projectId, { status: "ready", localPath: targetDir });
 
-        const projectName = repoUrl.split("/").pop()?.replace(".git", "") || "Untitled";
-        
-        await Project.create({
-            _id: projectId,
-            userId: userId,
-            name: projectName,
-            repoUrl: repoUrl
-        });
+        const allFiles = getAllFilesRecursive(targetDir, targetDir);
 
         // Maximum chunk sizes roughly to 100 on sqlite batching
         const BATCH_SIZE = 100;
@@ -118,7 +137,8 @@ projectsRoutes.post("/import", async (c) => {
                 id: crypto.randomUUID(),
                 projectId: projectId,
                 path: f.path,
-                content: f.content
+                content: f.content,
+                updatedAt: Math.floor(Date.now() / 1000)
             }));
             await db.insert(files).values(filesToInsert);
         }
@@ -150,6 +170,48 @@ projectsRoutes.get("/:id/files", async (c) => {
         .where(eq(files.projectId, projectId));
 
         return c.json({ success: true, files: projectFiles });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
+});
+
+projectsRoutes.post("/:id/push", async (c) => {
+    try {
+        const projectId = c.req.param("id");
+        if (!projectId) return c.json({ error: "Missing projectId" }, 400);
+
+        // Fetch project from MongoDB to get repoUrl (if needed)
+        await connectMongo();
+        const project = await Project.findById(projectId);
+        if (!project) return c.json({ error: "Project not found" }, 404);
+
+        // 1. Sync all files to disk
+        const targetDir = await syncProjectFilesToDisk(projectId);
+
+        // 2. Execute git commands
+        const gitConfigUser = Bun.spawn(["git", "config", "user.name", "iTECify Live Collaboration"], { cwd: targetDir });
+        await gitConfigUser.exited;
+        const gitConfigEmail = Bun.spawn(["git", "config", "user.email", "live@itecify.cloud"], { cwd: targetDir });
+        await gitConfigEmail.exited;
+
+        const gitAdd = Bun.spawn(["git", "add", "."], { cwd: targetDir });
+        await gitAdd.exited;
+
+        const gitCommit = Bun.spawn(["git", "commit", "-m", "Auto-Save Sandbox Commit"], { cwd: targetDir });
+        await gitCommit.exited;
+
+        const gitPush = Bun.spawn(["git", "push", "--force"], { cwd: targetDir, stdout: "pipe", stderr: "pipe" });
+        const exitCode = await gitPush.exited;
+        
+        const stdout = await new Response(gitPush.stdout).text();
+        const stderr = await new Response(gitPush.stderr).text();
+
+        if (exitCode !== 0) {
+            return c.json({ error: "Failed to push to GitHub", details: stderr }, 500);
+        }
+
+        return c.json({ success: true, message: "Successfully pushed to GitHub", output: stdout });
+
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }
