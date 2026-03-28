@@ -4,7 +4,8 @@ import EditorArea from "./EditorArea";
 import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
 import ReelsWidget from "./ReelsWidget";
-import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight } from "lucide-react";
+import SecurityScanModal from "./SecurityScanModal";
+import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
@@ -26,6 +27,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [copied, setCopied] = useState(false);
     const [showReels, setShowReels] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [showSecurityScan, setShowSecurityScan] = useState(false);
 
     // Panel toggles
     const [showSidebar, setShowSidebar] = useState(true);
@@ -301,6 +303,15 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                         {copied ? "Copied Link!" : "Collaborate"}
                     </button>
 
+					{/* Security Scan button */}
+					<button
+						onClick={() => setShowSecurityScan(true)}
+						className="text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-gradient-to-r from-cyan-500 to-blue-600 hover:scale-105 text-white"
+					>
+						<Shield size={14} />
+						Security Scan
+					</button>
+
                     {/* Vibe Reels button */}
                     <button
                         onClick={() => setShowReels(true)}
@@ -405,6 +416,15 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 					onClose={() => setShowReels(false)}
 					onMinimize={() => setShowReels(false)}
 					isAgentLoading={isLoading}
+				/>
+			)}
+
+			{/* Security Scan Modal */}
+			{showSecurityScan && (
+				<SecurityScanModal
+					onClose={() => setShowSecurityScan(false)}
+					projectId={projectId}
+					token={agentToken}
 				/>
 			)}
 		</div>
