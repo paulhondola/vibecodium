@@ -4,7 +4,7 @@ import EditorArea from "./EditorArea";
 import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
 import ReelsWidget from "./ReelsWidget";
-import { ArrowLeft, Loader2, Users, Check, Flame } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, Save } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { SocketProvider, useSocket } from "../contexts/SocketProvider";
@@ -21,6 +21,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [isLoading, setIsLoading] = useState(false);
     const [copied, setCopied] = useState(false);
     const [showReels, setShowReels] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     // Collab
     const { isConnected, lastMessage } = useSocket();
@@ -85,6 +86,25 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         navigator.clipboard.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleSave = async () => {
+        if (!projectId || !isAuthenticated) return;
+        setIsSaving(true);
+        try {
+            const token = await getAccessTokenSilently();
+            const res = await fetch(`http://localhost:3000/api/projects/${projectId}/push`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (!data.success) {
+                console.error("Save failed:", data.error);
+            }
+        } catch (e) {
+            console.error("Save error:", e);
+        }
+        setIsSaving(false);
     };
 
     if (isLoading) {
@@ -153,6 +173,15 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                         Vibe Reels
                     </button>
 
+					<div className="w-[1px] h-4 bg-[#27272a] mx-1"></div>
+                    <button
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className="text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-[#27272a] hover:bg-[#3f3f46] text-gray-200 disabled:opacity-50"
+                    >
+                        {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                        Save
+                    </button>
 					<div className="w-[1px] h-4 bg-[#27272a] mx-1"></div>
 					<span className="relative flex h-2.5 w-2.5">
 						<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>

@@ -94,6 +94,17 @@ projectsRoutes.post("/import", async (c) => {
         const user = (c.get as any)("user");
         const userId = user ? (user.sub || user.nickname) : "anonymous";
 
+        // Check if the user already imported this repository
+        const existingProject = await Project.findOne({ userId, repoUrl });
+        if (existingProject) {
+            return c.json({
+                success: true,
+                message: "Repository already imported",
+                projectId: existingProject._id.toString(),
+                name: existingProject.projectName,
+            }, 200);
+        }
+
 		const projectId = new mongoose.Types.ObjectId().toString();
 		const targetDir = `/tmp/vibecodium/${projectId}`;
         const projectName = repoUrl.split("/").pop()?.replace(".git", "") || "Untitled";
