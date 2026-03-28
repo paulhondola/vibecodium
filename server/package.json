@@ -15,7 +15,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "bun --watch run src/index.ts & tsc --watch"
+    "dev": "npx concurrently \"bun --watch run src/index.ts\" \"tsc --watch\""
   },
   "dependencies": {
     "@types/mongoose": "^5.11.97",
