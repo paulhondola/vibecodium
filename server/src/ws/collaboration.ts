@@ -13,6 +13,7 @@ interface Client {
     color: string;
     currentFile: string | null;
     ws: any;
+    connectionId: string;
 }
 
 interface Room {
@@ -49,6 +50,9 @@ export function attachCollaborationWS(app: Hono) {
         const projectId = c.req.param("projectId")!;
         const clientId = c.req.query("userId") || c.req.query("clientId") || "anon";
         const userName = c.req.query("userName") || "Anonymous";
+        // Unique per physical WS connection — survives across handler calls for this connection.
+        // Used instead of ws-object comparison (Hono creates a new wrapper on each handler call).
+        const myConnectionId = crypto.randomUUID();
 
         return {
             onOpen(_event, ws) {
@@ -58,8 +62,26 @@ export function attachCollaborationWS(app: Hono) {
                     rooms.set(projectId, room);
                 }
 
+                const existing = room.clients.get(clientId);
+                if (existing) {
+                    // StrictMode remount: same clientId reconnected. Update ws + connectionId
+                    // without re-announcing to the room.
+                    existing.ws = ws;
+                    existing.connectionId = myConnectionId;
+                    ws.send(JSON.stringify({
+                        type: "connected",
+                        clientId,
+                        color: existing.color,
+                        users: Array.from(room.clients.values())
+                            .filter(c => c.id !== clientId)
+                            .map(c => ({ id: c.id, name: c.name, color: c.color, currentFile: c.currentFile }))
+                    }));
+                    console.log(`[WS] ${userName} reconnected to room ${projectId} (${room.clients.size} users)`);
+                    return;
+                }
+
                 const color = COLORS[room.clients.size % COLORS.length]!;
-                const client: Client = { id: clientId, name: userName, color, currentFile: null, ws };
+                const client: Client = { id: clientId, name: userName, color, currentFile: null, ws, connectionId: myConnectionId };
                 room.clients.set(clientId, client);
 
                 // Tell this client their info
@@ -86,10 +108,8 @@ export function attachCollaborationWS(app: Hono) {
                     const data = JSON.parse(event.data as string);
                     const room = rooms.get(projectId);
                     if (!room) return;
-                    const sender = room.clients.get(clientId);
-                    if (!sender) return;
 
-                    // ── CODE CHANGE ──
+                    // ── CODE CHANGE ── (before sender check — client may be race-evicted)
                     if (data.type === "code_change") {
                         broadcast(room, {
                             type: "code_update",
@@ -99,6 +119,9 @@ export function attachCollaborationWS(app: Hono) {
                         }, clientId);
                         return;
                     }
+
+                    const sender = room.clients.get(clientId);
+                    if (!sender) return;
 
                     // ── CURSOR MOVE ──
                     if (data.type === "cursor_move") {
@@ -132,6 +155,10 @@ export function attachCollaborationWS(app: Hono) {
             onClose(_event, _ws) {
                 const room = rooms.get(projectId);
                 if (!room) return;
+
+                // If a newer connection already took over this clientId, don't evict it.
+                const existing = room.clients.get(clientId);
+                if (existing && existing.connectionId !== myConnectionId) return;
 
                 room.clients.delete(clientId);
                 broadcast(room, { type: "user_left", clientId });
