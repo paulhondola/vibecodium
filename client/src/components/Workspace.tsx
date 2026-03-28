@@ -4,8 +4,9 @@ import EditorArea from "./EditorArea";
 import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
 import { ArrowLeft, Loader2, Users, Check } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
+import { SocketProvider, useSocket } from "../contexts/SocketProvider";
 
 export interface ProjectFile {
     id: string;
@@ -13,24 +14,23 @@ export interface ProjectFile {
     content: string | null;
 }
 
-export default function Workspace({ onBack, projectId }: { onBack: () => void, projectId: string | null }) {
+function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: string | null }) {
     const [files, setFiles] = useState<ProjectFile[]>([]);
     const [activeFile, setActiveFile] = useState<ProjectFile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [copied, setCopied] = useState(false);
 
     // Collab
-    const wsRef = useRef<WebSocket | null>(null);
-    const [collabUsers, setCollabUsers] = useState<{id: string, name: string, color: string}[]>([]);
+    const { isConnected, lastMessage } = useSocket();
+    const [collabUsers, setCollabUsers] = useState<{id: string, name: string, color: string, isHost?: boolean}[]>([]);
     const [, setMyColor] = useState("#A855F7");
-    const sessionIdRef = useRef(Math.random().toString(36).substring(2, 10));
+    const [isHost, setIsHost] = useState(false);
 
     // Remote editor events — set in onmessage, consumed by EditorArea via props
     const [remoteCodeUpdate, setRemoteCodeUpdate] = useState<{ filePath: string; content: string; clientId: string } | null>(null);
     const [remoteCursorUpdate, setRemoteCursorUpdate] = useState<{ filePath: string; clientId: string; color: string; userName: string; position: { lineNumber: number; column: number } } | null>(null);
 
     const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
-    const myUserId = `${user?.sub || "anon"}_${sessionIdRef.current}`;
 
     // 1. Fetch project files from API
     useEffect(() => {
@@ -55,47 +55,28 @@ export default function Workspace({ onBack, projectId }: { onBack: () => void, p
         });
     }, [projectId, isAuthenticated, getAccessTokenSilently]);
 
-    // 2. WebSocket connection — simple room join, no approval
+    // 2. Consume parsed WebSocket messages from SocketProvider
     useEffect(() => {
-        if (!projectId || !user?.sub) return;
+        const data = lastMessage;
+        if (!data) return;
 
-        const url = new URL(`ws://localhost:3000/ws/collab/${projectId}`);
-        url.searchParams.set("userId", myUserId);
-        url.searchParams.set("userName", user.name || user.nickname || "Anonymous");
-
-        const ws = new WebSocket(url.toString());
-        wsRef.current = ws;
-
-        ws.onmessage = (e) => {
-            let data: any;
-            try { data = JSON.parse(e.data); } catch { return; }
-
-            if (data.type === "connected") {
-                setMyColor(data.color);
-                setCollabUsers(data.users || []);
-            } else if (data.type === "user_joined") {
-                setCollabUsers(prev => prev.some(u => u.id === data.user.id) ? prev : [...prev, data.user]);
-            } else if (data.type === "user_left") {
-                setCollabUsers(prev => prev.filter(u => u.id !== data.clientId));
-            } else if (data.type === "code_update") {
-                setRemoteCodeUpdate({ filePath: data.filePath, content: data.content, clientId: data.clientId });
-            } else if (data.type === "cursor_update") {
-                setRemoteCursorUpdate({ filePath: data.filePath, clientId: data.clientId, color: data.color, userName: data.userName, position: data.position });
-            }
-        };
-
-        ws.onclose = () => { wsRef.current = null; };
-
-        return () => {
-            if (ws.readyState === WebSocket.CONNECTING) {
-                // Prevent browser "interrupted" error returning in React 18 Strict Mode double-mount
-                ws.addEventListener("open", () => ws.close());
-            } else {
-                ws.close();
-            }
-        };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [projectId, user?.sub]);
+        if (data.type === "connected") {
+            setMyColor(data.color);
+            setCollabUsers(data.users || []);
+            setIsHost(!!data.isHost);
+        } else if (data.type === "user_joined") {
+            setCollabUsers(prev => prev.some(u => u.id === data.user.id) ? prev : [...prev, data.user]);
+        } else if (data.type === "user_left") {
+            setCollabUsers(prev => prev.filter(u => u.id !== data.clientId));
+        } else if (data.type === "code_update") {
+            setRemoteCodeUpdate({ filePath: data.filePath, content: data.content, clientId: data.clientId });
+        } else if (data.type === "cursor_update") {
+            setRemoteCursorUpdate({ filePath: data.filePath, clientId: data.clientId, color: data.color, userName: data.userName, position: data.position });
+        } else if (data.type === "host_changed") {
+            // New host assignment from backend
+            // In a fuller implementation, check if we are the new host via myUserId
+        }
+    }, [lastMessage]);
 
     const copyCollabLink = () => {
         const url = `${window.location.origin}/?w=${projectId}`;
@@ -125,6 +106,16 @@ export default function Workspace({ onBack, projectId }: { onBack: () => void, p
 					<div className="flex items-center gap-2">
 						<div className="w-5 h-5 rounded-sm bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-black text-[10px] font-bold">iT</div>
 						<span className="font-semibold text-sm text-gray-200">{projectId ? `Project ${projectId.slice(0, 8)}` : "itec-project"}</span>
+                        {isHost && (
+                            <span className="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                HOST
+                            </span>
+                        )}
+                        {!isConnected && (
+                            <span className="ml-2 flex items-center text-[10px] font-bold text-red-400">
+                                <Loader2 size={10} className="animate-spin mr-1" /> Reconnecting...
+                            </span>
+                        )}
 					</div>
 				</div>
 
@@ -133,7 +124,7 @@ export default function Workspace({ onBack, projectId }: { onBack: () => void, p
                     {collabUsers.length > 0 && (
                         <div className="flex -space-x-2 mr-2">
                             {collabUsers.map(u => (
-                                <div key={u.id} title={u.name} className="w-6 h-6 rounded-full border border-[#18181b] flex items-center justify-center text-[10px] font-bold text-white shadow-sm" style={{ backgroundColor: u.color }}>
+                                <div key={u.id} title={`${u.name}${u.isHost ? ' (Host)' : ''}`} className={`w-6 h-6 rounded-full border flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${u.isHost ? 'border-yellow-400 z-10' : 'border-[#18181b]'}`} style={{ backgroundColor: u.color }}>
                                     {u.name.substring(0, 2).toUpperCase()}
                                 </div>
                             ))}
@@ -174,10 +165,9 @@ export default function Workspace({ onBack, projectId }: { onBack: () => void, p
 				{/* Center Area */}
 				<div className="flex-1 flex flex-col min-w-0 bg-[#09090b] relative">
 					<div className="flex-1 relative border-b border-[#27272a] overflow-hidden">
-						<EditorArea
+                        <EditorArea
 							activeFile={activeFile}
-							collabWs={wsRef}
-							userId={myUserId}
+							userId={user?.sub ? `${user.sub}_local` : "anon_local"}
 							remoteCodeUpdate={remoteCodeUpdate}
 							remoteCursorUpdate={remoteCursorUpdate}
 						/>
@@ -194,4 +184,12 @@ export default function Workspace({ onBack, projectId }: { onBack: () => void, p
 			</div>
 		</div>
 	);
+}
+
+export default function Workspace(props: { onBack: () => void, projectId: string | null }) {
+    return (
+        <SocketProvider projectId={props.projectId}>
+            <WorkspaceInner {...props} />
+        </SocketProvider>
+    );
 }

@@ -1,8 +1,9 @@
-import { useRef, useState, useEffect, type MutableRefObject } from "react";
+import { useRef, useState, useEffect } from "react";
 import MonacoEditor, { useMonaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { Bot, Check, X, Sparkles } from "lucide-react";
 import type { ProjectFile } from "./Workspace";
+import { useSocket } from "../contexts/SocketProvider";
 
 function safeCssId(id: string) {
     return id.replace(/[^a-zA-Z0-9]/g, "_");
@@ -13,17 +14,19 @@ interface RemoteCursorUpdate { filePath: string; clientId: string; color: string
 
 interface EditorAreaProps {
     activeFile: ProjectFile | null;
-    collabWs?: MutableRefObject<WebSocket | null>;
     userId?: string;
     remoteCodeUpdate?: RemoteCodeUpdate | null;
     remoteCursorUpdate?: RemoteCursorUpdate | null;
 }
 
-export default function EditorArea({ activeFile, collabWs, userId, remoteCodeUpdate, remoteCursorUpdate }: EditorAreaProps) {
+export default function EditorArea({ activeFile, userId, remoteCodeUpdate, remoteCursorUpdate }: EditorAreaProps) {
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 	const monaco = useMonaco();
 	const [showPending, setShowPending] = useState(false);
 	const [code, setCode] = useState("");
+    const { send } = useSocket();
+    const sendRef = useRef(send);
+    useEffect(() => { sendRef.current = send; }, [send]);
 
     const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
     const isRemoteUpdate = useRef(false);
@@ -45,12 +48,9 @@ export default function EditorArea({ activeFile, collabWs, userId, remoteCodeUpd
 
     // Emit file_focus when switching files
     useEffect(() => {
-        if (!activeFile || !collabWs?.current) return;
-        const ws = collabWs.current;
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "file_focus", filePath: activeFile.path }));
-        }
-    }, [activeFile, collabWs]);
+        if (!activeFile) return;
+        sendRef.current({ type: "file_focus", filePath: activeFile.path });
+    }, [activeFile]);
 
     // Apply incoming remote code update
     useEffect(() => {
@@ -123,13 +123,12 @@ export default function EditorArea({ activeFile, collabWs, userId, remoteCodeUpd
 
         // Broadcast cursor position on every move
         ed.onDidChangeCursorPosition((e) => {
-            const ws = collabWs?.current;
-            if (ws && ws.readyState === WebSocket.OPEN && activeFileRef.current) {
-                ws.send(JSON.stringify({
+            if (activeFileRef.current) {
+                sendRef.current({
                     type: "cursor_move",
                     filePath: activeFileRef.current.path,
                     position: { lineNumber: e.position.lineNumber, column: e.position.column }
-                }));
+                });
             }
         });
 	};
@@ -142,13 +141,12 @@ export default function EditorArea({ activeFile, collabWs, userId, remoteCodeUpd
         if (isRemoteUpdate.current) return;
 
         // Broadcast to other users
-        const ws = collabWs?.current;
-        if (ws && ws.readyState === WebSocket.OPEN && activeFileRef.current) {
-            ws.send(JSON.stringify({
+        if (activeFileRef.current) {
+            sendRef.current({
                 type: "code_change",
                 filePath: activeFileRef.current.path,
                 content: text
-            }));
+            });
         }
     };
 
