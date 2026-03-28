@@ -3,7 +3,8 @@ import ActionHistory from "./ActionHistory";
 import EditorArea from "./EditorArea";
 import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
-import { ArrowLeft, Loader2, Users, Check } from "lucide-react";
+import ReelsWidget from "./ReelsWidget";
+import { ArrowLeft, Loader2, Users, Check, Flame } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { SocketProvider, useSocket } from "../contexts/SocketProvider";
@@ -19,6 +20,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [activeFile, setActiveFile] = useState<ProjectFile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [showReels, setShowReels] = useState(false);
 
     // Collab
     const { isConnected, lastMessage } = useSocket();
@@ -142,6 +144,15 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                         {copied ? "Copied Link!" : "Collaborate"}
                     </button>
 
+                    {/* Vibe Reels button */}
+                    <button
+                        onClick={() => setShowReels(true)}
+                        className="text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 hover:scale-105 text-white"
+                    >
+                        <Flame size={14} />
+                        Vibe Reels
+                    </button>
+
 					<div className="w-[1px] h-4 bg-[#27272a] mx-1"></div>
 					<span className="relative flex h-2.5 w-2.5">
 						<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
@@ -182,6 +193,15 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 					<VibeChat />
 				</div>
 			</div>
+
+			{/* Reels Widget Overlay */}
+			{showReels && (
+				<ReelsWidget
+					onClose={() => setShowReels(false)}
+					onMinimize={() => setShowReels(false)}
+					isAgentLoading={isLoading}
+				/>
+			)}
 		</div>
 	);
 }
