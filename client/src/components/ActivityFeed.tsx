@@ -3,6 +3,7 @@ import { History, Loader2, RefreshCw, GitCommit } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth0 } from "@auth0/auth0-react";
+import { API_BASE } from "@/lib/config";
 
 interface GitHubCommit {
     sha: string;
@@ -29,7 +30,7 @@ export default function ActivityFeed({ projectId }: { projectId: string | null }
 
         try {
             const token = await getAccessTokenSilently();
-            const res = await fetch(`http://localhost:3000/api/projects/${projectId}/commits`, {
+            const res = await fetch(`${API_BASE}/api/projects/${projectId}/commits`, {
                 headers: {
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${token}`

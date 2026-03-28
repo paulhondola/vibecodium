@@ -1,5 +1,6 @@
 import { X, Shield, AlertTriangle, AlertCircle, Info, CheckCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { API_BASE } from "@/lib/config";
 
 interface VulnerabilityMatch {
 	pattern: string;
@@ -39,7 +40,7 @@ export default function SecurityScanModal({ onClose, projectId, token }: Securit
 		setError(null);
 
 		try {
-			const res = await fetch("http://localhost:3000/api/scan", {
+			const res = await fetch(`${API_BASE}/api/scan`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",

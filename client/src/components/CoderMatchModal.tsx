@@ -1,6 +1,7 @@
 import { Heart, X, Flame, MapPin, Code2, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
+import { API_BASE } from "@/lib/config";
 
 interface MatchUser {
     auth0Id: string;
@@ -25,7 +26,7 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
         const fetchUsers = async () => {
             try {
                 const token = await getAccessTokenSilently();
-                const res = await fetch("http://localhost:3000/api/users/match", {
+                const res = await fetch(`${API_BASE}/api/users/match`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const data = await res.json();

@@ -15,7 +15,11 @@
       "WebFetch(domain:docs.railway.com)",
       "WebFetch(domain:github.com)",
       "Bash(railway --version)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:render.com)",
+      "WebFetch(domain:fly.io)",
+      "WebFetch(domain:api-docs.render.com)",
+      "Bash(git remote:*)"
     ]
   }
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { WS_BASE } from "@/lib/config";
 
 // Stable client ID for this browser session
 const LOCAL_USER_ID = crypto.randomUUID();
@@ -20,7 +21,7 @@ export function useEditorSync(roomId: string | null, sessionToken?: string | nul
             params.set("roomId", roomId);
         }
 
-        const ws = new WebSocket(`ws://localhost:3000/ws/editor?${params}`);
+        const ws = new WebSocket(`${WS_BASE}/ws/editor?${params}`);
         wsRef.current = ws;
 
         ws.onmessage = (event) => {

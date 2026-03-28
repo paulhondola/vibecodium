@@ -12,6 +12,7 @@ import SpotifyPlayer from "./SpotifyPlayer";
 import MatrixRain from "./MatrixRain";
 import ReactionOverlay from "./ReactionOverlay";
 import CodeRoastModal from "./CodeRoastModal";
+import { API_BASE } from "@/lib/config";
 import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, ChevronDown, Wrench, CloudMessage, Rocket, ExternalLink, X } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -89,7 +90,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         setIsLoading(true);
         getAccessTokenSilently().then(token => {
             setAgentToken(token);
-            fetch(`http://localhost:3000/api/projects/${projectId}/files`, {
+            fetch(`${API_BASE}/api/projects/${projectId}/files`, {
                 headers: { Authorization: `Bearer ${token}` }
             })
             .then(res => res.json())
@@ -179,7 +180,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const handleFileAction = useCallback(async (action: AgentFileAction) => {
         if (!projectId || !agentToken) return;
 
-        const base = `http://localhost:3000/api/projects/${projectId}`;
+        const base = `${API_BASE}/api/projects/${projectId}`;
         const headers = { "Content-Type": "application/json", Authorization: `Bearer ${agentToken}` };
 
         if (action.type === "create_file") {
@@ -251,7 +252,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         setIsSaving(true);
         try {
             const token = await getAccessTokenSilently();
-            const res = await fetch(`http://localhost:3000/api/projects/${projectId}/push`, {
+            const res = await fetch(`${API_BASE}/api/projects/${projectId}/push`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` }
             });
