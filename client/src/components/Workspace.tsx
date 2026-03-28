@@ -6,9 +6,10 @@ import VibeChat from "./VibeChat";
 import ReelsWidget from "./ReelsWidget";
 import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { SocketProvider, useSocket } from "../contexts/SocketProvider";
+import type { PendingUpdate } from "../hooks/useAgentStream";
 
 export interface ProjectFile {
     id: string;
@@ -41,13 +42,20 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [remoteCodeUpdate, setRemoteCodeUpdate] = useState<{ filePath: string; content: string; clientId: string } | null>(null);
     const [remoteCursorUpdate, setRemoteCursorUpdate] = useState<{ filePath: string; clientId: string; color: string; userName: string; position: { lineNumber: number; column: number } } | null>(null);
 
-    const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
+    // Agent diff state
+    const [pendingUpdate, setPendingUpdate] = useState<PendingUpdate | null>(null);
+    const [agentToken, setAgentToken] = useState<string | null>(null);
 
-    // 1. Fetch project files from API
+    const { user, getAccessTokenSilently, isAuthenticated, loginWithRedirect } = useAuth0();
+    const getTokenRef = useRef(getAccessTokenSilently);
+    useEffect(() => { getTokenRef.current = getAccessTokenSilently; }, [getAccessTokenSilently]);
+
+    // 1. Fetch project files from API + store token for agent
     useEffect(() => {
         if (!projectId || !isAuthenticated) return;
         setIsLoading(true);
         getAccessTokenSilently().then(token => {
+            setAgentToken(token);
             fetch(`http://localhost:3000/api/projects/${projectId}/files`, {
                 headers: { Authorization: `Bearer ${token}` }
             })
@@ -64,8 +72,13 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                 console.error("Fetch files error:", err);
                 setIsLoading(false);
             });
+        }).catch(err => {
+            console.error(err);
+            if (err?.error === 'consent_required' || err?.message?.includes('Consent required')) {
+                loginWithRedirect();
+            }
         });
-    }, [projectId, isAuthenticated, getAccessTokenSilently]);
+    }, [projectId, isAuthenticated, getAccessTokenSilently, loginWithRedirect]);
 
     // 2. Consume parsed WebSocket messages from SocketProvider
     useEffect(() => {
@@ -84,11 +97,23 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
             setRemoteCodeUpdate({ filePath: data.filePath, content: data.content, clientId: data.clientId });
         } else if (data.type === "cursor_update") {
             setRemoteCursorUpdate({ filePath: data.filePath, clientId: data.clientId, color: data.color, userName: data.userName, position: data.position });
+        } else if (data.type === "agent_accepted") {
+            // Another client accepted a suggestion — apply the change to our local file state
+            setFiles(prev => prev.map(f =>
+                f.path === data.filePath ? { ...f, content: data.content } : f
+            ));
+            setRemoteCodeUpdate({ filePath: data.filePath, content: data.content, clientId: data.appliedBy ?? "agent" });
+            setPendingUpdate(null);
         } else if (data.type === "host_changed") {
             // New host assignment from backend
             // In a fuller implementation, check if we are the new host via myUserId
         }
     }, [lastMessage]);
+
+
+    const handlePendingUpdate = useCallback((update: PendingUpdate) => {
+        setPendingUpdate(update);
+    }, []);
 
     const copyCollabLink = () => {
         const url = `${window.location.origin}/?w=${projectId}`;
@@ -269,6 +294,9 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                     userId={user?.sub ? `${user.sub}_local` : "anon_local"}
                                     remoteCodeUpdate={remoteCodeUpdate}
                                     remoteCursorUpdate={remoteCursorUpdate}
+                                    pendingUpdate={pendingUpdate}
+                                    onPendingResolved={() => setPendingUpdate(null)}
+                                    projectId={projectId}
                                 />
                             </Panel>
                             
@@ -288,7 +316,12 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                         <>
                             <PanelResizeHandle className="w-1 hover:bg-cyan-500/50 transition-colors z-50 cursor-col-resize border-l border-[#27272a]" />
                             <Panel defaultSize={25} minSize={20} className="flex flex-col bg-[#18181b] relative z-10 shadow-[-5px_0_15px_rgba(0,0,0,0.5)]">
-                                <VibeChat />
+                                <VibeChat
+                                    activeFile={activeFile}
+                                    projectId={projectId}
+                                    token={agentToken}
+                                    onPendingUpdate={handlePendingUpdate}
+                                />
                             </Panel>
                         </>
                     )}
