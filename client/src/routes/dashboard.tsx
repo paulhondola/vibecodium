@@ -3,6 +3,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { Loader2, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import CoderMatchModal from "../components/CoderMatchModal";
+import GamePIP from "../components/GamePIP";
 import { API_BASE } from "@/lib/config";
 
 export const Route = createFileRoute("/dashboard")({
@@ -42,6 +43,7 @@ function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCoderMatch, setShowCoderMatch] = useState(false);
+  const [showGame, setShowGame] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'recent'>('all');
 
@@ -261,6 +263,14 @@ function DashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-6">
+          <button
+            onClick={() => setShowGame(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-orange-500/20 to-red-500/20 border border-orange-500/30 rounded-lg hover:from-orange-500/30 hover:to-red-500/30 transition-all hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(249,115,22,0.2)]"
+            title="Play Code Runner Game"
+          >
+            <span className="text-base">🎮</span>
+            <span className="text-[9px] uppercase tracking-[0.3em] font-black text-orange-400">Game</span>
+          </button>
           <div className="hidden lg:flex items-center bg-[rgba(168,85,247,0.1)] px-4 py-1.5 rounded-full border border-[rgba(168,85,247,0.2)]">
             <span className="w-1.5 h-1.5 rounded-full bg-[#A855F7] mr-3 animate-ping" />
             <span className="text-[9px] uppercase tracking-[0.3em] font-black text-[#A855F7]">Online</span>
@@ -538,6 +548,11 @@ function DashboardPage() {
       {/* Vibe Match Modal */}
       {showCoderMatch && (
         <CoderMatchModal onClose={() => setShowCoderMatch(false)} />
+      )}
+
+      {/* Game PIP */}
+      {showGame && (
+        <GamePIP onClose={() => setShowGame(false)} />
       )}
 
       {/* Create Repository Modal */}

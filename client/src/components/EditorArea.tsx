@@ -5,6 +5,7 @@ import { Bot, Check, X } from "lucide-react";
 import type { ProjectFile } from "./Workspace";
 import { useSocket } from "../contexts/SocketProvider";
 import type { PendingUpdate } from "../hooks/useAgentStream";
+import GamePIP from "./GamePIP";
 
 function safeCssId(id: string) {
     return id.replace(/[^a-zA-Z0-9]/g, "_");
@@ -49,6 +50,9 @@ export default function EditorArea({
     const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
     const [snapshots, setSnapshots] = useState<{timestamp: number, content: string}[]>([]);
     const [snapshotIndex, setSnapshotIndex] = useState(0);
+
+    // Game state
+    const [showGame, setShowGame] = useState(false);
 
     const { send } = useSocket();
     const sendRef = useRef(send);
@@ -468,6 +472,18 @@ export default function EditorArea({
                         TIME TRAVEL
                     </button>
                 </div>
+
+                {/* Game Toggle Button */}
+                <div className="p-1.5 flex items-center shrink-0 border-l border-[#27272a]">
+                    <button
+                        onClick={() => setShowGame(prev => !prev)}
+                        className="text-[10px] px-2 py-1 flex items-center gap-1.5 rounded transition font-medium tracking-wide bg-gradient-to-r from-orange-500/10 to-red-500/10 text-orange-400 hover:from-orange-500/20 hover:to-red-500/20 hover:shadow-[0_0_8px_rgba(249,115,22,0.2)] border border-orange-500/20"
+                        title="Play Code Runner Game"
+                    >
+                        <span className="text-xs">🎮</span>
+                        GAME
+                    </button>
+                </div>
             </div>
 
             {/* Power Mode indicator */}
@@ -667,6 +683,11 @@ export default function EditorArea({
                     100% { opacity: 0; transform: translate(var(--sx, 12px), var(--sy, -20px)) scale(0); }
                 }
             `}</style>
+
+            {/* Game PIP */}
+            {showGame && (
+                <GamePIP onClose={() => setShowGame(false)} />
+            )}
         </div>
     );
 }
