@@ -12,12 +12,13 @@ import SpotifyPlayer from "./SpotifyPlayer";
 import MatrixRain from "./MatrixRain";
 import ReactionOverlay from "./ReactionOverlay";
 import CodeRoastModal from "./CodeRoastModal";
-import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, ChevronDown, Wrench } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, ChevronDown, Wrench, CloudMessage, Rocket, ExternalLink, X } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { SocketProvider, useSocket } from "../contexts/SocketProvider";
 import type { PendingUpdate, AgentFileAction } from "../hooks/useAgentStream";
+import { motion, AnimatePresence } from "framer-motion";
 
 export interface ProjectFile {
     id: string;
@@ -39,6 +40,11 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [showSecurityScan, setShowSecurityScan] = useState(false);
     const [showToolsMenu, setShowToolsMenu] = useState(false);
     const toolsMenuRef = useRef<HTMLDivElement>(null);
+
+    // Deployment State
+    const [isDeploying, setIsDeploying] = useState(false);
+    const [deploySuccess, setDeploySuccess] = useState<{ url: string } | null>(null);
+    const [showConfetti, setShowConfetti] = useState(false);
 
     // Panel toggles
     const [showSidebar, setShowSidebar] = useState(true);
@@ -258,6 +264,28 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         setIsSaving(false);
     };
 
+    const handleDeploy = async () => {
+        if (!projectId || !isAuthenticated) return;
+        setIsDeploying(true);
+        setShowTerminal(true); // Show terminal to see logs
+        try {
+            const res = await fetch(`http://localhost:3000/api/deploy/${projectId}`, {
+                method: "POST"
+            });
+            const data = await res.json();
+            if (data.success) {
+                setDeploySuccess({ url: data.url });
+                setShowConfetti(true);
+                setTimeout(() => setShowConfetti(false), 5000);
+            } else {
+                console.error("Deploy failed:", data.error);
+            }
+        } catch (e) {
+            console.error("Deploy error:", e);
+        }
+        setIsDeploying(false);
+    };
+
     const handleSelectFile = (file: ProjectFile) => {
         setOpenFiles(prev => {
             if (!prev.find(f => f.path === file.path)) {
@@ -348,6 +376,16 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 					</div>
 
 				<div className="flex items-center gap-4">
+                    {/* Ship to Cloud Button */}
+                    <button
+                        onClick={handleDeploy}
+                        disabled={isDeploying}
+                        className={`text-xs px-4 py-1.5 rounded-full flex items-center gap-2 transition-all font-bold shadow-[0_0_15px_rgba(34,197,94,0.3)] border border-green-500/30 ${isDeploying ? "bg-green-600/50 cursor-not-allowed" : "bg-green-600 hover:bg-green-500 text-white hover:scale-105 active:scale-95"}`}
+                    >
+                        {isDeploying ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
+                        {isDeploying ? "Shipping..." : "Ship to Cloud"}
+                    </button>
+
                     {/* Connected users */}
                     {collabUsers.length > 0 && (
                         <div className="flex -space-x-2 mr-2">
@@ -450,7 +488,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 						<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
 						<span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
 					</span>
-					<span className="text-xs text-gray-400 font-medium">Auto-saving...</span>
+					<span className="text-xs text-gray-400 font-medium hidden lg:block">Auto-saving...</span>
 				</div>
 			</div>
 
@@ -535,6 +573,89 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 			</div>
             
             <RubberDuck />
+
+            {/* Deployment Success Modal */}
+            <AnimatePresence>
+                {deploySuccess && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="bg-[#18181b] border border-green-500/30 rounded-2xl p-8 max-w-md w-full shadow-[0_0_50px_rgba(34,197,94,0.2)] text-center relative overflow-hidden"
+                        >
+                            <div className="absolute top-0 left-0 w-full h-1 bg-green-500" />
+                            <div className="flex justify-center mb-6">
+                                <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center border border-green-500/20">
+                                    <Rocket size={40} className="text-green-500" />
+                                </div>
+                            </div>
+                            <h2 className="text-2xl font-bold text-white mb-2">Deployed Successfully!</h2>
+                            <p className="text-gray-400 text-sm mb-6">Your project is now live on Railway with zero downtime.</p>
+                            
+                            <div className="bg-[#09090b] border border-[#27272a] rounded-xl p-4 flex items-center justify-between mb-8 group hover:border-green-500/30 transition-colors">
+                                <div className="flex flex-col items-start overflow-hidden">
+                                    <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">Production URL</span>
+                                    <span className="text-sm text-green-400 font-mono truncate w-full">{deploySuccess.url}</span>
+                                </div>
+                                <a 
+                                    href={deploySuccess.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="p-2 rounded-lg bg-[#27272a] hover:bg-green-600 text-white transition-all ml-4"
+                                >
+                                    <ExternalLink size={18} />
+                                </a>
+                            </div>
+
+                            <button
+                                onClick={() => setDeploySuccess(null)}
+                                className="w-full py-3 rounded-xl bg-[#27272a] hover:bg-[#3f3f46] text-white font-semibold transition-all"
+                            >
+                                Back to Editor
+                            </button>
+
+                            <button 
+                                onClick={() => setDeploySuccess(null)}
+                                className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Confetti Overlay */}
+            {showConfetti && (
+                <div className="fixed inset-0 pointer-events-none z-[110] overflow-hidden">
+                    {Array.from({ length: 50 }).map((_, i) => (
+                        <motion.div
+                            key={i}
+                            initial={{ 
+                                top: -20, 
+                                left: `${Math.random() * 100}%`,
+                                rotate: 0,
+                                scale: Math.random() * 0.5 + 0.5
+                            }}
+                            animate={{ 
+                                top: "110%",
+                                rotate: 360 * (Math.random() > 0.5 ? 1 : -1),
+                                left: `${(Math.random() - 0.5) * 20 + i * 2}%`
+                            }}
+                            transition={{ 
+                                duration: Math.random() * 2 + 2,
+                                ease: "linear",
+                                repeat: 0
+                            }}
+                            className="absolute w-2 h-2 rounded-sm"
+                            style={{ 
+                                backgroundColor: ['#22c55e', '#3b82f6', '#eab308', '#ec4899', '#a855f7'][Math.floor(Math.random() * 5)] 
+                            }}
+                        />
+                    ))}
+                </div>
+            )}
 
 			{/* Reels Widget Overlay */}
 			{showReels && (

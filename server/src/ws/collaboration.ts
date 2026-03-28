@@ -24,14 +24,14 @@ interface Room {
 // State
 // ──────────────────────────────────────────
 
-const rooms = new Map<string, Room>();
+export const rooms = new Map<string, Room>();
 const COLORS = ["#A855F7", "#3B82F6", "#10B981", "#F59E0B", "#EC4899", "#EF4444", "#14B8A6", "#F97316"];
 
 // ──────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────
 
-function broadcast(room: Room, msg: object, excludeId?: string) {
+export function broadcast(room: Room, msg: object, excludeId?: string) {
     const json = JSON.stringify(msg);
     for (const [id, client] of room.clients) {
         if (id !== excludeId) {
