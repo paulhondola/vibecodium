@@ -109,6 +109,51 @@ export const app = new Hono()
 			return c.json({ success: false, error: error.message }, 500);
 		}
 	})
+	// Roast My Code Endpoint
+	.post("/api/roast", async (c) => {
+		try {
+			const body = await c.req.json<{ code: string; fileName?: string }>();
+			if (!body.code) return c.json({ success: false, error: "No code to roast" }, 400);
+
+			if (!LLM_KEY) {
+				// Fallback roast when no LLM key is configured
+				const fallbacks = [
+					"I've seen better code in COBOL tutorials from 1985. Your variable names are so cryptic, even you don't know what they mean anymore. The indentation looks like you coded this during an earthquake. Congrats on shipping it though, I guess.",
+					"This code has more nested callbacks than a Russian doll convention. Stack Overflow would close your question as 'unclear what you're asking'. Your future self will hate you for this, as they should.",
+					"Whoever wrote this comment — '// TODO: fix later' — that was 3 years ago, wasn't it? The cyclomatic complexity of this file is higher than your coffee intake, and that's saying something.",
+				];
+				return c.json({ success: true, roast: fallbacks[Math.floor(Math.random() * fallbacks.length)] });
+			}
+
+			const systemPrompt = `You are a savage but ultimately well-meaning senior software engineer with 20 years of experience and zero patience for bad code. You will roast the submitted code mercilessly but with humor and specificity. Point out real issues (bad naming, complexity, potential bugs, style violations, missing error handling, etc.) in an entertaining, exaggerated, comedic way. Keep it under 200 words. Don't be cruel about the person, only the code. End with one genuine small compliment buried in sarcasm.`;
+
+			const res = await fetch(`${LLM_BASE_URL}/chat/completions`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json", Authorization: `Bearer ${LLM_KEY}` },
+				body: JSON.stringify({
+					model: LLM_MODEL,
+					messages: [
+						{ role: "system", content: systemPrompt },
+						{ role: "user", content: `Roast this code from file "${body.fileName || "unknown"}":\n\n\`\`\`\n${body.code.slice(0, 3000)}\n\`\`\`` },
+					],
+					max_tokens: 350,
+					temperature: 0.9,
+				}),
+				signal: AbortSignal.timeout(20_000),
+			});
+
+			if (!res.ok) {
+				const err = await res.text();
+				return c.json({ success: false, error: err }, 500);
+			}
+
+			const data = await res.json() as { choices: { message: { content: string } }[] };
+			return c.json({ success: true, roast: data.choices[0]?.message?.content?.trim() });
+		} catch (error: any) {
+			console.error("Roast error:", error);
+			return c.json({ success: false, error: error.message }, 500);
+		}
+	})
     .get("/api/ping-llm", async (c) => {
         if (!LLM_KEY) return c.json({ success: false, error: "LLM_KEY is not set" }, 500);
         const res = await fetch(`${LLM_BASE_URL}/chat/completions`, {
@@ -552,6 +597,17 @@ export default {
                     if (data.isHost) {
                         ws.publish(data.projectId, JSON.stringify(payload)); // Send approval
                     }
+                    return;
+                }
+
+                // emoji_reaction: broadcast to all peers in the room
+                if (payload.type === "emoji_reaction") {
+                    ws.publish(data.projectId, JSON.stringify({
+                        type: "emoji_reaction",
+                        emoji: payload.emoji,
+                        sender: payload.sender || data.userName,
+                        clientId: data.clientId,
+                    }));
                     return;
                 }
 

@@ -10,6 +10,8 @@ import WhiteboardArea from "./WhiteboardArea";
 import PomodoroTimer from "./PomodoroTimer";
 import SpotifyPlayer from "./SpotifyPlayer";
 import MatrixRain from "./MatrixRain";
+import ReactionOverlay from "./ReactionOverlay";
+import CodeRoastModal from "./CodeRoastModal";
 import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -32,6 +34,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [copied, setCopied] = useState(false);
     const [showReels, setShowReels] = useState(false);
     const [showMatrix, setShowMatrix] = useState(false);
+    const [showRoast, setShowRoast] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showSecurityScan, setShowSecurityScan] = useState(false);
 
@@ -42,7 +45,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [showWhiteboard, setShowWhiteboard] = useState(false);
 
     // Collab
-    const { isConnected, lastMessage } = useSocket();
+    const { isConnected, lastMessage, send } = useSocket();
     const [collabUsers, setCollabUsers] = useState<{id: string, name: string, color: string, isHost?: boolean}[]>([]);
     const [, setMyColor] = useState("#A855F7");
     const [isHost, setIsHost] = useState(false);
@@ -115,8 +118,8 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
             setPendingUpdate(null);
         } else if (data.type === "host_changed") {
             // New host assignment from backend
-            // In a fuller implementation, check if we are the new host via myUserId
         }
+        // emoji_reaction: handled directly in ReactionOverlay via lastMessage prop
     }, [lastMessage]);
 
     // Keyboard shortcuts for panel toggles & Zen mode
@@ -358,6 +361,23 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                         {copied ? "Copied Link!" : "Collaborate"}
                     </button>
 
+                    {/* Emoji Reactions */}
+                    <ReactionOverlay
+                        lastMessage={lastMessage}
+                        onSendReaction={(emoji) => send({ type: "emoji_reaction", emoji, sender: user?.name || "Someone" })}
+                    />
+
+                    {/* Roast My Code button */}
+                    {activeFile && (
+                        <button
+                            onClick={() => setShowRoast(true)}
+                            className="text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-gradient-to-r from-orange-600 to-red-600 hover:scale-105 text-white"
+                            title="Let the AI roast your current file"
+                        >
+                            🔥 Roast My Code
+                        </button>
+                    )}
+
                     {/* Hacker Mode button */}
                     <button
                         onClick={() => setShowMatrix(prev => !prev)}
@@ -497,6 +517,15 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 					onClose={() => setShowSecurityScan(false)}
 					projectId={projectId}
 					token={agentToken}
+				/>
+			)}
+
+			{/* Code Roast Modal */}
+			{showRoast && activeFile && (
+				<CodeRoastModal
+					code={activeFile.content || "// No content"}
+					fileName={activeFile.path.split("/").pop() || activeFile.path}
+					onClose={() => setShowRoast(false)}
 				/>
 			)}
 
