@@ -1,9 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import MonacoEditor, { useMonaco } from "@monaco-editor/react";
-// @ts-ignore
-import { initVimMode } from "monaco-vim";
-// @ts-ignore
-import { emacsMode } from "monaco-emacs";
 import type { editor } from "monaco-editor";
 import { Bot, Check, X } from "lucide-react";
 import type { ProjectFile } from "./Workspace";
