@@ -142,6 +142,17 @@ export default function VibeChat({ activeFile, projectId, token, onPendingUpdate
             setInput("");
             return;
         }
+        if (cmd === "/roast") {
+            new Audio("https://www.myinstants.com/media/sounds/roasting.mp3").play().catch(() => {});
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: input }, { id: Date.now().toString() + "_a", role: "assistant", content: "🔥 Oh, you want a roast? Your code is so messy even the garbage collector complains. Are you trying to invent a new Big O notation for maximum inefficiency? Because if so, you're succeeding." }]);
+            setInput("");
+            return;
+        }
+        if (cmd === "/brainrot") {
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: input }, { id: Date.now().toString() + "_a", role: "assistant", content: "🧠 brainrot autocomplete enabled no cap. this feature is bussin fr fr." }]);
+            setInput("");
+            return;
+        }
 
         const userMsg: Message = { id: Date.now().toString(), role: "user", content: input };
         setMessages(prev => [...prev, userMsg]);

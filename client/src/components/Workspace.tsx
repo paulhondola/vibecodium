@@ -5,6 +5,7 @@ import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
 import ReelsWidget from "./ReelsWidget";
 import SecurityScanModal from "./SecurityScanModal";
+import RubberDuck from "./RubberDuck";
 import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -112,6 +113,34 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         }
     }, [lastMessage]);
 
+    // Keyboard shortcuts for panel toggles & Zen mode
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+            if (e.metaKey || e.ctrlKey) {
+                if (e.key.toLowerCase() === 'e') {
+                    e.preventDefault();
+                    setShowSidebar(prev => !prev);
+                } else if (e.key.toLowerCase() === 'j') {
+                    e.preventDefault();
+                    setShowTerminal(prev => !prev);
+                } else if (e.key.toLowerCase() === 'b') {
+                    e.preventDefault();
+                    setShowChat(prev => !prev);
+                } else if (e.key.toLowerCase() === 'k') {
+                    e.preventDefault();
+                    // Zen Mode / Focus Mode
+                    const isZen = !showSidebar && !showTerminal && !showChat;
+                    setShowSidebar(isZen);
+                    setShowTerminal(isZen);
+                    setShowChat(isZen);
+                }
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showSidebar, showTerminal, showChat]);
 
     const handlePendingUpdate = useCallback((update: PendingUpdate) => {
         setPendingUpdate(update);
@@ -409,6 +438,8 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                     )}
                 </PanelGroup>
 			</div>
+            
+            <RubberDuck />
 
 			{/* Reels Widget Overlay */}
 			{showReels && (
