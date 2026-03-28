@@ -9,7 +9,7 @@ import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "reac
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { SocketProvider, useSocket } from "../contexts/SocketProvider";
-import type { PendingUpdate } from "../hooks/useAgentStream";
+import type { PendingUpdate, AgentFileAction } from "../hooks/useAgentStream";
 
 export interface ProjectFile {
     id: string;
@@ -114,6 +114,69 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const handlePendingUpdate = useCallback((update: PendingUpdate) => {
         setPendingUpdate(update);
     }, []);
+
+    const handleFileAction = useCallback(async (action: AgentFileAction) => {
+        if (!projectId || !agentToken) return;
+
+        const base = `http://localhost:3000/api/projects/${projectId}`;
+        const headers = { "Content-Type": "application/json", Authorization: `Bearer ${agentToken}` };
+
+        if (action.type === "create_file") {
+            const res = await fetch(`${base}/files/create`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ path: action.filePath, content: action.content ?? "" }),
+            });
+            if (res.ok) {
+                const newFile: ProjectFile = { id: crypto.randomUUID(), path: action.filePath, content: action.content ?? "" };
+                setFiles(prev => {
+                    if (prev.find(f => f.path === action.filePath)) {
+                        return prev.map(f => f.path === action.filePath ? { ...f, content: action.content ?? "" } : f);
+                    }
+                    return [...prev, newFile];
+                });
+            }
+        } else if (action.type === "delete_file") {
+            const res = await fetch(`${base}/files`, {
+                method: "DELETE",
+                headers,
+                body: JSON.stringify({ path: action.filePath }),
+            });
+            if (res.ok) {
+                setFiles(prev => prev.filter(f => f.path !== action.filePath && !f.path.startsWith(action.filePath + "/")));
+                setOpenFiles(prev => prev.filter(f => f.path !== action.filePath && !f.path.startsWith(action.filePath + "/")));
+                setActiveFile(prev => {
+                    if (!prev) return null;
+                    if (prev.path === action.filePath || prev.path.startsWith(action.filePath + "/")) return null;
+                    return prev;
+                });
+            }
+        } else if (action.type === "rename_file" && action.newPath) {
+            const res = await fetch(`${base}/files/rename`, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify({ oldPath: action.filePath, newPath: action.newPath }),
+            });
+            if (res.ok) {
+                setFiles(prev => prev.map(f => {
+                    if (f.path === action.filePath) return { ...f, path: action.newPath! };
+                    if (f.path.startsWith(action.filePath + "/")) return { ...f, path: action.newPath! + f.path.slice(action.filePath.length) };
+                    return f;
+                }));
+                setOpenFiles(prev => prev.map(f => {
+                    if (f.path === action.filePath) return { ...f, path: action.newPath! };
+                    if (f.path.startsWith(action.filePath + "/")) return { ...f, path: action.newPath! + f.path.slice(action.filePath.length) };
+                    return f;
+                }));
+                setActiveFile(prev => {
+                    if (!prev) return null;
+                    if (prev.path === action.filePath) return { ...prev, path: action.newPath! };
+                    if (prev.path.startsWith(action.filePath + "/")) return { ...prev, path: action.newPath! + prev.path.slice(action.filePath.length) };
+                    return prev;
+                });
+            }
+        }
+    }, [projectId, agentToken]);
 
     const copyCollabLink = () => {
         const url = `${window.location.origin}/?w=${projectId}`;
@@ -328,6 +391,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                     projectId={projectId}
                                     token={agentToken}
                                     onPendingUpdate={handlePendingUpdate}
+                                    onFileAction={handleFileAction}
                                 />
                             </Panel>
                         </>
