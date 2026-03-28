@@ -198,7 +198,7 @@ function hasVulnerability(content: string): boolean {
 // Per-room state for the collaborative Docker terminal
 interface TerminalRoom {
     container: Docker.Container;
-    stream: any; // hijacked raw TCP socket from container.attach
+    proc: ReturnType<typeof Bun.spawn>; // docker exec subprocess
 }
 
 const termClients = new Map<string, Set<import("bun").ServerWebSocket<WSData>>>();
@@ -215,7 +215,7 @@ async function stopTerminal(roomId: string): Promise<void> {
     });
 
     if (room) {
-        try { room.stream?.destroy(); } catch (_) {}
+        try { room.proc?.kill(); } catch (_) {}
         try { await room.container.stop({ t: 5 }); } catch (_) {}
         try { await room.container.remove(); } catch (_) {}
         console.log(`[Terminal] Cleaned up container for room ${roomId}`);
@@ -324,21 +324,23 @@ export default {
                         broadcastToRoom(`\x1b[90mImage: ${image}  |  ${hostDir} → /usr/src/app\x1b[0m\r\n`);
 
                         // Pull image (instant if already cached)
+                        // NOTE: docker.modem.followProgress hangs in Bun — drain raw stream events instead
                         broadcastToRoom("\x1b[90mPulling image...\x1b[0m\r\n");
                         await new Promise<void>((res, rej) => {
                             docker.pull(image, (err: Error | null, pullStream: any) => {
                                 if (err) return rej(err);
-                                docker.modem.followProgress(pullStream, (e: Error | null) => e ? rej(e) : res());
+                                pullStream.on("data", () => {}); // drain
+                                pullStream.on("end", res);
+                                pullStream.on("error", rej);
                             });
                         });
 
-                        // Create container — 512 MB RAM, 50% CPU cap, PID limit, bind mount
+                        // Create container — sleep infinity as PID 1 (keeps it alive for docker exec)
+                        // NOTE: container.attach({hijack:true}) hangs in Bun — use Bun.spawn docker exec instead
                         container = await docker.createContainer({
                             Image: image,
-                            Cmd: ["/bin/sh"],
-                            Tty: true,
-                            OpenStdin: true,
-                            StdinOnce: false,
+                            Cmd: ["sleep", "infinity"],
+                            Tty: false,
                             WorkingDir: "/usr/src/app",
                             HostConfig: {
                                 Memory: 512 * 1024 * 1024,
@@ -352,28 +354,37 @@ export default {
                         });
                         await container.start();
 
-                        // Attach — hijacked raw socket (TTY=true → no multiplexing header)
-                        const stream = await container.attach({
-                            stream: true,
-                            stdin: true,
-                            stdout: true,
-                            stderr: true,
-                            hijack: true,
-                        }) as any;
+                        // Spawn interactive shell via docker exec (Bun-compatible approach)
+                        const proc = Bun.spawn(
+                            ["docker", "exec", "-i", container.id, "/bin/sh", "-i"],
+                            { stdin: "pipe", stdout: "pipe", stderr: "pipe" }
+                        );
 
-                        termRooms.set(roomId, { container, stream });
+                        termRooms.set(roomId, { container, proc });
 
-                        // Pipe container output → all connected clients
-                        stream.on("data", (chunk: Buffer) => {
-                            broadcastToRoom(chunk.toString("utf-8"));
-                        });
-                        stream.on("end", () => {
-                            broadcastToRoom("\r\n\x1b[33m[Container exited]\x1b[0m\r\n");
+                        // Pipe stdout → clients (normalize bare LF → CRLF for xterm)
+                        (async () => {
+                            const reader = proc.stdout.getReader();
+                            const dec = new TextDecoder();
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                broadcastToRoom(dec.decode(value).replace(/\r?\n/g, "\r\n"));
+                            }
+                            broadcastToRoom("\r\n\x1b[33m[Shell exited]\x1b[0m\r\n");
                             stopTerminal(roomId);
-                        });
-                        stream.on("error", (e: Error) => {
-                            broadcastToRoom(`\r\n\x1b[31m[Stream error: ${e.message}]\x1b[0m\r\n`);
-                        });
+                        })();
+
+                        // Pipe stderr → clients
+                        (async () => {
+                            const reader = proc.stderr.getReader();
+                            const dec = new TextDecoder();
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                broadcastToRoom(dec.decode(value).replace(/\r?\n/g, "\r\n"));
+                            }
+                        })();
 
                         broadcastToRoom("\x1b[1;32m[Ready]\x1b[0m Sandbox started. Working dir: \x1b[33m/usr/src/app\x1b[0m\r\n\r\n");
 
@@ -434,8 +445,8 @@ export default {
                 // JSON control messages
                 try {
                     const msg = JSON.parse(message);
-                    if (msg.type === "resize" && msg.rows && msg.cols) {
-                        room.container.resize({ h: msg.rows, w: msg.cols }).catch(() => {});
+                    if (msg.type === "resize") {
+                        // No PTY — resize is a no-op; ignore silently
                         return;
                     }
                     if (msg.type === "stop") {
@@ -443,8 +454,23 @@ export default {
                         return;
                     }
                 } catch { /* not JSON — treat as raw stdin */ }
-                // Forward raw keystrokes to container stdin
-                try { room.stream.write(message); } catch (_) {}
+
+                // Translate xterm CR → LF (no PTY driver to do it for us)
+                const input = message === "\r" ? "\n" : message;
+
+                // Server-side echo (no PTY = no automatic echo from shell)
+                const broadcastAll = (msg: string) =>
+                    termClients.get(ws.data.projectId)?.forEach(c => { try { c.send(msg); } catch (_) {} });
+                if (input === "\n") {
+                    broadcastAll("\r\n");
+                } else if (input === "\x7f" || input === "\b") {
+                    broadcastAll("\b \b");
+                } else if (input.length === 1 && input.charCodeAt(0) >= 32) {
+                    broadcastAll(input);
+                }
+
+                // Forward to shell stdin
+                try { room.proc.stdin.write(input); } catch (_) {}
                 return;
             }
 
