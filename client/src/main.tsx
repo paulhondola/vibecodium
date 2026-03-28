@@ -7,6 +7,13 @@ import "./index.css";
 
 const queryClient = new QueryClient();
 
+// Add global handler to suppress harmless React 18 Strict Mode unmount cancelation errors from Monaco
+window.addEventListener("unhandledrejection", (event) => {
+    if (event.reason && event.reason.type === "cancelation") {
+        event.preventDefault();
+    }
+});
+
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
 
