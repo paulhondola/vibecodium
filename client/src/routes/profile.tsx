@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth0 } from "@auth0/auth0-react";
-import { ArrowLeft, LogOut, Activity, FolderGit2, Star, Zap } from "lucide-react";
+import { ArrowLeft, LogOut, Activity, FolderGit2, Star, Zap, Github, Key, Save, Loader2, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 
@@ -15,6 +15,13 @@ function ProfilePage() {
   const [githubRepoCount, setGithubRepoCount] = useState<number | null>(null);
   const [githubCommitCount, setGithubCommitCount] = useState<number | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+
+  // Token Management State
+  const [githubToken, setGithubToken] = useState("");
+  const [vercelToken, setVercelToken] = useState("");
+  const [isSavingTokens, setIsSavingTokens] = useState(false);
+  const [isFetchingTokens, setIsFetchingTokens] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
     if (user?.nickname) {
@@ -35,6 +42,62 @@ function ProfilePage() {
       .finally(() => setIsLoadingStats(false));
     }
   }, [user?.nickname]);
+
+  // Fetch tokens on mount
+  useEffect(() => {
+    if (isAuthenticated) {
+      setIsFetchingTokens(true);
+      getAccessTokenSilently().then(token => {
+        return fetch(`http://localhost:3000/api/users/tokens`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          if (data.githubToken) setGithubToken(data.githubToken);
+          if (data.vercelToken) setVercelToken(data.vercelToken);
+        }
+      })
+      .catch(err => console.error("Failed to fetch tokens", err))
+      .finally(() => setIsFetchingTokens(false));
+    }
+  }, [isAuthenticated, getAccessTokenSilently]);
+
+  const handleSaveTokens = async () => {
+    setIsSavingTokens(true);
+    setSaveMessage(null);
+    try {
+      const token = await getAccessTokenSilently();
+      const res = await fetch(`http://localhost:3000/api/users/tokens`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ 
+          githubToken: githubToken.includes('****') ? undefined : githubToken, 
+          vercelToken: vercelToken.includes('****') ? undefined : vercelToken 
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSaveMessage({ text: "Integrations updated successfully!", type: 'success' });
+        // Refetch to get the masked versions
+        const updatedTokens = await fetch(`http://localhost:3000/api/users/tokens`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).then(r => r.json());
+        if (updatedTokens.githubToken) setGithubToken(updatedTokens.githubToken);
+        if (updatedTokens.vercelToken) setVercelToken(updatedTokens.vercelToken);
+      } else {
+        setSaveMessage({ text: data.error || "Failed to update tokens", type: 'error' });
+      }
+    } catch (e) {
+      setSaveMessage({ text: "Connection error", type: 'error' });
+    }
+    setIsSavingTokens(false);
+    setTimeout(() => setSaveMessage(null), 3000);
+  };
 
   if (isLoading) {
     return (
@@ -116,6 +179,61 @@ function ProfilePage() {
               >
                 <LogOut size={14} /> Disconnect
               </button>
+            </div>
+          </div>
+
+          {/* Token Management Card */}
+          <div className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-white/5 rounded-2xl p-6 shadow-lg">
+            <h3 className="text-md font-['Space_Grotesk'] font-bold text-white tracking-tight flex items-center gap-2 mb-6">
+              <Key size={18} className="text-cyan-400" />
+              Integrations
+            </h3>
+            
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                  <Github size={12} /> GitHub Token (Repo)
+                </label>
+                <input 
+                  type="password"
+                  value={githubToken}
+                  onChange={(e) => setGithubToken(e.target.value)}
+                  placeholder="ghp_xxxxxxxxxxxx"
+                  className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#A855F7]/50 focus:ring-1 focus:ring-[#A855F7]/50 outline-none transition-all"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                  <ShieldCheck size={12} /> Vercel Token
+                </label>
+                <input 
+                  type="password"
+                  value={vercelToken}
+                  onChange={(e) => setVercelToken(e.target.value)}
+                  placeholder="vercel_xxxxxxxxxxxx"
+                  className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#3B82F6]/50 focus:ring-1 focus:ring-[#3B82F6]/50 outline-none transition-all"
+                />
+              </div>
+
+              <button
+                onClick={handleSaveTokens}
+                disabled={isSavingTokens || isFetchingTokens}
+                className="w-full py-2.5 mt-2 bg-[#A855F7]/10 hover:bg-[#A855F7]/20 border border-[#A855F7]/30 text-[#A855F7] rounded-lg transition-all font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
+              >
+                {isSavingTokens ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                {isSavingTokens ? "Syncing..." : "Secure Tokens"}
+              </button>
+
+              {saveMessage && (
+                <motion.p 
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`text-center text-[10px] font-bold ${saveMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`}
+                >
+                  {saveMessage.text}
+                </motion.p>
+              )}
             </div>
           </div>
         </div>

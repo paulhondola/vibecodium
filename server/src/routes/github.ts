@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../middleware/authMiddleware";
+import { getUserTokens } from "../utils/tokens";
 
 const githubRoutes = new Hono();
 
@@ -9,12 +10,21 @@ githubRoutes.use("/*", async (c, next) => {
     return authMiddleware(c, next);
 });
 
-function ghHeaders(): Record<string, string> {
+async function ghHeaders(auth0Id?: string): Promise<Record<string, string>> {
     const h: Record<string, string> = {
         Accept: "application/vnd.github.v3+json",
         "User-Agent": "iTECify-App",
     };
-    const token = process.env.GITHUB_TOKEN;
+    
+    let token = process.env.GITHUB_TOKEN;
+    
+    if (auth0Id) {
+        const userTokens = await getUserTokens(auth0Id);
+        if (userTokens.githubToken) {
+            token = userTokens.githubToken;
+        }
+    }
+
     if (token && token !== "undefined") {
         h["Authorization"] = `Bearer ${token}`;
     }
@@ -23,20 +33,24 @@ function ghHeaders(): Record<string, string> {
 
 // GET /api/github/users/:username — proxy for user info
 githubRoutes.get("/users/:username", async (c) => {
+    const user = (c.get as any)("user");
     const username = c.req.param("username");
-    const res = await fetch(`https://api.github.com/users/${username}`, { headers: ghHeaders() });
+    const headers = await ghHeaders(user?.sub);
+    const res = await fetch(`https://api.github.com/users/${username}`, { headers });
     const data = await res.json();
     return c.json(data, res.ok ? 200 : 500);
 });
 
 // GET /api/github/users/:username/repos — proxy for user repos
 githubRoutes.get("/users/:username/repos", async (c) => {
+    const user = (c.get as any)("user");
     const username = c.req.param("username");
     const sort = c.req.query("sort") || "updated";
     const perPage = c.req.query("per_page") || "50";
+    const headers = await ghHeaders(user?.sub);
     const res = await fetch(
         `https://api.github.com/users/${username}/repos?sort=${sort}&per_page=${perPage}`,
-        { headers: ghHeaders() }
+        { headers }
     );
     const data = await res.json();
     return c.json(data, res.ok ? 200 : 500);
@@ -44,8 +58,9 @@ githubRoutes.get("/users/:username/repos", async (c) => {
 
 // GET /api/github/search/commits — proxy for commit search
 githubRoutes.get("/search/commits", async (c) => {
+    const user = (c.get as any)("user");
     const q = c.req.query("q") || "";
-    const headers = ghHeaders();
+    const headers = await ghHeaders(user?.sub);
     headers["Accept"] = "application/vnd.github.cloak-preview+json";
     const res = await fetch(
         `https://api.github.com/search/commits?q=${encodeURIComponent(q)}`,
