@@ -118,7 +118,8 @@ function DashboardPage() {
     setIsCreating(true);
     setError(null);
 
-    const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     const repoName = formData.get('name') as string;
     const description = formData.get('description') as string;
     const isPrivate = formData.get('private') === 'on';
@@ -165,7 +166,7 @@ function DashboardPage() {
       setShowCreateModal(false);
 
       // Reset form
-      e.currentTarget.reset();
+      form.reset();
 
     } catch (err: any) {
       setError(err.message || 'Failed to create repository');
@@ -474,9 +475,7 @@ function DashboardPage() {
                         <h4 className="font-['Space_Grotesk'] font-bold text-xl text-[#f8fafc] tracking-tight group-hover:text-[#10B981] transition-colors">
                           {repo.full_name}
                         </h4>
-                        <span className={`px-3 py-1 rounded-full ${repo.visibility === 'private' || !(repo as any).public ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-[rgba(16,185,129,0.1)] text-[#10B981] border-[rgba(16,185,129,0.2)]'} text-[9px] font-black uppercase tracking-[0.2em] border`}>
-                          {repo.visibility === 'private' || !(repo as any).public ? 'Private' : 'Public'}
-                        </span>
+                        
                       </div>
                       <div className="flex items-center gap-8 mt-3 font-['JetBrains_Mono'] text-[10px] text-slate-500 uppercase tracking-widest">
                         {repo.language && (
