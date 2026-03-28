@@ -272,7 +272,14 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                         <>
                             <Panel defaultSize={20} minSize={15} className="flex flex-col bg-[#09090b] relative z-10 border-r border-[#27272a]">
                                 <div className="flex-1 overflow-y-auto w-full">
-                                    <FileExplorer files={files} activeFile={activeFile} onSelect={handleSelectFile} />
+                                    <FileExplorer
+                                    files={files}
+                                    activeFile={activeFile}
+                                    onSelect={handleSelectFile}
+                                    projectId={projectId}
+                                    token={agentToken}
+                                    onFilesChange={setFiles}
+                                />
                                 </div>
                                 <div className="h-[220px] shrink-0 border-t border-[#27272a] overflow-y-auto shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
                                     <ActionHistory />
