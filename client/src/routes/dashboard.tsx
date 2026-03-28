@@ -210,9 +210,9 @@ function DashboardPage() {
 
   const getFilteredProjects = () => {
     if (activeFilter === 'recent') {
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      return savedProjects.filter(p => new Date(p.createdAt) > oneWeekAgo);
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      return savedProjects.filter(p => new Date(p.createdAt) > thirtyDaysAgo);
     }
     return savedProjects;
   };
@@ -369,7 +369,7 @@ function DashboardPage() {
                   <span className="material-symbols-outlined text-[#3B82F6]" style={{ fontVariationSettings: "'FILL' 1" }}>folder_open</span>
                 </div>
                 <h2 className="text-xs font-['Space_Grotesk'] font-black uppercase tracking-[0.5em] text-[rgba(248,250,252,0.8)]">
-                  {activeFilter === 'recent' ? 'Recently Opened (Last 7 Days)' : 'Your Workspaces'}
+                  {activeFilter === 'recent' ? 'Recently Opened (Last 30 Days)' : 'Your Workspaces'}
                 </h2>
               </div>
               {activeFilter === 'recent' && (
@@ -388,7 +388,7 @@ function DashboardPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {getFilteredProjects().slice(0, 2).map(project => {
+                {getFilteredProjects().slice(0, 5).map(project => {
                   const date = new Date(project.createdAt);
                   return (
                     <div
