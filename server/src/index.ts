@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { logger } from "hono/logger";
 import Docker from "dockerode";
 import { Writable } from "stream";
 import type { ApiResponse, ExecuteRequest, ExecuteResponse } from "shared";
@@ -56,6 +57,7 @@ const EXEC_COMMANDS: Record<string, () => string[]> = {
 };
 
 export const app = new Hono()
+	.use(logger())
 	.use(cors({
 		origin: (origin) => origin ?? "http://localhost:5173",
 		allowHeaders: ["Content-Type", "Authorization"],

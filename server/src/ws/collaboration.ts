@@ -109,7 +109,7 @@ export function attachCollaborationWS(app: Hono) {
                     const room = rooms.get(projectId);
                     if (!room) return;
 
-                    // ── CODE CHANGE ── (before sender check — client may be race-evicted)
+                    // ── CODE CHANGE ──
                     if (data.type === "code_change") {
                         broadcast(room, {
                             type: "code_update",
