@@ -3,6 +3,7 @@ import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
 import { Terminal as TerminalIcon, StopCircle, Lock, RefreshCw } from "lucide-react";
+import { WS_BASE } from "@/lib/config";
 
 export default function TerminalArea({ projectId }: { projectId: string | null }) {
 	const terminalRef = useRef<HTMLDivElement>(null);
@@ -42,7 +43,7 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
             term.writeln("\x1b[1;36m➜\x1b[0m \x1b[90mConnecting to iTECify sandbox...\x1b[0m");
 
             try {
-                const ws = new WebSocket(`ws://localhost:3000/ws/terminal?roomId=${projectId || "default"}`);
+                const ws = new WebSocket(`${WS_BASE}/ws/terminal?roomId=${projectId || "default"}`);
                 wsInstance.current = ws;
 
                 ws.onopen = () => {

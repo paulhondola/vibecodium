@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
+import { WS_BASE } from "@/lib/config";
 
 interface SocketContextData {
     socket: WebSocket | null;
@@ -25,7 +26,7 @@ export function SocketProvider({ children, projectId }: { children: React.ReactN
         
         const userId = `${user?.sub || "anon"}_${sessionIdRef.current}`;
         const userName = user?.name || user?.nickname || "Anonymous";
-        const url = `ws://localhost:3000/ws/collab/${projectId}?userId=${encodeURIComponent(userId)}&userName=${encodeURIComponent(userName)}`;
+        const url = `${WS_BASE}/ws/collab/${projectId}?userId=${encodeURIComponent(userId)}&userName=${encodeURIComponent(userName)}`;
 
         const connect = () => {
             if (isCleaningUp) return;

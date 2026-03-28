@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { API_BASE } from "@/lib/config";
 
 export interface PendingUpdate {
     id: string;
@@ -144,7 +145,7 @@ export function useAgentStream(): UseAgentStreamResult {
         setIsStreaming(true);
 
         try {
-            const res = await fetch("http://localhost:3000/api/agent/suggest", {
+            const res = await fetch(`${API_BASE}/api/agent/suggest`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
