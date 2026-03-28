@@ -29,12 +29,17 @@ interface EditorAreaProps {
 export default function EditorArea({
     openFiles, onSelectFile, onCloseFile,
     activeFile, userId, remoteCodeUpdate, remoteCursorUpdate,
-    pendingUpdate, onPendingResolved,
+    pendingUpdate, onPendingResolved, projectId,
 }: EditorAreaProps) {
     const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
     const monaco = useMonaco();
     const [code, setCode] = useState("");
     const [isRetro, setIsRetro] = useState(false);
+
+    // Time-Travel Debugging state
+    const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
+    const [snapshots, setSnapshots] = useState<{timestamp: number, content: string}[]>([]);
+    const [snapshotIndex, setSnapshotIndex] = useState(0);
 
     const { send } = useSocket();
     const sendRef = useRef(send);
@@ -95,6 +100,7 @@ export default function EditorArea({
 
     // Sync code when active file changes
     useEffect(() => {
+        setIsTimeTravelOpen(false); // Close timeline on file switch
         if (activeFile) {
             setCode(activeFile.content || "");
             decorationsRef.current?.clear();
@@ -102,6 +108,53 @@ export default function EditorArea({
             setCode("");
         }
     }, [activeFile]);
+
+    // Fetch snapshots when Time-Travel opens
+    useEffect(() => {
+        if (isTimeTravelOpen && projectId && activeFile) {
+            fetch(`/api/projects/${projectId}/snapshots?path=${encodeURIComponent(activeFile.path)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.snapshots) {
+                        // Snapshots from backend might be desc, we want chronological (oldest to newest)
+                        const chronological = [...data.snapshots].reverse();
+                        setSnapshots(chronological);
+                        setSnapshotIndex(chronological.length - 1);
+                    }
+                })
+                .catch(err => console.error("Failed fetching snapshots:", err));
+        }
+    }, [isTimeTravelOpen, projectId, activeFile]);
+
+    // Apply snapshot content to editor when scrubbing slider
+    useEffect(() => {
+        if (isTimeTravelOpen && snapshots.length > 0) {
+            const snappedCode = snapshots[snapshotIndex]?.content || "";
+            setCode(snappedCode);
+            if (editorRef.current) {
+                const model = editorRef.current.getModel();
+                if (model && model.getValue() !== snappedCode) {
+                    isRemoteUpdate.current = true;
+                    model.setValue(snappedCode);
+                    setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+                }
+            }
+        }
+    }, [snapshotIndex, isTimeTravelOpen, snapshots]);
+
+    const handleRestoreSnapshot = () => {
+        if (!isTimeTravelOpen || snapshots.length === 0) return;
+        const restoredContent = snapshots[snapshotIndex]?.content || "";
+        if (activeFileRef.current) {
+            activeFileRef.current.content = restoredContent;
+            sendRef.current({
+                type: "code_change",
+                filePath: activeFileRef.current.path,
+                content: restoredContent
+            });
+        }
+        setIsTimeTravelOpen(false);
+    };
 
     // Emit file_focus when switching files
     useEffect(() => {
@@ -292,11 +345,24 @@ export default function EditorArea({
                         </div>
                     );
                 })}
+                
+                {/* Time Travel Toggle Button */}
+                <div className="ml-auto p-1.5 flex items-center shrink-0 border-l border-[#27272a]">
+                    <button
+                        onClick={() => setIsTimeTravelOpen(prev => !prev)}
+                        className={`text-[10px] px-2 py-1 flex items-center gap-1.5 rounded transition font-medium tracking-wide ${isTimeTravelOpen ? "bg-cyan-500/20 text-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.2)]" : "text-gray-400 hover:text-gray-200 hover:bg-[#27272a]"}`}
+                        title="Time-Travel History"
+                    >
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        TIME TRAVEL
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 relative">
                 {activeFile ? (
-                    <MonacoEditor
+                    <>
+                        <MonacoEditor
                         height="100%"
                         language={language}
                         theme={isRetro ? "retro" : "vs-dark"}
@@ -309,10 +375,56 @@ export default function EditorArea({
                             scrollBeyondLastLine: false,
                             fontFamily: isRetro ? "'Courier New', monospace" : "'JetBrains Mono', 'Fira Code', monospace",
                             padding: { top: 16 },
-                            readOnly: hasPending, // lock editor while diff is shown
+                            readOnly: hasPending || isTimeTravelOpen, // lock editor while diff is shown or time traveling
                         }}
                         onMount={handleEditorDidMount}
                     />
+                    
+                    {/* ── Time-Travel Slider Overlay ── */}
+                    {isTimeTravelOpen && (
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 w-[550px] bg-[#0d0d0f]/95 backdrop-blur-xl border border-cyan-500/40 rounded-xl overflow-hidden shadow-[0_8px_40px_rgba(34,211,238,0.15)] flex flex-col z-30">
+                            <div className="px-4 py-3 flex items-center justify-between border-b border-cyan-500/20 bg-cyan-900/10">
+                                <div className="text-[11px] font-semibold tracking-wider uppercase text-cyan-400 flex items-center gap-2">
+                                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                    History Timeline
+                                </div>
+                                <button onClick={() => setIsTimeTravelOpen(false)} className="text-cyan-600 hover:text-cyan-400 p-1"><X size={14}/></button>
+                            </div>
+                            <div className="p-5 flex flex-col gap-4">
+                                {snapshots.length === 0 ? (
+                                    <p className="text-gray-400 text-[11px] text-center font-mono">No history snapshots found for this file.</p>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center justify-between text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
+                                            <span>Older</span>
+                                            <span className="text-cyan-300 font-mono bg-cyan-900/40 px-2 py-0.5 rounded shadow-inner">
+                                                {new Date(snapshots[snapshotIndex]?.timestamp).toLocaleString()}
+                                            </span>
+                                            <span>Newer</span>
+                                        </div>
+                                        <input 
+                                            type="range" 
+                                            min={0} 
+                                            max={snapshots.length - 1} 
+                                            value={snapshotIndex} 
+                                            onChange={(e) => setSnapshotIndex(Number(e.target.value))}
+                                            className="w-full h-1.5 bg-[#27272a] rounded-lg appearance-none cursor-pointer"
+                                        />
+                                        <div className="flex justify-between items-center mt-2">
+                                            <span className="text-[10px] text-gray-500 font-mono">Revision {snapshotIndex + 1} of {snapshots.length}</span>
+                                            <button 
+                                                onClick={handleRestoreSnapshot}
+                                                className="bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] uppercase tracking-wider font-bold px-4 py-1.5 rounded transition shadow-lg shadow-cyan-900/30"
+                                            >
+                                                Restore Version
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    </>
                 ) : (
                     <div className="flex h-full w-full items-center justify-center bg-[#09090b] select-none">
                         <div className="text-center flex flex-col items-center">
