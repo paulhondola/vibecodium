@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { serveStatic } from "hono/bun";
 import Docker from "dockerode";
 import { Writable } from "stream";
 import type { ApiResponse, ExecuteRequest, ExecuteResponse } from "shared";
@@ -79,7 +80,11 @@ export const app = new Hono()
 	.route("/api/github", githubRoutes)
 	.route("/api/users", usersRouter)
 	.route("/api/deploy", deployRoutes)
-	.get("/", c => c.text("Hello Hono!"))
+	// Serve static assets from the client dist folder
+	.use("/assets/*", serveStatic({ root: "../client/dist" }))
+	.use("/favicon.ico", serveStatic({ path: "../client/dist/favicon.ico" }))
+	.use("/vibecodium_icon.svg", serveStatic({ path: "../client/dist/vibecodium_icon.svg" }))
+	.use("/vite.svg", serveStatic({ path: "../client/dist/vite.svg" }))
 	.get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
 
 	// Security Scanning Endpoint
@@ -246,7 +251,8 @@ export const app = new Hono()
             if (err.statusCode === 404) return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: "Docker image missing!" }, 500);
             return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: "Internal Error executing code." }, 500);
         }
-    });
+    })
+    .get("*", serveStatic({ path: "../client/dist/index.html" }));
 
 // ──────────────────────────────────────────
 // Docker Terminal Engine
