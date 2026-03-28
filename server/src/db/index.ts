@@ -19,7 +19,17 @@ CREATE TABLE IF NOT EXISTS files (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
     path TEXT NOT NULL,
-    content TEXT
+    content TEXT,
+    updated_at INTEGER,
+    UNIQUE(project_id, path)
+);
+
+CREATE TABLE IF NOT EXISTS snapshots (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    path TEXT NOT NULL,
+    content TEXT,
+    timestamp INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS sessions (

@@ -8,6 +8,9 @@ import gitRoutes from "./routes/git";
 import projectsRoutes from "./routes/projects";
 import sessionsRoutes from "./routes/sessions";
 import reelsRoutes from "./routes/reels";
+import { syncProjectFilesToDisk } from "./utils/sync";
+import { db } from "./db";
+import { files, snapshots } from "./db/schema";
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.groq.com/openai/v1";
 const LLM_API_KEY = process.env.LLM_API_KEY ?? "";
@@ -109,9 +112,22 @@ export const app = new Hono()
             const getCmd = EXEC_COMMANDS[body.language];
             if (!imageName || !getCmd) return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: `Unsupported language: ${body.language}` }, 400);
 
+            let cmd = getCmd();
+            let hostConfig: any = { Memory: 256 * 1024 * 1024, NetworkMode: "none" };
+            const reqBody = body as any;
+            
+            if (reqBody.projectId && reqBody.entryFile) {
+                const targetDir = await syncProjectFilesToDisk(reqBody.projectId);
+                hostConfig.Binds = [`${targetDir}:/app`];
+                if (body.language === "node") cmd = ["node", `/app/${reqBody.entryFile}`];
+                if (body.language === "python") cmd = ["python", `/app/${reqBody.entryFile}`];
+                if (body.language === "c++") cmd = ["sh", "-c", `cd /app && g++ ${reqBody.entryFile} && ./a.out`];
+                if (body.language === "rust") cmd = ["sh", "-c", `cd /app && rustc ${reqBody.entryFile} && ./main`];
+            }
+
             const container = await docker.createContainer({
-                Image: imageName, Cmd: getCmd(), Env: [`USER_CODE=${body.code}`],
-                HostConfig: { Memory: 256 * 1024 * 1024, NetworkMode: "none" }, Tty: false
+                Image: imageName, Cmd: cmd, Env: [`USER_CODE=${body.code}`],
+                HostConfig: hostConfig, Tty: false
             });
 
             try {
@@ -296,6 +312,38 @@ export default {
                     outbound.type = outType; 
                     
                     ws.publish(data.projectId, JSON.stringify(outbound));
+
+                    // Async auto-save to DB
+                    if (outbound.type === "code_update" && payload.filePath && payload.content !== undefined) {
+                        setImmediate(() => {
+                            (async () => {
+                                try {
+                                    const timestamp = Date.now();
+                                    await db.insert(files).values({
+                                        id: crypto.randomUUID(),
+                                        projectId: data.projectId,
+                                        path: payload.filePath,
+                                        content: payload.content,
+                                        updatedAt: timestamp
+                                    }).onConflictDoUpdate({
+                                        target: [files.projectId, files.path],
+                                        set: { content: payload.content, updatedAt: Math.floor(timestamp / 1000) }
+                                    });
+
+                                    // Insert snapshot for time-travel feature
+                                    await db.insert(snapshots).values({
+                                        id: crypto.randomUUID(),
+                                        projectId: data.projectId,
+                                        path: payload.filePath,
+                                        content: payload.content,
+                                        timestamp
+                                    });
+                                } catch (e) {
+                                    console.error("[WS AutoSave Error]:", e);
+                                }
+                            })();
+                        });
+                    }
                 }
 
             } catch (err) {

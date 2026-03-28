@@ -3,20 +3,22 @@ import mongoose, { Schema, Document } from "mongoose";
 export interface IProject extends Document {
     userId: string;
     repoUrl: string;
-    name: string;
+    projectName: string;
+    status: "cloning" | "ready" | "error";
+    localPath?: string;
     createdAt: Date;
-    // `_id` and virtual `id` are provided by Mongoose automatically
 }
 
 const ProjectSchema: Schema = new Schema(
     {
         userId: { type: String, required: true, index: true },
         repoUrl: { type: String, required: true },
-        name: { type: String, required: true },
+        projectName: { type: String, required: true },
+        status: { type: String, enum: ["cloning", "ready", "error"], default: "cloning" },
+        localPath: { type: String },
         createdAt: { type: Date, default: Date.now },
     },
     {
-        // Enforce the inclusion of the virtual properties natively when converting to JSON
         toJSON: { virtuals: true },
         toObject: { virtuals: true },
     }
