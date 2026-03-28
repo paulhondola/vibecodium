@@ -10,7 +10,12 @@
       "Bash(ls:*)",
       "Bash(bun run:*)",
       "Bash(curl:*)",
-      "Bash(bun install:*)"
+      "Bash(bun install:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.railway.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(railway --version)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }
