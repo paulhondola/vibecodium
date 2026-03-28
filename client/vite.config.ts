@@ -19,4 +19,10 @@ export default defineConfig({
 			"@": path.resolve(__dirname, "./src"),
 		},
 	},
+	optimizeDeps: {
+		// monaco-emacs uses AMD (define/require) internally which is incompatible with
+		// Vite's ESM pre-bundler. Excluding it prevents the "define is not defined" crash.
+		exclude: ["monaco-emacs"],
+	},
 });
+
