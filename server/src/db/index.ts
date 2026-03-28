@@ -19,8 +19,7 @@ CREATE TABLE IF NOT EXISTS files (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
     path TEXT NOT NULL,
-    content TEXT,
-    FOREIGN KEY(project_id) REFERENCES projects(id)
+    content TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -29,8 +28,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     created_at  INTEGER NOT NULL,
     expires_at  INTEGER NOT NULL,
     created_by  TEXT NOT NULL,
-    label       TEXT,
-    FOREIGN KEY(project_id) REFERENCES projects(id)
+    label       TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions (project_id);
