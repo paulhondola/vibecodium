@@ -1,5 +1,5 @@
-import 'tldraw/tldraw.css';
-import { Tldraw } from 'tldraw';
+import '@tldraw/tldraw/tldraw.css';
+import { Tldraw } from '@tldraw/tldraw';
 import { useMemo } from 'react';
 
 interface WhiteboardAreaProps {
