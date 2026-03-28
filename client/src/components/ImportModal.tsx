@@ -13,30 +13,13 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
 	const [url, setUrl] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const { getAccessTokenSilently, user } = useAuth0();
+	const { getAccessTokenSilently } = useAuth0();
 
 	const handleImport = async () => {
 		if (!url.startsWith("https://github.com/")) {
 			setError("Please enter a valid GitHub repository URL.");
 			return;
 		}
-
-        try {
-            const urlObj = new URL(url);
-            const pathParts = urlObj.pathname.split('/').filter(Boolean);
-            if (pathParts.length >= 2 && user?.nickname && pathParts[0].toLowerCase() !== user.nickname.toLowerCase()) {
-                const cleanUrl = `https://github.com/${pathParts[0]}/${pathParts[1]}`;
-                const externalReposKey = `external_repos_${user.nickname}`;
-                const savedReposStr = localStorage.getItem(externalReposKey);
-                let savedRepos: string[] = savedReposStr ? JSON.parse(savedReposStr) : [];
-                if (!savedRepos.includes(cleanUrl)) {
-                    savedRepos.push(cleanUrl);
-                    localStorage.setItem(externalReposKey, JSON.stringify(savedRepos));
-                }
-            }
-        } catch (e) {
-            // Ignore malformed URL errors for tracking
-        }
 
 		setIsLoading(true);
 		setError(null);
