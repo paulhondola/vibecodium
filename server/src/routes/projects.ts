@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../middleware/authMiddleware";
 import { db } from "../db";
-import { projects, files } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { projects, files, snapshots } from "../db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import mongoose from "mongoose";
@@ -188,6 +188,36 @@ projectsRoutes.get("/:id/files", async (c) => {
             || "Untitled";
 
         return c.json({ success: true, files: projectFiles, projectName });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
+});
+
+projectsRoutes.get("/:id/snapshots", async (c) => {
+    try {
+        const projectId = c.req.param("id");
+        const filePath = c.req.query("path");
+        if (!projectId) return c.json({ error: "Missing projectId" }, 400);
+        
+        const query = db.select({
+            id: snapshots.id,
+            path: snapshots.path,
+            content: snapshots.content,
+            timestamp: snapshots.timestamp
+        }).from(snapshots);
+
+        let projectSnapshots;
+        if (filePath) {
+            projectSnapshots = await query
+                .where(and(eq(snapshots.projectId, projectId), eq(snapshots.path, filePath)))
+                .orderBy(desc(snapshots.timestamp));
+        } else {
+            projectSnapshots = await query
+                .where(eq(snapshots.projectId, projectId))
+                .orderBy(desc(snapshots.timestamp));
+        }
+
+        return c.json({ success: true, snapshots: projectSnapshots });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }
