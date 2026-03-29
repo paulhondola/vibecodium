@@ -107,38 +107,88 @@ projectsRoutes.post("/import", async (c) => {
                 .where(eq(files.projectId, projectId))
                 .limit(1);
 
-            if (sqliteFiles.length === 0 && fs.existsSync(targetDir)) {
-                console.log(`Re-indexing existing project ${projectId}...`);
-                
-                // Ensure project entry exists in SQLite
-                await db.insert(projects).values({
-                    id: projectId,
-                    name: existingProject.projectName,
-                    repoUrl: existingProject.repoUrl,
-                    createdAt: existingProject.createdAt.toISOString()
-                }).onConflictDoNothing();
+            if (sqliteFiles.length === 0) {
+                if (fs.existsSync(targetDir)) {
+                    console.log(`Re-indexing existing project ${projectId} from disk...`);
 
-                const allFiles = getAllFilesRecursive(targetDir, targetDir);
-                const BATCH_SIZE = 100;
-                for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
-                    const batch = allFiles.slice(i, i + BATCH_SIZE);
-                    const filesToInsert = batch.map((f) => ({
-                        id: crypto.randomUUID(),
+                    // Ensure project entry exists in SQLite
+                    await db.insert(projects).values({
+                        id: projectId,
+                        name: existingProject.projectName,
+                        repoUrl: existingProject.repoUrl,
+                        createdAt: existingProject.createdAt.toISOString()
+                    }).onConflictDoNothing();
+
+                    const allFiles = getAllFilesRecursive(targetDir, targetDir);
+                    const BATCH_SIZE = 100;
+                    for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
+                        const batch = allFiles.slice(i, i + BATCH_SIZE);
+                        const filesToInsert = batch.map((f) => ({
+                            id: crypto.randomUUID(),
+                            projectId: projectId,
+                            path: f.path,
+                            content: f.content,
+                            updatedAt: Math.floor(Date.now() / 1000)
+                        }));
+                        await db.insert(files).values(filesToInsert);
+                    }
+
+                    return c.json({
+                        success: true,
+                        message: "Repository re-indexed successfully",
                         projectId: projectId,
-                        path: f.path,
-                        content: f.content,
-                        updatedAt: Math.floor(Date.now() / 1000)
-                    }));
-                    await db.insert(files).values(filesToInsert);
+                        name: existingProject.projectName,
+                        filesCount: allFiles.length
+                    }, 200);
+                } else {
+                    // Disk dir is gone (e.g. /tmp cleared after server restart) — re-clone
+                    console.log(`Re-cloning project ${projectId} (disk dir missing)...`);
+                    await Project.findByIdAndUpdate(projectId, { status: "cloning" });
+
+                    fs.mkdirSync("/tmp/vibecodium", { recursive: true });
+                    const cloneProc = Bun.spawn(["git", "clone", repoUrl, targetDir], {
+                        stdout: "pipe",
+                        stderr: "pipe"
+                    });
+                    const cloneExit = await cloneProc.exited;
+
+                    if (cloneExit !== 0) {
+                        const errText = await new Response(cloneProc.stderr).text();
+                        await Project.findByIdAndUpdate(projectId, { status: "error" });
+                        return c.json({ error: `Re-clone failed: ${errText}` }, 500);
+                    }
+
+                    await Project.findByIdAndUpdate(projectId, { status: "ready", localPath: targetDir });
+
+                    await db.insert(projects).values({
+                        id: projectId,
+                        name: existingProject.projectName,
+                        repoUrl: existingProject.repoUrl,
+                        createdAt: existingProject.createdAt.toISOString()
+                    }).onConflictDoNothing();
+
+                    const allFiles = getAllFilesRecursive(targetDir, targetDir);
+                    const BATCH_SIZE = 100;
+                    for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
+                        const batch = allFiles.slice(i, i + BATCH_SIZE);
+                        const filesToInsert = batch.map((f) => ({
+                            id: crypto.randomUUID(),
+                            projectId: projectId,
+                            path: f.path,
+                            content: f.content,
+                            updatedAt: Math.floor(Date.now() / 1000)
+                        }));
+                        await db.insert(files).values(filesToInsert);
+                    }
+
+                    return c.json({
+                        success: true,
+                        message: "Repository re-cloned and indexed successfully",
+                        projectId: projectId,
+                        name: existingProject.projectName,
+                        filesCount: allFiles.length
+                    }, 200);
                 }
-                
-                return c.json({
-                    success: true,
-                    message: "Repository re-indexed successfully",
-                    projectId: projectId,
-                    name: existingProject.projectName,
-                    filesCount: allFiles.length
-                }, 200);
             }
 
             return c.json({
@@ -223,8 +273,15 @@ projectsRoutes.get("/:id/files", async (c) => {
     try {
         const projectId = c.req.param("id");
         if (!projectId) return c.json({ error: "Missing projectId" }, 400);
-        
-        const projectFiles = await db.select({
+
+        // Fetch project name from MongoDB
+        await connectMongo();
+        const project = await Project.findById(projectId).select("projectName repoUrl localPath");
+        const projectName = project?.projectName
+            || project?.repoUrl?.split("/").pop()?.replace(".git", "")
+            || "Untitled";
+
+        let projectFiles = await db.select({
             id: files.id,
             path: files.path,
             content: files.content
@@ -232,12 +289,42 @@ projectsRoutes.get("/:id/files", async (c) => {
         .from(files)
         .where(eq(files.projectId, projectId));
 
-        // Fetch project name from MongoDB
-        await connectMongo();
-        const project = await Project.findById(projectId).select("projectName repoUrl");
-        const projectName = project?.projectName 
-            || project?.repoUrl?.split("/").pop()?.replace(".git", "")
-            || "Untitled";
+        // Auto-recover: SQLite is empty but disk still has the files (e.g. after server restart)
+        if (projectFiles.length === 0 && project) {
+            const diskDir = project.localPath || `/tmp/vibecodium/${projectId}`;
+            if (fs.existsSync(diskDir)) {
+                console.log(`[files] Re-indexing ${projectId} from disk on read...`);
+
+                await db.insert(projects).values({
+                    id: projectId,
+                    name: projectName,
+                    repoUrl: project.repoUrl || "",
+                    createdAt: (project as any).createdAt?.toISOString?.() ?? new Date().toISOString()
+                }).onConflictDoNothing();
+
+                const diskFiles = getAllFilesRecursive(diskDir, diskDir);
+                const BATCH_SIZE = 100;
+                for (let i = 0; i < diskFiles.length; i += BATCH_SIZE) {
+                    const batch = diskFiles.slice(i, i + BATCH_SIZE);
+                    await db.insert(files).values(batch.map(f => ({
+                        id: crypto.randomUUID(),
+                        projectId,
+                        path: f.path,
+                        content: f.content,
+                        updatedAt: Math.floor(Date.now() / 1000)
+                    })));
+                }
+
+                // Re-query so the response includes the freshly indexed files
+                projectFiles = await db.select({
+                    id: files.id,
+                    path: files.path,
+                    content: files.content
+                })
+                .from(files)
+                .where(eq(files.projectId, projectId));
+            }
+        }
 
         return c.json({ success: true, files: projectFiles, projectName, repoUrl: project?.repoUrl ?? null });
     } catch (e: any) {
