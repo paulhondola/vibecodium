@@ -21,22 +21,10 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 						<span className="material-symbols-outlined text-[#A855F7] fill-1 animate-pulse">terminal</span>
 						iTECify
 					</span>
-					<div className="hidden lg:flex items-center gap-8">
-						<a className="font-['Space_Grotesk'] text-xs font-bold uppercase tracking-[0.2em] text-[#A855F7] border-b border-[#A855F7] transition-all" href="#">Features</a>
-						<a className="font-['Space_Grotesk'] text-xs font-bold uppercase tracking-[0.2em] text-slate-400 hover:text-[#3B82F6] transition-all" href="#">Docs</a>
-						<a className="font-['Space_Grotesk'] text-xs font-bold uppercase tracking-[0.2em] text-slate-400 hover:text-[#3B82F6] transition-all" href="#">Pricing</a>
-						<a className="font-['Space_Grotesk'] text-xs font-bold uppercase tracking-[0.2em] text-slate-400 hover:text-[#3B82F6] transition-all" href="#">Changelog</a>
-					</div>
+
 				</div>
 				<div className="flex items-center gap-4">
-					<div className="hidden sm:flex items-center gap-1 p-1 bg-[rgba(26,31,46,0.3)] rounded-lg">
-						<button className="p-2 rounded hover:text-[#A855F7] transition-colors text-slate-500">
-							<span className="material-symbols-outlined text-[20px]">group_add</span>
-						</button>
-						<button className="p-2 rounded hover:text-[#A855F7] transition-colors text-slate-500">
-							<span className="material-symbols-outlined text-[20px]">share</span>
-						</button>
-					</div>
+
 					<button
 						onClick={() => isAuthenticated ? navigate({ to: "/profile" }) : onEnter()}
 						className="relative overflow-hidden px-6 py-2 rounded-lg bg-[#A855F7] font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest text-[#02040a] hover:scale-105 active:scale-95 transition-all group flex items-center justify-center gap-2"
@@ -345,32 +333,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 					</div>
 				</section>
 
-				{/* Spectacular Testimonial */}
-				<section className="py-40 px-6 text-center relative overflow-hidden">
-					<div className="absolute inset-0 warp-layer opacity-10"></div>
-					<div className="max-w-4xl mx-auto space-y-12 relative z-10">
-						<div className="inline-flex items-center gap-2 px-4 py-1 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.3)] rounded-full">
-							<span className="material-symbols-outlined text-[#10B981] text-[10px] fill-1">verified</span>
-							<span className="text-[9px] font-black text-[#10B981] uppercase tracking-[0.5em]">Verified Industry Titan</span>
-						</div>
-						<blockquote className="text-4xl md:text-5xl font-['Space_Grotesk'] font-medium italic text-[#f8fafc] leading-tight tracking-tighter">
-							"iTECify is the first tool in a decade that actually matches the speed of human thought. It's not just an IDE; it's a{' '}
-							<span className="text-[#A855F7] text-glow">cognitive accelerator</span> for distributed teams."
-						</blockquote>
-						<div className="flex flex-col items-center">
-							<div className="relative mb-6">
-								<div className="absolute -inset-4 bg-[rgba(168,85,247,0.2)] blur-xl rounded-full animate-pulse"></div>
-								<img
-									alt="Testimonial"
-									className="relative w-24 h-24 rounded-full border-2 border-[#A855F7] object-cover"
-									src="https://lh3.googleusercontent.com/aida-public/AB6AXuAdZWvJoFqCklXcWZHRrRsrkK4hVXXwERlMReFALRQUXS-5up8oXe2DcJSUbO-10WnHdCgFYK5cv3pg2wX_8W_XaKIognozJOMQOqqwVGuPV6mtnOnSMZ-Q2Fy9dfdNCXLTZ7t1e6pUCc5eyg6VAJuuhkCrBpLh40fMpbdhm26JKJyzVATOXDinC8mtX2P1JEA1HmvDlrZACvwY8wdN8ZsSlgxhEGpv2htkIMKvVa1wq2v1RCYQH1SiMqoUr9C9ZZd6asNdGI4lvSac"
-								/>
-							</div>
-							<div className="font-['Space_Grotesk'] font-black text-2xl tracking-tight">ALEX THORNE</div>
-							<div className="text-[10px] text-slate-500 uppercase tracking-[0.4em] mt-2">Chief Architect, Synthetix Corp</div>
-						</div>
-					</div>
-				</section>
+
 				
                 <ImportModal 
                     isOpen={isImportModalOpen} 
