@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
-import { Terminal as TerminalIcon, StopCircle, Plus, X, Globe, Lock, RefreshCw } from "lucide-react";
-import { WS_BASE } from "@/lib/config";
+import { Terminal as TerminalIcon, StopCircle, X, Globe, Lock, RefreshCw } from "lucide-react";
+import { WS_BASE, API_BASE } from "@/lib/config";
 
 interface TerminalTab {
     id: string;
@@ -17,7 +17,7 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
     ]);
     const [activeTabId, setActiveTabId] = useState("term-1");
     const [isConnected, setIsConnected] = useState(false);
-    const [previewUrl, setPreviewUrl] = useState("localhost:3000");
+    const [previewUrl, setPreviewUrl] = useState(() => API_BASE.replace(/^https?:\/\//, ""));
 
     const termInstances = useRef<Record<string, Terminal>>({});
     const fitAddons = useRef<Record<string, FitAddon>>({});

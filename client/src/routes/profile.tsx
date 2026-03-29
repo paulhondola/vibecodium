@@ -49,7 +49,7 @@ function ProfilePage() {
     if (isAuthenticated) {
       setIsFetchingTokens(true);
       getAccessTokenSilently().then(token => {
-        return fetch(`http://localhost:3000/api/users/tokens`, {
+        return fetch(`${API_BASE}/api/users/tokens`, {
           headers: { Authorization: `Bearer ${token}` }
         });
       })
@@ -70,7 +70,7 @@ function ProfilePage() {
     setSaveMessage(null);
     try {
       const token = await getAccessTokenSilently();
-      const res = await fetch(`http://localhost:3000/api/users/tokens`, {
+      const res = await fetch(`${API_BASE}/api/users/tokens`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -85,7 +85,7 @@ function ProfilePage() {
       if (data.success) {
         setSaveMessage({ text: "Integrations updated successfully!", type: 'success' });
         // Refetch to get the masked versions
-        const updatedTokens = await fetch(`http://localhost:3000/api/users/tokens`, {
+        const updatedTokens = await fetch(`${API_BASE}/api/users/tokens`, {
           headers: { Authorization: `Bearer ${token}` }
         }).then(r => r.json());
         if (updatedTokens.githubToken) setGithubToken(updatedTokens.githubToken);

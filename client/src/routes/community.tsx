@@ -74,7 +74,7 @@ function CommunityPage() {
             <div className="border-b border-[#27272a] bg-[#18181b]">
                 <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
                     <button
-                        onClick={() => navigate({ to: "/" })}
+                        onClick={() => navigate({ to: "/", search: { w: undefined } })}
                         className="flex items-center gap-2 text-gray-400 hover:text-cyan-400 transition-colors text-sm"
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
