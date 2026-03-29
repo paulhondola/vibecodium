@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth0 } from "@auth0/auth0-react";
-import { Loader2, X } from "lucide-react";
+import { Loader2, X, ExternalLink } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import CoderMatchModal from "../components/CoderMatchModal";
 import GamePIP from "../components/GamePIP";
@@ -31,6 +31,14 @@ interface DBProject {
   createdAt: string;
 }
 
+interface DeployedApp {
+  _id: string;
+  title: string;
+  project_repo: string;
+  project_link: string;
+  createdAt: string;
+}
+
 function DashboardPage() {
   const { user, isAuthenticated, isLoading, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
@@ -46,6 +54,8 @@ function DashboardPage() {
   const [showGame, setShowGame] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'recent'>('all');
+  const [deployedApps, setDeployedApps] = useState<DeployedApp[]>([]);
+  const [isLoadingApps, setIsLoadingApps] = useState(false);
 
   const reposRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
@@ -87,6 +97,14 @@ function DashboardPage() {
         })
         .catch(console.error)
         .finally(() => setIsFetchingExternal(false));
+
+      setIsLoadingApps(true);
+      getAccessTokenSilently()
+        .then(token => fetch(`${API_BASE}/api/deploy`, { headers: { Authorization: `Bearer ${token}` } }))
+        .then(r => r.json())
+        .then(data => { if (data.success) setDeployedApps(data.apps); })
+        .catch(console.error)
+        .finally(() => setIsLoadingApps(false));
     }
   }, [user?.nickname, getAccessTokenSilently]);
 
@@ -448,6 +466,71 @@ function DashboardPage() {
                   <h3 className="text-[11px] font-['Space_Grotesk'] font-black uppercase tracking-[0.4em] text-[rgba(248,250,252,0.6)] group-hover:text-[#A855F7] transition-colors">Import Project</h3>
                   <p className="text-[9px] text-slate-600 mt-4 uppercase tracking-[0.3em] font-['JetBrains_Mono']">From GitHub</p>
                 </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Deployed Apps Section */}
+        {(isLoadingApps || deployedApps.length > 0) && (
+          <section className="mb-24">
+            <div className="flex items-center gap-5 mb-10 border-b border-white/5 pb-4">
+              <div className="w-10 h-10 rounded bg-[rgba(168,85,247,0.1)] flex items-center justify-center border border-[rgba(168,85,247,0.2)]">
+                <span className="material-symbols-outlined text-[#A855F7]" style={{ fontVariationSettings: "'FILL' 1" }}>rocket_launch</span>
+              </div>
+              <h2 className="text-xs font-['Space_Grotesk'] font-black uppercase tracking-[0.5em] text-[rgba(248,250,252,0.8)]">
+                Deployed Apps
+              </h2>
+            </div>
+            {isLoadingApps ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 size={32} className="animate-spin text-[#A855F7] mb-4" />
+                <div className="text-slate-400 font-['Space_Grotesk'] tracking-widest uppercase text-xs">Loading deployments...</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {deployedApps.map(app => (
+                  <div
+                    key={app._id}
+                    className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-[rgba(168,85,247,0.15)] shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] group relative p-8 rounded-xl transition-all duration-300 overflow-hidden hover:border-[rgba(168,85,247,0.5)] hover:shadow-[0_0_30px_rgba(168,85,247,0.2)]"
+                  >
+                    <div className="absolute top-0 left-0 w-1 h-full bg-[#A855F7] opacity-30 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-start mb-6">
+                        <div className="w-12 h-12 rounded-lg bg-[rgba(168,85,247,0.1)] flex items-center justify-center border border-[rgba(168,85,247,0.2)]">
+                          <span className="material-symbols-outlined text-[#A855F7] text-2xl">language</span>
+                        </div>
+                        <span className="flex items-center gap-1.5 text-[10px] font-['JetBrains_Mono'] text-[#10B981] uppercase tracking-widest">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] shadow-[0_0_6px_#10B981]" />
+                          Live
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-['Space_Grotesk'] font-bold mb-2 tracking-tight text-white group-hover:text-[#A855F7] transition-colors">
+                        {app.title}
+                      </h3>
+                      <a
+                        href={app.project_repo}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-['JetBrains_Mono'] text-slate-500 hover:text-cyan-400 transition-colors truncate block mb-1"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        {app.project_repo.replace("https://github.com/", "github.com/")}
+                      </a>
+                      <div className="text-[10px] font-['JetBrains_Mono'] text-slate-600 mb-6">
+                        {new Date(app.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </div>
+                      <a
+                        href={app.project_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center gap-2 py-3 bg-[rgba(168,85,247,0.1)] border border-[rgba(168,85,247,0.3)] text-[#A855F7] font-black text-[10px] uppercase tracking-[0.3em] rounded-lg hover:bg-[#A855F7] hover:text-[#02040a] transition-all active:scale-95"
+                      >
+                        <ExternalLink size={13} /> Visit App
+                      </a>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </section>

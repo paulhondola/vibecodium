@@ -15,8 +15,15 @@ interface HelpPost {
     description: string;
     repoUrl: string;
     userName: string;
+    difficulty: "easy" | "medium" | "hard";
     createdAt: string;
 }
+
+const DIFFICULTY_STYLES = {
+    easy:   { label: "Easy",   className: "bg-emerald-500/15 border-emerald-500/40 text-emerald-400" },
+    medium: { label: "Medium", className: "bg-yellow-500/15 border-yellow-500/40 text-yellow-400" },
+    hard:   { label: "Hard",   className: "bg-red-500/15 border-red-500/40 text-red-400" },
+} as const;
 
 function CommunityPage() {
     const navigate = useNavigate();
@@ -133,7 +140,7 @@ function CommunityPage() {
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1 min-w-0">
                                         {/* Meta */}
-                                        <div className="flex items-center gap-3 mb-2">
+                                        <div className="flex items-center gap-3 mb-2 flex-wrap">
                                             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#A855F7] to-cyan-500 flex items-center justify-center text-[11px] font-bold text-white shrink-0">
                                                 {post.userName.substring(0, 2).toUpperCase()}
                                             </div>
@@ -143,6 +150,15 @@ function CommunityPage() {
                                                 <Clock size={11} />
                                                 {formatDate(post.createdAt)}
                                             </span>
+                                            <span className="text-gray-600">·</span>
+                                            {(() => {
+                                                const d = DIFFICULTY_STYLES[post.difficulty] ?? DIFFICULTY_STYLES.medium;
+                                                return (
+                                                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-widest ${d.className}`}>
+                                                        {d.label}
+                                                    </span>
+                                                );
+                                            })()}
                                         </div>
 
                                         {/* Title */}

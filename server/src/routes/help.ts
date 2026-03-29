@@ -10,11 +10,13 @@ helpRoutes.post("/", authMiddleware, async (c) => {
     try {
         await connectMongo();
         const user = (c.get as any)("user");
-        const body = await c.req.json<{ title: string; description: string; repoUrl: string }>();
+        const body = await c.req.json<{ title: string; description: string; repoUrl: string; difficulty?: string }>();
 
         if (!body.title || !body.description || !body.repoUrl) {
             return c.json({ success: false, error: "Title, Description, and RepoUrl are required." }, 400);
         }
+
+        const difficulty = ["easy", "medium", "hard"].includes(body.difficulty ?? "") ? body.difficulty : "medium";
 
         const newPost = await HelpPost.create({
             title: body.title,
@@ -22,6 +24,7 @@ helpRoutes.post("/", authMiddleware, async (c) => {
             repoUrl: body.repoUrl,
             userName: user.nickname || user.name || "Anonymous",
             auth0_id: user.sub,
+            difficulty,
         });
 
         return c.json({ success: true, post: newPost }, 201);
