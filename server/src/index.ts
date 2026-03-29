@@ -14,6 +14,9 @@ import githubRoutes from "./routes/github";
 import usersRouter from "./routes/users";
 import deployRoutes from "./routes/deploy";
 import helpRoutes from "./routes/help";
+import timelineRoutes from "./routes/timeline";
+import { connectMongo } from "./db/mongoose";
+import { TimelineEvent } from "./db/models/TimelineEvent";
 import { syncProjectFilesToDisk } from "./utils/sync";
 import { db } from "./db";
 import { files, snapshots } from "./db/schema";
@@ -82,6 +85,7 @@ export const app = new Hono()
 	.route("/api/users", usersRouter)
 	.route("/api/deploy", deployRoutes)
     .route("/api/help", helpRoutes)
+    .route("/api/timeline", timelineRoutes)
 	// Serve static assets from the client dist folder
 	.use("/assets/*", serveStatic({ root: "../client/dist" }))
 	.use("/favicon.ico", serveStatic({ path: "../client/dist/favicon.ico" }))
@@ -289,6 +293,10 @@ const termClients     = new Map<string, Set<import("bun").ServerWebSocket<WSData
 const termRooms       = new Map<string, TerminalRoom>();
 const termLineBuffers = new Map<string, string>(); // per-room line edit buffer
 
+// Per project+file event counter for checkpoint marking.
+// NOTE: resets on server restart — checkpoints are cosmetic anchors, not exact.
+const timelineEventCounters = new Map<string, number>(); // key: `${projectId}::${filePath}`
+
 async function stopTerminal(roomId: string): Promise<void> {
     const room    = termRooms.get(roomId);
     const clients = termClients.get(roomId);
@@ -312,6 +320,50 @@ async function stopTerminal(roomId: string): Promise<void> {
 // Bun.serve Engine
 // ──────────────────────────────────────────
 const COLORS = ["#A855F7", "#3B82F6", "#10B981", "#F59E0B", "#EC4899", "#EF4444", "#14B8A6", "#F97316"];
+
+// Fire-and-forget MongoDB timeline logger.
+// Must be called from within an already-async context (e.g. inside a setImmediate IIFE).
+// Save every Nth code_update to MongoDB to avoid flooding the DB.
+// agent_accepted events are always saved (they're rare and always meaningful).
+const TIMELINE_SAVE_INTERVAL = 7;
+
+function logTimelineEvent(
+    projectId: string,
+    filePath: string,
+    content: string,
+    eventType: "code_update" | "agent_accepted",
+    userId: string,
+    userName: string,
+    userColor: string,
+): void {
+    if (content.length > 500_000) return; // skip snapshots for very large files
+    (async () => {
+        try {
+            await connectMongo();
+            const key = `${projectId}::${filePath}`;
+            const count = (timelineEventCounters.get(key) ?? 0) + 1;
+            timelineEventCounters.set(key, count);
+
+            // Throttle: only persist every Nth code_update.
+            // Always persist agent_accepted — they are semantically significant.
+            if (eventType === "code_update" && count % TIMELINE_SAVE_INTERVAL !== 0) return;
+
+            await TimelineEvent.create({
+                projectId,
+                filePath,
+                eventType,
+                userId,
+                userName,
+                userColor,
+                content,
+                isCheckpoint: count % 50 === 0,
+                createdAt: new Date(),
+            });
+        } catch (e) {
+            console.error("[Timeline log error]:", e);
+        }
+    })();
+}
 
 interface WSData {
     projectId: string;
@@ -655,6 +707,11 @@ export default {
                                         content: payload.content,
                                         timestamp
                                     });
+                                    // Log rich event to MongoDB for timeline feature
+                                    logTimelineEvent(
+                                        data.projectId, payload.filePath, payload.content,
+                                        "agent_accepted", data.clientId, data.userName, data.color
+                                    );
                                 } catch (e) {
                                     console.error("[WS AgentAccept DB Error]:", e);
                                 }
@@ -712,6 +769,11 @@ export default {
                                         content: payload.content,
                                         timestamp
                                     });
+                                    // Log rich event to MongoDB for timeline feature
+                                    logTimelineEvent(
+                                        data.projectId, payload.filePath, payload.content,
+                                        "code_update", data.clientId, data.userName, data.color
+                                    );
                                 } catch (e) {
                                     console.error("[WS AutoSave Error]:", e);
                                 }
@@ -747,9 +809,10 @@ export default {
                 clientId: data.clientId
             }));
 
+            const remaining = Array.from(activeClients.values()).filter(c => c.projectId === data.projectId);
+
             if (data.isHost) {
                 // Determine new host if old host left
-                const remaining = Array.from(activeClients.values()).filter(c => c.projectId === data.projectId);
                 if (remaining.length > 0) {
                     const newHost = remaining[0];
                     if (newHost) {
@@ -762,6 +825,26 @@ export default {
                     roomHosts.delete(data.projectId);
                 }
             }
+
+            // When the last collaborator exits the project, purge timeline events from MongoDB
+            // so the DB doesn't accumulate data from abandoned sessions.
+            if (remaining.length === 0) {
+                // Clear in-memory counters for this project
+                for (const key of timelineEventCounters.keys()) {
+                    if (key.startsWith(`${data.projectId}::`)) timelineEventCounters.delete(key);
+                }
+                // Fire-and-forget MongoDB cleanup
+                (async () => {
+                    try {
+                        await connectMongo();
+                        await TimelineEvent.deleteMany({ projectId: data.projectId });
+                        console.log(`[Timeline] Purged events for project ${data.projectId}`);
+                    } catch (e) {
+                        console.error("[Timeline purge error]:", e);
+                    }
+                })();
+            }
+
             console.log(`[WS] ${data.userName} left ${data.projectId}`);
         }
     }
