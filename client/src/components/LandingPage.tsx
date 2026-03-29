@@ -24,6 +24,13 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 
 				</div>
 				<div className="flex items-center gap-4">
+                    <button
+                        onClick={() => navigate({ to: "/community" })}
+                        className="text-xs font-semibold text-gray-400 hover:text-[#A855F7] transition-colors tracking-widest uppercase flex items-center gap-1.5"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        Community
+                    </button>
 
 					<button
 						onClick={() => isAuthenticated ? navigate({ to: "/profile" }) : onEnter()}
