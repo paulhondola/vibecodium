@@ -6,6 +6,7 @@ export interface IHelpPost extends Document {
     repoUrl: string;
     userName: string;
     auth0_id: string;
+    difficulty: "easy" | "medium" | "hard";
     createdAt: Date;
 }
 
@@ -16,6 +17,7 @@ const HelpPostSchema: Schema = new Schema(
         repoUrl: { type: String, required: true },
         userName: { type: String, required: true },
         auth0_id: { type: String, required: true },
+        difficulty: { type: String, enum: ["easy", "medium", "hard"], default: "medium" },
         createdAt: { type: Date, default: Date.now },
     },
     {

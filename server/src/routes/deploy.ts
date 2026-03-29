@@ -6,6 +6,7 @@ import { scanCode } from "../security/scanner";
 import { rooms, broadcast } from "../ws/collaboration";
 import { connectMongo } from "../db/mongoose";
 import { Project } from "../db/models/Project";
+import { DeployedApp } from "../db/models/DeployedApp";
 import { getUserTokens } from "../utils/tokens";
 import { authMiddleware } from "../middleware/authMiddleware";
 
@@ -125,6 +126,14 @@ deployRoutes.post("/:projectId", async (c) => {
         const liveUrl = `https://${deployData.url}`;
         sendLog(`✨ Deployment successful! Live at: ${liveUrl}`, "success");
 
+        // Persist deployment record
+        await DeployedApp.create({
+            auth0_id: userId,
+            title: projectName,
+            project_repo: projectRow.repoUrl || "",
+            project_link: liveUrl,
+        });
+
         return c.json({
             success: true,
             url: liveUrl,
@@ -136,6 +145,17 @@ deployRoutes.post("/:projectId", async (c) => {
         sendLog(`❌ Deployment failed: ${err.message}`, "error");
         return c.json({ success: false, error: err.message }, 500);
     }
+});
+
+// GET /api/deployments — list all deployments for the authenticated user
+deployRoutes.get("/", async (c) => {
+    const user = (c.get as any)("user");
+    const userId = user?.sub || user?.nickname;
+    if (!userId) return c.json({ error: "Unauthorized" }, 401);
+
+    await connectMongo();
+    const apps = await DeployedApp.find({ auth0_id: userId }).sort({ createdAt: -1 });
+    return c.json({ success: true, apps });
 });
 
 export default deployRoutes;

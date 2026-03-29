@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { API_BASE } from "@/lib/config";
 
+
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
 });

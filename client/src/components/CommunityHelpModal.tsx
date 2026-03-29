@@ -14,6 +14,7 @@ export default function CommunityHelpModal({ isOpen, onClose, repoUrl }: Communi
     const { getAccessTokenSilently } = useAuth0();
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
+    const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -32,7 +33,7 @@ export default function CommunityHelpModal({ isOpen, onClose, repoUrl }: Communi
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ title, description, repoUrl }),
+                body: JSON.stringify({ title, description, repoUrl, difficulty }),
             });
 
             const data = await res.json();
@@ -40,6 +41,7 @@ export default function CommunityHelpModal({ isOpen, onClose, repoUrl }: Communi
                 onClose();
                 setTitle("");
                 setDescription("");
+                setDifficulty("medium");
             } else {
                 setError(data.error || "Failed to post help request.");
             }
@@ -96,6 +98,30 @@ export default function CommunityHelpModal({ isOpen, onClose, repoUrl }: Communi
                                     className="w-full bg-[#02040a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-[#A855F7]/50 focus:ring-1 focus:ring-[#A855F7]/50 outline-none transition-all resize-none placeholder:text-gray-600"
                                     required
                                 />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Task Difficulty</label>
+                                <div className="flex gap-3">
+                                    {(["easy", "medium", "hard"] as const).map((level) => {
+                                        const styles = {
+                                            easy:   { active: "bg-emerald-500/20 border-emerald-500/60 text-emerald-400", idle: "border-white/10 text-slate-500 hover:border-emerald-500/30 hover:text-emerald-400" },
+                                            medium: { active: "bg-yellow-500/20 border-yellow-500/60 text-yellow-400",   idle: "border-white/10 text-slate-500 hover:border-yellow-500/30 hover:text-yellow-400" },
+                                            hard:   { active: "bg-red-500/20 border-red-500/60 text-red-400",             idle: "border-white/10 text-slate-500 hover:border-red-500/30 hover:text-red-400" },
+                                        };
+                                        const isActive = difficulty === level;
+                                        return (
+                                            <button
+                                                key={level}
+                                                type="button"
+                                                onClick={() => setDifficulty(level)}
+                                                className={`flex-1 py-2.5 rounded-xl border text-xs font-bold uppercase tracking-widest transition-all ${isActive ? styles[level].active : styles[level].idle}`}
+                                            >
+                                                {level}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
 
                             <div className="p-4 bg-[#02040a] border border-white/5 rounded-xl">
