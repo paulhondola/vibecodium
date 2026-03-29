@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
-import { db } from "../db";
-import { users } from "../db/schema";
+import { connectMongo } from "../db/mongoose";
+import { User } from "../db/models/User";
 
 const FUN_BIOS = [
     "I use Arch btw.",
@@ -57,38 +57,37 @@ export const authMiddleware = createMiddleware(async (c, next) => {
             return c.json({ error: "Unauthorized: Invalid or expired Auth0 token" }, 401);
         }
 
-        const user = (await response.json()) as any;
+        const userPayload = (await response.json()) as any;
         
-        cache.set(token, { user, expiresAt: now + 15 * 60 * 1000 }); // 15 minutes
+        cache.set(token, { user: userPayload, expiresAt: now + 15 * 60 * 1000 }); // 15 minutes
         
-        // Upsert user into database
+        // Upsert user into database (MongoDB)
         const randomBio = FUN_BIOS[Math.floor(Math.random() * FUN_BIOS.length)];
         const randomLang = LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)];
         const randomLoc = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
 
         try {
-            await db.insert(users).values({
-                auth0Id: user.sub,
-                name: user.name || user.nickname || "Anonymous Coder",
-                email: user.email || "no-email@vibecodium.com",
-                picture: user.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.sub}`,
-                bio: randomBio,
-                language: randomLang,
-                location: randomLoc,
-                createdAt: Date.now()
-            }).onConflictDoUpdate({
-                target: users.auth0Id,
-                set: {
-                    name: user.name || user.nickname || "Anonymous Coder",
-                    picture: user.picture
-                }
-            });
+            await connectMongo();
+            await User.findOneAndUpdate(
+                { auth0Id: userPayload.sub },
+                {
+                    auth0Id: userPayload.sub,
+                    name: userPayload.name || userPayload.nickname || "Anonymous Coder",
+                    email: userPayload.email || "no-email@vibecodium.com",
+                    picture: userPayload.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userPayload.sub}`,
+                    bio: randomBio,
+                    language: randomLang,
+                    location: randomLoc,
+                    createdAt: userPayload.createdAt || Date.now()
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
         } catch (e) {
-            console.error("Failed to upsert user:", e);
+            console.error("Failed to upsert user in MongoDB:", e);
         }
         
         // Set the valid decoded user payload in context
-		c.set("user", user);
+		c.set("user", userPayload);
 		await next();
 
 	} catch (error: any) {

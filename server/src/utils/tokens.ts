@@ -1,14 +1,15 @@
-import { db } from "../db";
-import { user_tokens } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { connectMongo } from "../db/mongoose";
+import { UserToken } from "../db/models/UserToken";
 
 export async function getUserTokens(auth0Id: string) {
-    const [token] = await db.select().from(user_tokens).where(eq(user_tokens.auth0Id, auth0Id));
-    if (!token) {
+    await connectMongo();
+    const tokens = await UserToken.findOne({ auth0Id });
+    if (!tokens) {
         return { githubToken: null, vercelToken: null };
     }
     return {
-        githubToken: token.githubToken,
-        vercelToken: token.vercelToken,
+        githubToken: tokens.githubToken,
+        vercelToken: tokens.vercelToken,
     };
 }
+
