@@ -6,6 +6,8 @@ import type { ProjectFile } from "./Workspace";
 import { useSocket } from "../contexts/SocketProvider";
 import type { PendingUpdate } from "../hooks/useAgentStream";
 import GamePIP from "./GamePIP";
+import TimelineBar, { type TimelineEvent } from "./TimelineBar";
+import { API_BASE } from "@/lib/config";
 
 function safeCssId(id: string) {
     return id.replace(/[^a-zA-Z0-9]/g, "_");
@@ -25,12 +27,14 @@ interface EditorAreaProps {
     pendingUpdate?: PendingUpdate | null;
     onPendingResolved?: () => void;
     projectId?: string | null;
+    agentToken?: string | null;
+    powerModeEnabled?: boolean;
 }
 
 export default function EditorArea({
     openFiles, onSelectFile, onCloseFile,
     activeFile, userId, remoteCodeUpdate, remoteCursorUpdate,
-    pendingUpdate, onPendingResolved, projectId,
+    pendingUpdate, onPendingResolved, projectId, agentToken, powerModeEnabled = false,
 }: EditorAreaProps) {
     const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
     const monaco = useMonaco();
@@ -46,8 +50,10 @@ export default function EditorArea({
 
     // Time-Travel Debugging state
     const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
-    const [snapshots, setSnapshots] = useState<{timestamp: number, content: string}[]>([]);
-    const [snapshotIndex, setSnapshotIndex] = useState(0);
+    const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+    const [eventIndex, setEventIndex] = useState(0);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState<string | null>(null);
 
     // Game state
     const [showGame, setShowGame] = useState(false);
@@ -120,27 +126,31 @@ export default function EditorArea({
         }
     }, [activeFile]);
 
-    // Fetch snapshots when Time-Travel opens
+    // Fetch timeline events when Time-Travel opens
     useEffect(() => {
-        if (isTimeTravelOpen && projectId && activeFile) {
-            fetch(`/api/projects/${projectId}/snapshots?path=${encodeURIComponent(activeFile.path)}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success && data.snapshots) {
-                        // Snapshots from backend might be desc, we want chronological (oldest to newest)
-                        const chronological = [...data.snapshots].reverse();
-                        setSnapshots(chronological);
-                        setSnapshotIndex(chronological.length - 1);
-                    }
-                })
-                .catch(err => console.error("Failed fetching snapshots:", err));
-        }
+        if (!isTimeTravelOpen || !projectId || !activeFile) return;
+        setTimelineEvents([]);
+        setAnalysisResult(null);
+        const headers: Record<string, string> = {};
+        if (agentToken) headers["Authorization"] = `Bearer ${agentToken}`;
+        fetch(
+            `${API_BASE}/api/timeline/${projectId}?path=${encodeURIComponent(activeFile.path)}`,
+            { headers }
+        )
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.events) {
+                    setTimelineEvents(data.events); // already ASC (oldest → newest)
+                    setEventIndex(data.events.length - 1); // start at latest
+                }
+            })
+            .catch(err => console.error("Failed fetching timeline:", err));
     }, [isTimeTravelOpen, projectId, activeFile]);
 
-    // Apply snapshot content to editor when scrubbing slider
+    // Apply timeline event content to editor when scrubbing
     useEffect(() => {
-        if (isTimeTravelOpen && snapshots.length > 0) {
-            const snappedCode = snapshots[snapshotIndex]?.content || "";
+        if (isTimeTravelOpen && timelineEvents.length > 0) {
+            const snappedCode = timelineEvents[eventIndex]?.content ?? "";
             setCode(snappedCode);
             if (editorRef.current) {
                 const model = editorRef.current.getModel();
@@ -151,21 +161,42 @@ export default function EditorArea({
                 }
             }
         }
-    }, [snapshotIndex, isTimeTravelOpen, snapshots]);
+    }, [eventIndex, isTimeTravelOpen, timelineEvents]);
 
-    const handleRestoreSnapshot = () => {
-        if (!isTimeTravelOpen || snapshots.length === 0) return;
-        const restoredContent = snapshots[snapshotIndex]?.content || "";
+    const handleRestoreEvent = () => {
+        if (!isTimeTravelOpen || timelineEvents.length === 0) return;
+        const restoredContent = timelineEvents[eventIndex]?.content ?? "";
         if (activeFileRef.current) {
             activeFileRef.current.content = restoredContent;
             sendRef.current({
                 type: "code_change",
                 filePath: activeFileRef.current.path,
-                content: restoredContent
+                content: restoredContent,
             });
         }
         setIsTimeTravelOpen(false);
     };
+
+    const handleAnalyze = useCallback(async (eventIds: string[]): Promise<void> => {
+        if (!projectId || !activeFile) return;
+        setIsAnalyzing(true);
+        setAnalysisResult(null);
+        try {
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            if (agentToken) headers["Authorization"] = `Bearer ${agentToken}`;
+            const res = await fetch(`${API_BASE}/api/timeline/${projectId}/analyze`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ filePath: activeFile.path, eventIds }),
+            });
+            const data = await res.json();
+            if (data.success) setAnalysisResult(data.analysis);
+        } catch (e) {
+            console.error("AI analysis failed:", e);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    }, [projectId, activeFile, agentToken]);
 
 
 
@@ -246,8 +277,9 @@ export default function EditorArea({
             }
         });
 
-        // Power Mode: track keystrokes for combo
+        // Power Mode: track keystrokes for combo (only when enabled via Tools menu)
         ed.onKeyDown((e) => {
+            if (!powerModeEnabled) return;
             // Only count printable characters (not modifier-only keys)
             if (e.code.startsWith('Key') || e.code.startsWith('Digit') || e.code === 'Space' || e.code === 'Enter' || e.code === 'Backspace') {
                 setCombo(c => {
@@ -442,8 +474,8 @@ export default function EditorArea({
                 </div>
             </div>
 
-            {/* Power Mode indicator */}
-            {combo > 10 && (
+            {/* Power Mode indicator — only when enabled */}
+            {powerModeEnabled && combo > 10 && (
                 <div className={`absolute top-12 right-4 z-40 pointer-events-none flex flex-col items-end gap-1 transition-all duration-200 ${isPowerMode ? 'opacity-100' : 'opacity-70'}`}>
                     <div className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded font-mono ${
                         isPowerMode 
@@ -461,12 +493,12 @@ export default function EditorArea({
             <div
                 ref={editorContainerRef}
                 className="flex-1 relative"
-                style={isPowerMode ? {
+                style={powerModeEnabled && isPowerMode ? {
                     animation: 'shake 0.08s ease-in-out infinite alternate',
                 } : undefined}
             >
-                {/* Sparks */}
-                {sparks.map(s => (
+                {/* Sparks — only when Power Mode is enabled */}
+                {powerModeEnabled && sparks.map(s => (
                     <div
                         key={s.id}
                         className="absolute pointer-events-none"
@@ -506,49 +538,20 @@ export default function EditorArea({
                         onMount={handleEditorDidMount}
                     />
                     
-                    {/* ── Time-Travel Slider Overlay ── */}
+                    {/* ── Time-Travel Timeline Bar ── */}
                     {isTimeTravelOpen && (
-                        <div className="absolute top-4 left-1/2 -translate-x-1/2 w-[550px] bg-[#0d0d0f]/95 backdrop-blur-xl border border-cyan-500/40 rounded-xl overflow-hidden shadow-[0_8px_40px_rgba(34,211,238,0.15)] flex flex-col z-30">
-                            <div className="px-4 py-3 flex items-center justify-between border-b border-cyan-500/20 bg-cyan-900/10">
-                                <div className="text-[11px] font-semibold tracking-wider uppercase text-cyan-400 flex items-center gap-2">
-                                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                                    History Timeline
-                                </div>
-                                <button onClick={() => setIsTimeTravelOpen(false)} className="text-cyan-600 hover:text-cyan-400 p-1"><X size={14}/></button>
-                            </div>
-                            <div className="p-5 flex flex-col gap-4">
-                                {snapshots.length === 0 ? (
-                                    <p className="text-gray-400 text-[11px] text-center font-mono">No history snapshots found for this file.</p>
-                                ) : (
-                                    <>
-                                        <div className="flex items-center justify-between text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
-                                            <span>Older</span>
-                                            <span className="text-cyan-300 font-mono bg-cyan-900/40 px-2 py-0.5 rounded shadow-inner">
-                                                {new Date(snapshots[snapshotIndex]?.timestamp).toLocaleString()}
-                                            </span>
-                                            <span>Newer</span>
-                                        </div>
-                                        <input 
-                                            type="range" 
-                                            min={0} 
-                                            max={snapshots.length - 1} 
-                                            value={snapshotIndex} 
-                                            onChange={(e) => setSnapshotIndex(Number(e.target.value))}
-                                            className="w-full h-1.5 bg-[#27272a] rounded-lg appearance-none cursor-pointer"
-                                        />
-                                        <div className="flex justify-between items-center mt-2">
-                                            <span className="text-[10px] text-gray-500 font-mono">Revision {snapshotIndex + 1} of {snapshots.length}</span>
-                                            <button 
-                                                onClick={handleRestoreSnapshot}
-                                                className="bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] uppercase tracking-wider font-bold px-4 py-1.5 rounded transition shadow-lg shadow-cyan-900/30"
-                                            >
-                                                Restore Version
-                                            </button>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
+                        <TimelineBar
+                            events={timelineEvents}
+                            currentIndex={eventIndex}
+                            onScrub={setEventIndex}
+                            onRestore={handleRestoreEvent}
+                            onClose={() => setIsTimeTravelOpen(false)}
+                            onLive={() => { setEventIndex(timelineEvents.length - 1); setIsTimeTravelOpen(false); }}
+                            onAnalyze={handleAnalyze}
+                            isLoading={timelineEvents.length === 0}
+                            analysisResult={analysisResult}
+                            isAnalyzing={isAnalyzing}
+                        />
                     )}
                     </>
                 ) : (

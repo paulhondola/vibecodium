@@ -41,6 +41,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [showReels, setShowReels] = useState(false);
     const [showMatrix, setShowMatrix] = useState(false);
     const [showRoast, setShowRoast] = useState(false);
+    const [showPowerMode, setShowPowerMode] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showSecurityScan, setShowSecurityScan] = useState(false);
     const [showToolsMenu, setShowToolsMenu] = useState(false);
@@ -480,6 +481,15 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                     </button>
                                 )}
 
+                                {/* Power Mode */}
+                                <button
+                                    onClick={() => { setShowPowerMode(prev => !prev); setShowToolsMenu(false); }}
+                                    className={`w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 transition-colors border-t border-[#27272a] ${showPowerMode ? "text-orange-400 bg-orange-500/10 hover:bg-orange-500/20" : "text-orange-500 hover:bg-[#27272a] hover:text-orange-400"}`}
+                                >
+                                    <span className="text-sm leading-none">⚡</span>
+                                    Power Mode {showPowerMode && <span className="ml-auto text-[10px] font-bold text-orange-400">ON</span>}
+                                </button>
+
                                 {/* Hacker Mode */}
                                 <button
                                     onClick={() => { setShowMatrix(prev => !prev); setShowToolsMenu(false); }}
@@ -548,7 +558,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                         <WhiteboardArea projectId={projectId} />
                                     </div>
                                 ) : (
-                                    <EditorArea 
+                                    <EditorArea
                                         openFiles={openFiles}
                                         activeFile={activeFile}
                                         onSelectFile={handleSelectFile}
@@ -559,6 +569,8 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                         pendingUpdate={pendingUpdate}
                                         onPendingResolved={() => setPendingUpdate(null)}
                                         projectId={projectId}
+                                        agentToken={agentToken}
+                                        powerModeEnabled={showPowerMode}
                                     />
                                 )}
                             </Panel>
