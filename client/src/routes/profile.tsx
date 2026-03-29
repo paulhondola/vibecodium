@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth0 } from "@auth0/auth0-react";
-import { ArrowLeft, LogOut, Activity, FolderGit2, Star, Zap, Github, Key, Save, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, LogOut, Activity, FolderGit2, Zap, Github, Key, Save, Loader2, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { API_BASE } from "@/lib/config";
@@ -183,60 +183,7 @@ function ProfilePage() {
             </div>
           </div>
 
-          {/* Token Management Card */}
-          <div className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-white/5 rounded-2xl p-6 shadow-lg">
-            <h3 className="text-md font-['Space_Grotesk'] font-bold text-white tracking-tight flex items-center gap-2 mb-6">
-              <Key size={18} className="text-cyan-400" />
-              Integrations
-            </h3>
-            
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                  <Github size={12} /> GitHub Token (Repo)
-                </label>
-                <input 
-                  type="password"
-                  value={githubToken}
-                  onChange={(e) => setGithubToken(e.target.value)}
-                  placeholder="ghp_xxxxxxxxxxxx"
-                  className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#A855F7]/50 focus:ring-1 focus:ring-[#A855F7]/50 outline-none transition-all"
-                />
-              </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                  <ShieldCheck size={12} /> Vercel Token
-                </label>
-                <input 
-                  type="password"
-                  value={vercelToken}
-                  onChange={(e) => setVercelToken(e.target.value)}
-                  placeholder="vercel_xxxxxxxxxxxx"
-                  className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#3B82F6]/50 focus:ring-1 focus:ring-[#3B82F6]/50 outline-none transition-all"
-                />
-              </div>
-
-              <button
-                onClick={handleSaveTokens}
-                disabled={isSavingTokens || isFetchingTokens}
-                className="w-full py-2.5 mt-2 bg-[#A855F7]/10 hover:bg-[#A855F7]/20 border border-[#A855F7]/30 text-[#A855F7] rounded-lg transition-all font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
-              >
-                {isSavingTokens ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {isSavingTokens ? "Syncing..." : "Secure Tokens"}
-              </button>
-
-              {saveMessage && (
-                <motion.p 
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`text-center text-[10px] font-bold ${saveMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`}
-                >
-                  {saveMessage.text}
-                </motion.p>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Right Column: Stats & Activity */}
@@ -271,38 +218,61 @@ function ProfilePage() {
             </div>
           </div>
 
-          <div className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-white/5 rounded-2xl p-6 flex-1 hover:border-white/10 transition-colors">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-['Space_Grotesk'] font-bold text-white tracking-tight flex items-center gap-2">
-                <Star size={18} className="text-yellow-500 fill-1" />
-                Recent Environments
-              </h3>
-              <button className="text-xs text-[#A855F7] hover:text-white uppercase tracking-widest font-bold transition-colors">
-                View All
-              </button>
-            </div>
+          <div className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-white/5 rounded-2xl p-6 flex-1 shadow-lg">
+            <h3 className="text-md font-['Space_Grotesk'] font-bold text-white tracking-tight flex items-center gap-2 mb-6">
+              <Key size={18} className="text-cyan-400" />
+              Integrations
+            </h3>
             
-            <div className="space-y-4">
-              {[
-                { name: 'hyper-ledger-ui', time: '2 mins ago', role: 'Host' },
-                { name: 'orbital-sync-engine', time: '5 hours ago', role: 'Collaborator' },
-                { name: 'neural-mesh-core', time: '2 days ago', role: 'Host' },
-              ].map((project, i) => (
-                <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-[rgba(168,85,247,0.3)] hover:bg-[rgba(168,85,247,0.05)] transition-all cursor-pointer group">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-[#02040a] border border-white/10 flex items-center justify-center text-slate-300 font-black group-hover:text-[#A855F7] group-hover:border-[#A855F7]/30 transition-colors">
-                      {project.name.substring(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-slate-200">{project.name}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">{project.time}</div>
-                    </div>
-                  </div>
-                  <div className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded inline-flex items-center ${project.role === 'Host' ? 'text-yellow-500 bg-yellow-500/10 border border-yellow-500/20' : 'text-[#3B82F6] bg-[#3B82F6]/10 border border-[#3B82F6]/20'}`}>
-                    {project.role}
-                  </div>
+            <div className="space-y-5">
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                    <Github size={12} /> GitHub Token (Repo)
+                  </label>
+                  <input 
+                    type="password"
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                    placeholder="ghp_xxxxxxxxxxxx"
+                    className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#A855F7]/50 focus:ring-1 focus:ring-[#A855F7]/50 outline-none transition-all"
+                  />
                 </div>
-              ))}
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                    <ShieldCheck size={12} /> Vercel Token
+                  </label>
+                  <input 
+                    type="password"
+                    value={vercelToken}
+                    onChange={(e) => setVercelToken(e.target.value)}
+                    placeholder="vercel_xxxxxxxxxxxx"
+                    className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#3B82F6]/50 focus:ring-1 focus:ring-[#3B82F6]/50 outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center gap-3 pt-2">
+                <button
+                  onClick={handleSaveTokens}
+                  disabled={isSavingTokens || isFetchingTokens}
+                  className="w-full md:w-auto px-10 py-2.5 bg-[#A855F7]/10 hover:bg-[#A855F7]/20 border border-[#A855F7]/30 text-[#A855F7] rounded-lg transition-all font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
+                >
+                  {isSavingTokens ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  {isSavingTokens ? "Syncing..." : "Secure Tokens"}
+                </button>
+
+                {saveMessage && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`text-center text-[10px] font-bold ${saveMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`}
+                  >
+                    {saveMessage.text}
+                  </motion.p>
+                )}
+              </div>
             </div>
           </div>
         </div>
