@@ -93,13 +93,19 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     useEffect(() => {
         if (!projectId || !isAuthenticated) return;
         setIsLoading(true);
-        getAccessTokenSilently().then(token => {
-            setAgentToken(token);
-            fetch(`${API_BASE}/api/projects/${projectId}/files`, {
-                headers: { Authorization: `Bearer ${token}` }
+        let cancelled = false;
+
+        getAccessTokenSilently()
+            .then(token => {
+                if (cancelled) return;
+                setAgentToken(token);
+                return fetch(`${API_BASE}/api/projects/${projectId}/files`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
             })
-            .then(res => res.json())
+            .then(res => res?.json())
             .then(data => {
+                if (cancelled || !data) return;
                 if (data.success) {
                     setFiles(data.files || []);
                     if (data.files?.length > 0) setActiveFile(data.files[0]);
@@ -109,15 +115,15 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                 setIsLoading(false);
             })
             .catch(err => {
+                if (cancelled) return;
                 console.error("Fetch files error:", err);
                 setIsLoading(false);
+                if (err?.error === 'consent_required' || err?.message?.includes('Consent required')) {
+                    loginWithRedirect();
+                }
             });
-        }).catch(err => {
-            console.error(err);
-            if (err?.error === 'consent_required' || err?.message?.includes('Consent required')) {
-                loginWithRedirect();
-            }
-        });
+
+        return () => { cancelled = true; };
     }, [projectId, isAuthenticated, getAccessTokenSilently, loginWithRedirect]);
 
     // 2. Consume parsed WebSocket messages from SocketProvider
