@@ -1,275 +1,93 @@
-# bhvr 🦫
+# 🚀 iTECify — The AI-Native Collaborative Forge
 
-![cover](https://cdn.stevedylan.dev/ipfs/bafybeievx27ar5qfqyqyud7kemnb5n2p4rzt2matogi6qttwkpxonqhra4)
+> **Vision**: We are at an industry inflection point. AI is no longer a separate tab or a passive assistant; it is a real-time partner. iTECify solves the "absolute nightmare" of collaborative debugging by visually delimiting human intent from AI intelligence through an isolated, high-performance universal sandbox.
 
-A full-stack TypeScript monorepo starter with shared types, using Bun, Hono, Vite, and React.
+---
 
-## Why bhvr?
+## 🏗️ The Universal Sandbox (Technical Stack)
 
-While there are plenty of existing app building stacks out there, many of them are either bloated, outdated, or have too much of a vendor lock-in. bhvr is built with the opinion that you should be able to deploy your client or server in any environment while also keeping type safety.
+iTECify is built on the **BHVR Stack** (Bun, Hono, Vite, React), engineered for sub-millisecond latency and total environment isolation.
 
-## Features
+| Layer | Technology | Implementation Detail |
+| :--- | :--- | :--- |
+| **Runtime** | **Bun** | High-performance JS runtime running on **Azure VM**. |
+| **Backend** | **Hono** | Ultrafast web framework for API routing and WebSocket orchestration. |
+| **Sandboxing** | **Dockerode** | Intelligent isolation with "on-the-fly" image detection for Node.js, Python, Rust, C++, and Go. |
+| **Frontend** | **React + Monaco** | The VS Code core engine paired with **Xterm.js** for real-time collaborative terminal output. |
+| **Synchronization**| **WebSockets** | Custom multi-presence algorithms for real-time cursor tracking and file-focus synchronization. |
+| **Persistence** | **Mongo Atlas + SQLite** | MongoDB Atlas for global user profiles/tokens; SQLite for low-latency local session state. |
+| **Deployment** | **Vercel & Railway** | Zero-disruption "Ship to Cloud" via REST/GraphQL API integrations. |
 
-- **Full-Stack TypeScript**: End-to-end type safety between client and server
-- **Shared Types**: Common type definitions shared between client and server
-- **Monorepo Structure**: Organized as a workspaces-based monorepo with Turbo for build orchestration
-- **Modern Stack**:
-  - [Bun](https://bun.sh) as the JavaScript runtime and package manager
-  - [Hono](https://hono.dev) as the backend framework
-  - [Vite](https://vitejs.dev) for frontend bundling
-  - [React](https://react.dev) for the frontend UI
-  - [Turbo](https://turbo.build) for monorepo build orchestration and caching
+---
 
-## Project Structure
+## 🌟 Core Features
 
-```
-.
-├── client/               # React frontend
-├── server/               # Hono backend
-├── shared/               # Shared TypeScript definitions
-│   └── src/types/        # Type definitions used by both client and server
-├── package.json          # Root package.json with workspaces
-└── turbo.json            # Turbo configuration for build orchestration
-```
+### 1. Multi-Presence Collaboration
+Forget "screen sharing." iTECify provides a fluid, Figma-like experience where every participant—including the **AI Agent**—possesses a unique cursor and presence. You see what Ana is typing, where Radu is looking, and what the AI is proposing, all in a unified workspace.
 
-### Server
+### 2. The Collaborative Terminal
+A shared integrated terminal where `stdout` and `stderr` are broadcasted via WebSockets to every client. If a build fails, everyone sees the error exactly as it happens. Powered by **Docker**, ensuring that "it works on my machine" is a problem of the past.
 
-bhvr uses Hono as a backend API for its simplicity and massive ecosystem of plugins. If you have ever used Express then it might feel familiar. Declaring routes and returning data is easy.
+### 3. Block-Style AI Integration
+AI suggestions aren't just text—they are **Notion-style blocks**.
+- **Visual Delimitation**: AI-generated code is clearly marked, preventing accidental merges of unverified logic.
+- **Atomic Actions**: Accept or Reject AI suggestions with a single click. The system handles the diffing and synchronization across all connected peers instantly.
 
-```
-server
-├── bun.lock
-├── package.json
-├── README.md
-├── src
-│   └── index.ts
-└── tsconfig.json
-```
+### 4. Smart Resource Limits
+To prevent system-wide degradation from infinite loops or malicious scripts, our Docker engine enforces strict **CPU and Memory caps** (512MB RAM / 0.5 CPU shares). If code exceeds these limits, the sandbox is gracefully terminated, and the room is notified.
 
-```typescript src/index.ts
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import type { ApiResponse } from 'shared'
+### 5. Pre-Deploy Security Scanning
+Security is not an afterthought. Before any container starts or any code is shipped to Vercel/Railway:
+- **Live Vulnerability Scan**: The system scans for high-severity patterns (e.g., hardcoded secrets, dangerous `eval` calls, or insecure shell executions).
+- **Policy Enforcement**: Deployment is automatically blocked if critical vulnerabilities are detected.
 
-const app = new Hono()
+---
 
-app.use(cors())
+## 🔐 Architecture & Security Data Flow
 
-app.get('/', (c) => {
-  return c.text('Hello Hono!')
-})
+1.  **Input**: User edits code in the Monaco Editor.
+2.  **Sync**: Changes are broadcasted via WebSockets to all peers and persisted in the server-side SQLite mirror.
+3.  **Sandbox Request**: User triggers "Execute." 
+4.  **Scan**: The Security Scanner audits the code buffer for malicious patterns.
+5.  **Provision**: Dockerode pulls the required language image and mounts the project files as a read-only volume (or restricted RW).
+6.  **Execute**: Code runs within the resource-constrained container.
+7.  **Output**: Real-time logs are piped from Docker back through WebSockets to the shared Xterm.js UI.
 
-app.get('/hello', async (c) => {
+---
 
-  const data: ApiResponse = {
-    message: "Hello BHVR!",
-    success: true
-  }
+## 🎁 Easter Eggs & Bonus Points
 
-  return c.json(data, { status: 200 })
-})
+iTECify isn't just functional; it's alive. We've implemented several "Vibe" features:
+- **🔥 Code Roast**: Submit your code to a savage AI senior engineer who will tell you exactly why your variable naming is a disaster.
+- **📺 Vibe Reels**: A non-distracting sidebar of tech-memes and coding shorts to keep the morale high during long debugging sessions.
+- **✨ Success Confetti**: A discretely choreographed celebration when your project successfully deploys to the cloud.
+- **⌨️ Hacker Mode**: Toggle a Matrix-style rain overlay for when you're "in the zone."
 
-export default app
-```
+---
 
-If you wanted to add a database to Hono you can do so with a multitude of Typescript libraries like [Supabase](https://supabase.com), or ORMs like [Drizzle](https://orm.drizzle.team/docs/get-started) or [Prisma](https://www.prisma.io/orm)
+## 🚀 Quick Start
 
-### Client
-
-bhvr uses Vite + React Typescript template, which means you can build your frontend just as you would with any other React app. This makes it flexible to add UI components like [shadcn/ui](https://ui.shadcn.com) or routing using [React Router](https://reactrouter.com/start/declarative/installation).
-
-```
-client
-├── eslint.config.js
-├── index.html
-├── package.json
-├── public
-│   └── vite.svg
-├── README.md
-├── src
-│   ├── App.css
-│   ├── App.tsx
-│   ├── assets
-│   ├── index.css
-│   ├── main.tsx
-│   └── vite-env.d.ts
-├── tsconfig.app.json
-├── tsconfig.json
-├── tsconfig.node.json
-└── vite.config.ts
-```
-
-```typescript src/App.tsx
-import { useState } from 'react'
-import beaver from './assets/beaver.svg'
-import { ApiResponse } from 'shared'
-import './App.css'
-
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3000"
-
-function App() {
-  const [data, setData] = useState<ApiResponse | undefined>()
-
-  async function sendRequest() {
-    try {
-      const req = await fetch(`${SERVER_URL}/hello`)
-      const res: ApiResponse = await req.json()
-      setData(res)
-    } catch (error) {
-      console.log(error)
-    }
-  }
-
-  return (
-    <>
-      <div>
-        <a href="https://github.com/stevedylandev/bhvr" target="_blank">
-          <img src={vibecodium_icon} className="logo" alt="vibecodium logo" />
-        </a>
-      </div>
-      <h1>bhvr</h1>
-      <h2>Bun + Hono + Vite + React</h2>
-      <p>A typesafe fullstack monorepo</p>
-      <div className="card">
-        <button onClick={sendRequest}>
-          Call API
-        </button>
-        {data && (
-          <pre className='response'>
-            <code>
-            Message: {data.message} <br />
-            Success: {data.success.toString()}
-            </code>
-          </pre>
-        )}
-      </div>
-      <p className="read-the-docs">
-        Click the beaver to learn more
-      </p>
-    </>
-  )
-}
-
-export default App
-```
-
-### Shared
-
-The Shared package is used for anything you want to share between the Server and Client. This could be types or libraries that you use in both environments.
-
-```
-shared
-├── package.json
-├── src
-│   ├── index.ts
-│   └── types
-│       └── index.ts
-└── tsconfig.json
-```
-
-Inside the `src/index.ts` we export any of our code from the folders so it's usable in other parts of the monorepo
-
-```typescript
-export * from "./types"
-```
-
-By running `bun run dev` or `bun run build` it will compile and export the packages from `shared` so it can be used in either `client` or `server`
-
-```typescript
-import { ApiResponse } from 'shared'
-```
-
-## Getting Started
-
-### Quick Start
-
-You can start a new bhvr project using the [CLI](https://github.com/stevedylandev/create-bhvr)
-
+### Backend
 ```bash
-bun create bhvr
-```
-
-### Installation
-
-```bash
-# Install dependencies for all workspaces
+cd server
 bun install
-```
-
-### Development
-
-```bash
-# Run all workspaces in development mode with Turbo
 bun run dev
-
-# Or run individual workspaces directly
-bun run dev:client    # Run the Vite dev server for React
-bun run dev:server    # Run the Hono backend
 ```
 
-### Building
-
+### Frontend
 ```bash
-# Build all workspaces with Turbo
-bun run build
-
-# Or build individual workspaces directly
-bun run build:client  # Build the React frontend
-bun run build:server  # Build the Hono backend
+cd client
+bun install
+bun run dev
 ```
 
-### Additional Commands
+**Required Environment Variables**:
+- `AUTH0_DOMAIN`: Your Auth0 tenant.
+- `MONGO_URI`: MongoDB Atlas connection string.
+- `RAILWAY_TOKEN` / `VERCEL_TOKEN`: For cloud deployments.
 
-```bash
-# Lint all workspaces
-bun run lint
+---
 
-# Type check all workspaces
-bun run type-check
+iTECify is more than an editor. It is a **Collaborative Forge** designed for the next generation of engineers who treat AI as a peer, not a tool. 
 
-# Run tests across all workspaces
-bun run test
-
-# Manually rebuild sandbox Docker images
-bun run setup:docker
-```
-
-## Sandbox Environment
-
-Vibecodium uses isolated Docker containers to safely execute user code. These environments are based on custom Dockerfiles located in `server/docker/`.
-
-The necessary Docker images (`vibecodium-rust`, `vibecodium-python`, etc.) are automatically built during `bun install` via the `postinstall` script. If you need to rebuild them manually, you can run `bun run setup:docker`.
-
-**Note:** Ensure Docker Desktop or a compatible Docker engine is running on your machine.
-
-### Deployment
-
-Deplying each piece is very versatile and can be done numerous ways, and exploration into automating these will happen at a later date. Here are some references in the meantime.
-
-**Client**
-- [Orbiter](https://orbiter.host)
-- [GitHub Pages](https://vite.dev/guide/static-deploy.html#github-pages)
-- [Netlify](https://vite.dev/guide/static-deploy.html#netlify)
-- [Cloudflare Pages](https://vite.dev/guide/static-deploy.html#cloudflare-pages)
-
-**Server**
-- [Cloudflare Worker](https://gist.github.com/stevedylandev/4aa1fc569bcba46b7169193c0498d0b3)
-- [Bun](https://hono.dev/docs/getting-started/bun)
-- [Node.js](https://hono.dev/docs/getting-started/nodejs)
-
-## Type Sharing
-
-Types are automatically shared between the client and server thanks to the shared package and TypeScript path aliases. You can import them in your code using:
-
-```typescript
-import { ApiResponse } from 'shared/types';
-```
-
-## Learn More
-
-- [Bun Documentation](https://bun.sh/docs)
-- [Vite Documentation](https://vitejs.dev/guide/)
-- [React Documentation](https://react.dev/learn)
-- [Hono Documentation](https://hono.dev/docs)
-- [Turbo Documentation](https://turbo.build/docs)
-- [TypeScript Documentation](https://www.typescriptlang.org/docs/)
+**Developed for iTEC 2026.**

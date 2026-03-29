@@ -5,9 +5,9 @@ import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
 import ReelsWidget from "./ReelsWidget";
 import SecurityScanModal from "./SecurityScanModal";
+import CommunityHelpModal from "./CommunityHelpModal";
 import RubberDuck from "./RubberDuck";
 import WhiteboardArea from "./WhiteboardArea";
-import PomodoroTimer from "./PomodoroTimer";
 import SpotifyPlayer from "./SpotifyPlayer";
 import MatrixRain from "./MatrixRain";
 import ReactionOverlay from "./ReactionOverlay";
@@ -35,7 +35,9 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [activeFile, setActiveFile] = useState<ProjectFile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [projectName, setProjectName] = useState<string | null>(null);
+    const [projectRepoUrl, setProjectRepoUrl] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const [showCommunityHelp, setShowCommunityHelp] = useState(false);
     const [showReels, setShowReels] = useState(false);
     const [showMatrix, setShowMatrix] = useState(false);
     const [showRoast, setShowRoast] = useState(false);
@@ -101,6 +103,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                     setFiles(data.files || []);
                     if (data.files?.length > 0) setActiveFile(data.files[0]);
                     if (data.projectName) setProjectName(data.projectName);
+                    if (data.repoUrl) setProjectRepoUrl(data.repoUrl);
                 }
                 setIsLoading(false);
             })
@@ -402,6 +405,35 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                         {isDeploying ? "Shipping..." : "Ship to Cloud"}
                     </button>
 
+                    {/* Commit Button */}
+                    <button
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className={`text-xs px-4 py-1.5 rounded-full flex items-center gap-2 transition-all font-bold border border-[#27272a] bg-[#18181b] hover:bg-[#27272a] text-gray-200 hover:scale-105 active:scale-95 disabled:opacity-50`}
+                    >
+                        {isSaving ? <Loader2 size={14} className="animate-spin" /> : <GitCommit size={14} />}
+                        Commit
+                    </button>
+
+                    {/* Collaborate Button */}
+                    <button
+                        onClick={copyCollabLink}
+                        className={`text-xs px-4 py-1.5 rounded-full flex items-center gap-2 transition-all font-bold border border-[#A855F7]/30 bg-[#A855F7]/10 hover:bg-[#A855F7]/20 text-[#A855F7] hover:scale-105 active:scale-95 ${copied ? "text-green-400 border-green-500/30 bg-green-500/10" : ""}`}
+                    >
+                        {copied ? <Check size={14} /> : <Users size={14} />}
+                        {copied ? "Link Copied!" : "Collaborate"}
+                    </button>
+
+                    {/* Request Help Button */}
+                    <button
+                        onClick={() => setShowCommunityHelp(true)}
+                        className="text-xs px-4 py-1.5 rounded-full flex items-center gap-2 transition-all font-bold border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 hover:scale-105 active:scale-95"
+                        title="Post your issue to the community"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        Request Help
+                    </button>
+
                     {/* Connected users */}
                     {collabUsers.length > 0 && (
                         <div className="flex -space-x-2 mr-2">
@@ -413,9 +445,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                         </div>
                     )}
 
-                    <div className="mx-2 flex items-center">
-                        <PomodoroTimer />
-                    </div>
 
                     {/* Tools Dropdown */}
                     <div className="relative" ref={toolsMenuRef}>
@@ -430,15 +459,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 
                         {showToolsMenu && (
                             <div className="absolute right-0 top-full mt-1.5 w-52 bg-[#18181b] border border-[#27272a] rounded-lg shadow-xl z-50 overflow-hidden py-1">
-                                {/* Collaborate */}
-                                <button
-                                    onClick={() => { copyCollabLink(); setShowToolsMenu(false); }}
-                                    className={`w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 transition-colors ${copied ? "text-green-400 bg-green-500/10" : "text-gray-300 hover:bg-[#27272a] hover:text-white"}`}
-                                >
-                                    {copied ? <Check size={14} /> : <Users size={14} />}
-                                    {copied ? "Copied Link!" : "Collaborate"}
-                                </button>
-
                                 {/* Emoji Reactions */}
                                 <div className="border-t border-[#27272a]">
                                     <ReactionOverlay
@@ -486,25 +506,9 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                     <Flame size={14} />
                                     Vibe Reels
                                 </button>
-
-                                {/* Commit */}
-                                <button
-                                    onClick={() => { handleSave(); setShowToolsMenu(false); }}
-                                    disabled={isSaving}
-                                    className="w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 text-gray-300 hover:bg-[#27272a] hover:text-white transition-colors border-t border-[#27272a] disabled:opacity-50"
-                                >
-                                    {isSaving ? <Loader2 size={14} className="animate-spin" /> : <GitCommit size={14} />}
-                                    Commit
-                                </button>
                             </div>
                         )}
                     </div>
-					<div className="w-[1px] h-4 bg-[#27272a] mx-1"></div>
-					<span className="relative flex h-2.5 w-2.5">
-						<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-						<span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
-					</span>
-					<span className="text-xs text-gray-400 font-medium hidden lg:block">Auto-saving...</span>
 				</div>
 			</div>
 
@@ -745,6 +749,13 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 
 			{/* Spotify Easter Egg */}
 			<SpotifyPlayer />
+
+            {/* Community Help Modal */}
+            <CommunityHelpModal
+                isOpen={showCommunityHelp}
+                onClose={() => setShowCommunityHelp(false)}
+                repoUrl={projectRepoUrl ?? `${window.location.origin}/?w=${projectId}`}
+            />
 		</div>
 	);
 }

@@ -239,7 +239,7 @@ projectsRoutes.get("/:id/files", async (c) => {
             || project?.repoUrl?.split("/").pop()?.replace(".git", "")
             || "Untitled";
 
-        return c.json({ success: true, files: projectFiles, projectName });
+        return c.json({ success: true, files: projectFiles, projectName, repoUrl: project?.repoUrl ?? null });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }

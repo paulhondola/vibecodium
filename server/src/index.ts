@@ -13,6 +13,7 @@ import agentRoutes from "./routes/agent";
 import githubRoutes from "./routes/github";
 import usersRouter from "./routes/users";
 import deployRoutes from "./routes/deploy";
+import helpRoutes from "./routes/help";
 import { syncProjectFilesToDisk } from "./utils/sync";
 import { db } from "./db";
 import { files, snapshots } from "./db/schema";
@@ -80,6 +81,7 @@ export const app = new Hono()
 	.route("/api/github", githubRoutes)
 	.route("/api/users", usersRouter)
 	.route("/api/deploy", deployRoutes)
+    .route("/api/help", helpRoutes)
 	// Serve static assets from the client dist folder
 	.use("/assets/*", serveStatic({ root: "../client/dist" }))
 	.use("/favicon.ico", serveStatic({ path: "../client/dist/favicon.ico" }))
