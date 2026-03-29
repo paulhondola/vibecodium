@@ -19,7 +19,8 @@
       "WebFetch(domain:render.com)",
       "WebFetch(domain:fly.io)",
       "WebFetch(domain:api-docs.render.com)",
-      "Bash(git remote:*)"
+      "Bash(git remote:*)",
+      "Bash(xargs -I {} basename {})"
     ]
   }
 }

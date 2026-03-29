@@ -1,93 +1,386 @@
-# 🚀 iTECify — The AI-Native Collaborative Forge
+<div align="center">
 
-> **Vision**: We are at an industry inflection point. AI is no longer a separate tab or a passive assistant; it is a real-time partner. iTECify solves the "absolute nightmare" of collaborative debugging by visually delimiting human intent from AI intelligence through an isolated, high-performance universal sandbox.
+<img src="client/public/vibecodium_icon.svg" alt="VibeCodium" width="80" />
 
----
+# VibeCodium · iTECify
 
-## 🏗️ The Universal Sandbox (Technical Stack)
+**A collaborative cloud IDE where AI writes code beside you — in real time.**
 
-iTECify is built on the **BHVR Stack** (Bun, Hono, Vite, React), engineered for sub-millisecond latency and total environment isolation.
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Bun](https://img.shields.io/badge/Bun-1.2-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
+[![Hono](https://img.shields.io/badge/Hono-4.12-e36002?style=flat-square&logo=hono&logoColor=white)](https://hono.dev/)
+[![React](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47a248?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
+[![Docker](https://img.shields.io/badge/Docker-Sandbox-2496ed?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 
-| Layer | Technology | Implementation Detail |
-| :--- | :--- | :--- |
-| **Runtime** | **Bun** | High-performance JS runtime running on **Azure VM**. |
-| **Backend** | **Hono** | Ultrafast web framework for API routing and WebSocket orchestration. |
-| **Sandboxing** | **Dockerode** | Intelligent isolation with "on-the-fly" image detection for Node.js, Python, Rust, C++, and Go. |
-| **Frontend** | **React + Monaco** | The VS Code core engine paired with **Xterm.js** for real-time collaborative terminal output. |
-| **Synchronization**| **WebSockets** | Custom multi-presence algorithms for real-time cursor tracking and file-focus synchronization. |
-| **Persistence** | **Mongo Atlas + SQLite** | MongoDB Atlas for global user profiles/tokens; SQLite for low-latency local session state. |
-| **Deployment** | **Vercel & Railway** | Zero-disruption "Ship to Cloud" via REST/GraphQL API integrations. |
+*Built for the iTEC 2026 Web Development track.*
 
----
-
-## 🌟 Core Features
-
-### 1. Multi-Presence Collaboration
-Forget "screen sharing." iTECify provides a fluid, Figma-like experience where every participant—including the **AI Agent**—possesses a unique cursor and presence. You see what Ana is typing, where Radu is looking, and what the AI is proposing, all in a unified workspace.
-
-### 2. The Collaborative Terminal
-A shared integrated terminal where `stdout` and `stderr` are broadcasted via WebSockets to every client. If a build fails, everyone sees the error exactly as it happens. Powered by **Docker**, ensuring that "it works on my machine" is a problem of the past.
-
-### 3. Block-Style AI Integration
-AI suggestions aren't just text—they are **Notion-style blocks**.
-- **Visual Delimitation**: AI-generated code is clearly marked, preventing accidental merges of unverified logic.
-- **Atomic Actions**: Accept or Reject AI suggestions with a single click. The system handles the diffing and synchronization across all connected peers instantly.
-
-### 4. Smart Resource Limits
-To prevent system-wide degradation from infinite loops or malicious scripts, our Docker engine enforces strict **CPU and Memory caps** (512MB RAM / 0.5 CPU shares). If code exceeds these limits, the sandbox is gracefully terminated, and the room is notified.
-
-### 5. Pre-Deploy Security Scanning
-Security is not an afterthought. Before any container starts or any code is shipped to Vercel/Railway:
-- **Live Vulnerability Scan**: The system scans for high-severity patterns (e.g., hardcoded secrets, dangerous `eval` calls, or insecure shell executions).
-- **Policy Enforcement**: Deployment is automatically blocked if critical vulnerabilities are detected.
+</div>
 
 ---
 
-## 🔐 Architecture & Security Data Flow
+## What is this?
 
-1.  **Input**: User edits code in the Monaco Editor.
-2.  **Sync**: Changes are broadcasted via WebSockets to all peers and persisted in the server-side SQLite mirror.
-3.  **Sandbox Request**: User triggers "Execute." 
-4.  **Scan**: The Security Scanner audits the code buffer for malicious patterns.
-5.  **Provision**: Dockerode pulls the required language image and mounts the project files as a read-only volume (or restricted RW).
-6.  **Execute**: Code runs within the resource-constrained container.
-7.  **Output**: Real-time logs are piped from Docker back through WebSockets to the shared Xterm.js UI.
+VibeCodium is a **real-time collaborative code editor** with an embedded AI agent, sandboxed multi-language execution, a live terminal, and social features — all in the browser. Think VS Code meets Figma, with an AI pair programmer that shows its work before committing it.
 
 ---
 
-## 🎁 Easter Eggs & Bonus Points
+## System Architecture
 
-iTECify isn't just functional; it's alive. We've implemented several "Vibe" features:
-- **🔥 Code Roast**: Submit your code to a savage AI senior engineer who will tell you exactly why your variable naming is a disaster.
-- **📺 Vibe Reels**: A non-distracting sidebar of tech-memes and coding shorts to keep the morale high during long debugging sessions.
-- **✨ Success Confetti**: A discretely choreographed celebration when your project successfully deploys to the cloud.
-- **⌨️ Hacker Mode**: Toggle a Matrix-style rain overlay for when you're "in the zone."
+```
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║                                  VIBECODIUM PLATFORM                                 ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
 
----
+  ┌──────────────────────────────────────────────────────────────────────────────────┐
+  │                             CLIENTS (Browsers)                                   │
+  │                                                                                  │
+  │   User A (Alice)           User B (Bob)              Guest (share token)        │
+  │   ┌─────────────┐          ┌─────────────┐           ┌─────────────┐            │
+  │   │  React SPA  │          │  React SPA  │           │  React SPA  │            │
+  │   │  Monaco Ed. │          │  Monaco Ed. │           │  (read-only)│            │
+  │   │  xterm.js   │          │  xterm.js   │           └─────────────┘            │
+  │   └──────┬──────┘          └──────┬──────┘                  │                   │
+  │          │  HTTPS / WSS           │  HTTPS / WSS            │ HTTPS             │
+  └──────────┼────────────────────────┼─────────────────────────┼───────────────────┘
+             │                        │                          │
+             ▼                        ▼                          ▼
+  ┌──────────────────────────────────────────────────────────────────────────────────┐
+  │                         VERCEL  (Frontend CDN)                                   │
+  │                    React 19 + Vite · TanStack Router                            │
+  │              VITE_BACKEND_URL → Cloudflare Tunnel URL                           │
+  └───────────────────────────────────────┬──────────────────────────────────────────┘
+                                          │ REST + SSE + WebSocket
+                                          │ (Cloudflare Tunnel — zero-config HTTPS)
+  ════════════════════════════════════════╪════════════════════════════════════════════
+                                          ▼
+  ┌──────────────────────────────────────────────────────────────────────────────────┐
+  │                       BACKEND  (Hono · Bun runtime)                              │
+  │                     localhost:3000  ◄──  cloudflared tunnel                      │
+  │                                                                                  │
+  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
+  │  │  Auth        │  │  Projects    │  │  Agent       │  │  Execution Router    │ │
+  │  │  Middleware  │  │  /api/proj.. │  │  /api/agent  │  │  /execute            │ │
+  │  │  Auth0 JWKS  │  │  Import repo │  │  SSE stream  │  │  Language → Engine   │ │
+  │  │  Token cache │  │  File CRUD   │  │  Tool loop   │  │  Security pre-scan   │ │
+  │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────┘ │
+  │         │                 │                  │                     │             │
+  │  ┌──────▼───────┐  ┌──────▼───────┐  ┌──────▼───────┐           │             │
+  │  │  Sessions    │  │  Timeline    │  │  Deploy      │           │             │
+  │  │  Share tokens│  │  Checkpoints │  │  /api/deploy │           │             │
+  │  │  7-day expiry│  │  AI analysis │  │  Vercel API  │           │             │
+  │  └──────────────┘  └──────────────┘  └──────────────┘           │             │
+  │                                                                   │             │
+  │  ┌─────────────────────────────────────────┐                     │             │
+  │  │          WebSocket Handlers              │                     │             │
+  │  │  /ws/collab/:id   /ws/terminal          │                     │             │
+  │  │  Yjs CRDT sync    PTY shell (node-pty)  │                     │             │
+  │  │  Cursor broadcast Multi-user I/O        │                     │             │
+  │  └─────────────────────────────────────────┘                     │             │
+  └────────────────────────────────────────────────────┬─────────────┼─────────────┘
+                                                       │             │
+               ┌───────────────────────────────────────┘             │
+               ▼                                                      ▼
+  ┌────────────────────────────┐              ┌──────────────────────────────────────┐
+  │   MONGODB ATLAS  (Cloud)   │              │   DOCKER DESKTOP  (Local daemon)     │
+  │                            │              │                                      │
+  │  ● projects                │              │  ┌─────────┐  ┌─────────┐           │
+  │  ● users (Auth0 upsert)    │              │  │ Python  │  │  Node   │           │
+  │  ● userTokens              │              │  │ sandbox │  │ sandbox │           │
+  │  ● timelineEvents          │              │  └─────────┘  └─────────┘           │
+  │  ● helpPosts               │              │  ┌─────────┐  ┌─────────┐           │
+  │                            │              │  │  C++    │  │  Rust   │           │
+  │  + SQLite (local)          │              │  │ sandbox │  │ sandbox │           │
+  │    ● files (content)       │              │  └─────────┘  └─────────┘           │
+  │    ● snapshots             │              │  ┌─────────┐  ┌─────────┐           │
+  │    ● sessions              │              │  │   Go    │  │   Bun   │           │
+  │                            │              │  │ sandbox │  │ sandbox │           │
+  └────────────────────────────┘              │  └─────────┘  └─────────┘           │
+                                              │                                      │
+                                              │  Per container:                      │
+                                              │  • 2 GB RAM limit                   │
+                                              │  • Network isolated                  │
+                                              │  • 3s execution timeout              │
+                                              │  • Code injected via env var         │
+                                              └──────────────────────────────────────┘
 
-## 🚀 Quick Start
-
-### Backend
-```bash
-cd server
-bun install
-bun run dev
+  ┌─────────────────────────────────────────────────────────────────────────────────┐
+  │                           EXTERNAL SERVICES                                     │
+  │                                                                                 │
+  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
+  │  │   AUTH0      │  │  DEEPSEEK /  │  │  GITHUB API  │  │  VERCEL API      │   │
+  │  │  JWKS auth   │  │  LM Studio   │  │  Repo import │  │  One-click       │   │
+  │  │  User upsert │  │  LLM backend │  │  User lookup │  │  project deploy  │   │
+  │  │  Token cache │  │  Code agent  │  │  Commit feed │  │  Base64 files    │   │
+  │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────────┘   │
+  └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Frontend
-```bash
-cd client
-bun install
-bun run dev
-```
+---
 
-**Required Environment Variables**:
-- `AUTH0_DOMAIN`: Your Auth0 tenant.
-- `MONGO_URI`: MongoDB Atlas connection string.
-- `RAILWAY_TOKEN` / `VERCEL_TOKEN`: For cloud deployments.
+## Core Features
+
+### Real-Time Collaboration
+- **Yjs CRDT** — conflict-free merges with no operational transform complexity
+- **Y-Monaco** bindings — every keystroke syncs across all connected clients instantly
+- **Cursor presence** — colored cursors per user with name labels
+- **File focus awareness** — see which file each collaborator is editing
+- **WebSocket room isolation** — per-project rooms, zero cross-contamination
+
+### AI Agent
+- **SSE streaming** — tokens appear word-by-word, never a loading spinner
+- **Tool loop** — agent calls `read_file → write_file → execute_command` in cycles until done
+- **Accept/Reject diffs** — AI edits surface as a highlighted diff overlay in Monaco; user decides
+- **Timeline analysis** — pick two checkpoints, get an AI explanation of what changed and why
+- **Code Roaster** — LLM-powered sarcastic code review (morale-destroying, accuracy guaranteed)
+
+### Sandboxed Code Execution
+Six custom Docker images (`vibecodium-{python,node,cpp,rust,go,bun}:latest`) built with `setup_docker.sh`:
+
+| Language | Runtime | Compile Step |
+|----------|---------|-------------|
+| Python | CPython 3.x | — |
+| JavaScript | Node 20 | — |
+| TypeScript | Bun | — |
+| C++ | GCC | `g++ -o binary source.cpp` |
+| Rust | rustc | `rustc -o binary source.rs` |
+| Go | go1.21 | `go build` |
+
+Every execution: security pre-scan → fresh container → inject code → capture stdout/stderr → destroy container. Hard limits: **2 GB RAM**, **network off**, **3-second wall-clock timeout**.
+
+### Security Scanner
+Regex-based static analysis runs before every execution:
+
+| Severity | Examples | Action |
+|----------|----------|--------|
+| Critical | `rm -rf /`, fork bombs, `mkfs` | Block execution |
+| High | `eval()`, `shell=True`, path traversal | Warn |
+| Medium | SQL concatenation, hardcoded secrets | Warn |
+| Low | Code quality patterns | Info |
+
+### Timeline & Checkpoints
+- Every **7th code edit** is persisted to MongoDB as a `TimelineEvent`
+- Every **50th edit** is flagged as a `checkpoint` (heavier diff marker)
+- Filterable by file path, paginated, orderable oldest-first
+- Click any event → restore that file state instantly
+- "Analyze" button → AI summarizes the diff between two checkpoints
+
+### One-Click Vercel Deployment
+- User stores their Vercel token in profile (masked, stored in MongoDB)
+- `/api/deploy/:projectId` pulls all files from SQLite, encodes as base64, calls Vercel Files API
+- Deployment logs stream back over WebSocket in real time
+- Returns live deployment URL when done
+
+### Session Sharing
+- Generate a shareable link with a signed token (7-day TTL by default)
+- Token-holders can access project files without an Auth0 account
+- Owner can revoke tokens at any time
+
+### Community & Discovery
+- **Help Posts** — post your repo for code review / collaboration requests
+- **CoderMatch** — random-match with 20 other users (think blind dev dating)
+- **Activity Feed** — who's editing what, right now, across your project
 
 ---
 
-iTECify is more than an editor. It is a **Collaborative Forge** designed for the next generation of engineers who treat AI as a peer, not a tool. 
+## Technical Stack
 
-**Developed for iTEC 2026.**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  MONOREPO  (Bun workspaces + Turborepo)                         │
+│                                                                  │
+│  packages/                                                       │
+│  ├── client/    React 19 · Vite · TanStack Router              │
+│  ├── server/    Hono · Bun runtime · Drizzle ORM               │
+│  └── shared/    TypeScript types (ExecuteRequest/Response)      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| Runtime | **Bun 1.2** | Native WebSocket, SQLite, spawn — no extra deps |
+| HTTP | **Hono 4** | 5× faster than Express, first-class Bun adapter |
+| Frontend | **React 19 + Vite** | Concurrent features, fastest HMR |
+| Routing | **TanStack Router** | Type-safe file-based routing, search params typed |
+| Editor | **Monaco** | VS Code engine in the browser |
+| CRDT | **Yjs + Y-Monaco** | Proven CRDT used by major collab editors |
+| Terminal | **xterm.js + node-pty** | Real PTY, full ANSI support |
+| Whiteboard | **tldraw** | Infinite canvas, battle-tested |
+| ORM | **Drizzle + SQLite** | Type-safe queries, zero runtime overhead |
+| Cloud DB | **MongoDB Atlas + Mongoose** | Flexible docs for users, events, posts |
+| Auth | **Auth0** | JWKS validation, token caching |
+| AI | **DeepSeek / LM Studio** | OpenAI-compatible, swappable via env |
+| Sandbox | **Docker + Dockerode** | Hard isolation per execution |
+| Animations | **Framer Motion** | Physics-based UI transitions |
+| Icons | **Lucide React** | Tree-shakeable, consistent |
+| Linting | **Biome** | 10× faster than ESLint + Prettier combined |
+
+---
+
+## Data Flow
+
+```
+Auth flow
+  Browser → Auth0 → JWT → server authMiddleware → MongoDB upsert → context.user
+
+Project import
+  GitHub URL → git clone /tmp/vibecodium/{id} → recursive file index → SQLite batch insert
+
+Live editing
+  Keystroke → Yjs delta → /ws/collab/:id → broadcast → all Monaco instances
+
+Agent cycle
+  User prompt → POST /api/agent/suggest → LLM stream → tool calls
+    → read_file (SQLite) │ write_file (diff overlay) │ execute_command (Docker)
+    → loop until no tool calls → SSE close
+
+Code execution
+  Run button → security scan → Dockerode.createContainer()
+    → inject code via env var → capture stdout/stderr → destroy → return
+
+One-click deploy
+  Deploy button → fetch user Vercel token → collect files from SQLite
+    → Vercel Files API (base64) → WS log stream → live URL
+```
+
+---
+
+## Project Structure
+
+```
+vibecodium/
+├── client/
+│   └── src/
+│       ├── routes/          # File-based pages (TanStack Router)
+│       │   ├── index.tsx    # Landing
+│       │   ├── dashboard.tsx
+│       │   ├── community.tsx
+│       │   └── profile.tsx
+│       ├── components/
+│       │   ├── Workspace.tsx       # Main IDE orchestrator
+│       │   ├── EditorArea.tsx      # Monaco + Y-Monaco
+│       │   ├── TerminalArea.tsx    # xterm.js + WS
+│       │   ├── VibeChat.tsx        # Real-time chat
+│       │   ├── TimelineBar.tsx     # Checkpoint history
+│       │   ├── FileExplorer.tsx    # File tree
+│       │   ├── WhiteboardArea.tsx  # tldraw
+│       │   ├── ReelsWidget.tsx     # YouTube Shorts
+│       │   └── ...easter eggs
+│       └── lib/
+│           └── config.ts           # API_BASE / WS_BASE from env
+│
+├── server/
+│   └── src/
+│       ├── index.ts         # Hono app, Docker setup, WS handlers
+│       ├── routes/
+│       │   ├── projects.ts  # CRUD + GitHub import
+│       │   ├── agent.ts     # LLM tool loop (SSE)
+│       │   ├── deploy.ts    # Vercel deployment
+│       │   ├── sessions.ts  # Share tokens
+│       │   ├── timeline.ts  # Checkpoint history + AI analysis
+│       │   ├── users.ts     # Token management
+│       │   ├── github.ts    # GitHub proxy
+│       │   ├── git.ts       # Git command runner
+│       │   ├── reels.ts     # YouTube Shorts proxy + cache
+│       │   └── help.ts      # Community posts
+│       ├── db/
+│       │   ├── index.ts     # SQLite (Drizzle) — files, snapshots, sessions
+│       │   ├── mongoose.ts  # MongoDB — users, events, projects, posts
+│       │   └── models/      # Mongoose schemas
+│       ├── middleware/
+│       │   └── authMiddleware.ts  # Auth0 JWKS + user upsert
+│       ├── security/
+│       │   └── scanner.ts   # Regex vulnerability detection
+│       └── ws/
+│           └── collaboration.ts  # Yjs relay + terminal PTY
+│
+├── shared/
+│   └── src/types/index.ts   # ExecuteRequest, ExecuteResponse, WS message types
+│
+├── Dockerfile.{python,node,cpp,rust,go,bun}
+├── setup_docker.sh          # Build all sandbox images
+└── turbo.json
+```
+
+---
+
+## Setup
+
+### Prerequisites
+- [Bun](https://bun.sh) ≥ 1.2
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) running
+- [MongoDB Atlas](https://www.mongodb.com/atlas) cluster (free tier works)
+- [Auth0](https://auth0.com) application (SPA type)
+- DeepSeek API key or [LM Studio](https://lmstudio.ai) running locally
+
+### 1. Clone & install
+
+```bash
+git clone https://github.com/Alex110506/vibecodium
+cd vibecodium
+bun install
+```
+
+### 2. Configure environment
+
+```bash
+cp server/.env.example server/.env
+cp client/.env.example client/.env
+```
+
+**`server/.env`**
+```env
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_KEY=sk-...
+LLM_MODEL=deepseek-chat
+AUTH0_DOMAIN=your-tenant.us.auth0.com
+MONGO_URI=mongodb+srv://...
+```
+
+**`client/.env`**
+```env
+VITE_AUTH0_DOMAIN=your-tenant.us.auth0.com
+VITE_AUTH0_CLIENT_ID=...
+VITE_BACKEND_URL=http://localhost:3000
+```
+
+### 3. Build sandbox images
+
+```bash
+bun run setup:docker
+# Builds: vibecodium-{python,node,cpp,rust,go,bun}:latest
+```
+
+### 4. Start dev servers
+
+```bash
+bun run dev
+# Client → http://localhost:5173
+# Server → http://localhost:3000
+```
+
+### Cloudflare tunnel (for collaboration across machines)
+
+```bash
+cloudflared tunnel --url http://localhost:3000
+# Copy the *.trycloudflare.com URL into client/.env as VITE_BACKEND_URL
+```
+
+---
+
+## Deployment
+
+| Part | Platform | Notes |
+|------|----------|-------|
+| Frontend | **Vercel** | Root dir: `client` · Install: `cd .. && bun install --frozen-lockfile --ignore-scripts && cd shared && bun run build` · Build: `bun run build` · Output: `dist` |
+| Backend | **Cloudflare Tunnel** | `cloudflared tunnel --url http://localhost:3000` — exposes local server via HTTPS, no port forwarding needed |
+| Database | **MongoDB Atlas** | Set Network Access → `0.0.0.0/0` to allow tunnel exit IPs |
+| Sandbox | **Docker Desktop** | Must run on the same machine as the backend |
+
+---
+
+<div align="center">
+
+Built with obsession for **iTEC 2026** · Web Development Track
+
+</div>

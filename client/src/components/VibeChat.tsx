@@ -31,7 +31,7 @@ interface VibeChatProps {
 const WELCOME: Message = {
     id: "msg1",
     role: "assistant",
-    content: "Hello! I'm your VibeCodium agent. Select a file and describe a change — I'll propose it inline in the editor for you to Accept or Reject.",
+    content: "Hello! I'm your iTECify agent. Select a file and describe a change — I'll propose it inline in the editor for you to Accept or Reject.",
 };
 
 export default function VibeChat({ activeFile, projectId, token, onPendingUpdate, onFileAction }: VibeChatProps) {
