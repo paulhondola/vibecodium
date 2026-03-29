@@ -1,111 +1,111 @@
-# iTECify — 6-Minute Pitch Strategy
+# iTECify — Strategie de Pitch (6 Minute)
 
 ---
 
-## 0:00–0:30 — Hook (use their own words)
+## 0:00–0:30 — Hook (cu propriile lor cuvinte)
 
-> "The problem statement opens with a scene: 3am, Ana writes Python, Radu tweaks React, an AI generates backend routes — all in the same file, no Git conflicts. You wrote that scenario. We built it."
+> "Enunțul problemei începe cu o scenă: ora 3 dimineața. Ana scrie Python, Radu face tweak-uri în React, un agent AI generează rutele de backend — totul în același fișier, fără conflicte de Git. Voi ați scris scena asta. Noi am construit-o."
 
-Open the app live. Don't show slides. The interface is the pitch.
-
----
-
-## 0:30–1:00 — Frame the gap
-
-One sentence per problem they named in the PDF:
-
-- Copilot = autocomplete on steroids. Not a real collaborator.
-- You can't tell human code from AI hallucination — debugging is a nightmare.
-- Sandboxing platforms fail at complex backends.
-- Deployment breaks your flow entirely.
-
-> "We solved all four."
+Deschideți aplicația live. Fără slide-uri. Interfața este pitch-ul.
 
 ---
 
-## 1:00–2:30 — Demo Block 1: Collaboration (their #1 requirement)
+## 0:30–1:00 — Problema
 
-**Show:** Two browser windows side by side (same session).
+Câte o propoziție pentru fiecare problemă menționată în PDF:
 
-1. Type in one window → Yjs CRDT syncs cursor position and edits to the other in real time. Call out: *"No Git push, no conflict."*
-2. Open VibeChat, send a prompt to the AI agent. Watch it stream token by token.
-3. When the agent calls `write_file`, the Monaco editor shows the **accept/reject block** — green diff inline, two buttons. Click Accept.
-4. Point out: *"Human code looks normal. AI code is a Notion block. One click to accept or reject. You asked for exactly this."*
+- Copilot = autocompletare pe steroizi. Nu un colaborator real.
+- Nu poți distinge codul uman de o halucinație AI — debugging-ul devine un coșmar.
+- Platformele de sandboxing pică când vine vorba de backend complex.
+- Deployment-ul îți rupe complet fluxul de lucru.
 
-**Covers:** Multi-cursor, CRDT sync, AI block-editor, accept/reject.
-
----
-
-## 2:30–3:30 — Demo Block 2: Sandboxing + Security (their #2 requirement)
-
-**Show:** Pick a Python or Rust file. Click Run.
-
-1. The terminal shows live stdout/stderr as the Docker container executes. Say: *"Isolated Docker container, spun up on the fly, for any language."*
-2. Open the **Security Scan** — trigger it on a file with a hardcoded secret or SQL injection pattern. Show the vulnerabilities flagged before execution.
-3. Optional: mention CPU/memory limits enforced on the container.
-
-**Covers:** Docker sandboxing, live output, pre-execution vulnerability scan, resource limits.
+> "Le-am rezolvat pe toate patru."
 
 ---
 
-## 3:30–4:15 — Demo Block 3: Shared Terminal (Side-quest #1)
+## 1:00–2:30 — Demo 1: Colaborare (cerința #1)
 
-**Show:** Open a terminal in both windows.
+**Arată:** Două ferestre de browser side by side, aceeași sesiune.
 
-1. Type a command in one window — both see the output simultaneously.
-2. Say: *"Not just the editor. The terminal is collaborative too."*
+1. Scrie în prima fereastră → Yjs CRDT sincronizează poziția cursorului și editările în timp real în cealaltă fereastră. Subliniază: *"Niciun Git push, niciun conflict."*
+2. Deschide VibeChat, trimite un prompt agentului AI. Urmărește cum răspunsul apare token cu token.
+3. Când agentul apelează `write_file`, editorul Monaco afișează **blocul accept/reject** — diff verde inline, două butoane. Apasă Accept.
+4. Subliniază: *"Codul uman arată normal. Codul AI e un bloc Notion. Un singur click pentru a-l accepta sau refuza. Exact asta ați cerut."*
 
-Quick beat — 45 seconds max. It's a side-quest, treat it like one.
-
----
-
-## 4:15–5:00 — Demo Block 4: Time-Travel Debugging (Side-quest #2)
-
-**Show:** The timeline bar at the bottom of the workspace.
-
-1. Click back through 3-4 checkpoints. Show the diff preview for each.
-2. Restore a previous state. Say: *"Every AI action creates a checkpoint. Rewind the session like a replay."*
-
-This maps directly to what they called "Time-Travel Debugging." Use that exact phrase.
+**Acoperă:** Multi-cursor, sincronizare CRDT, AI block-editor, accept/reject.
 
 ---
 
-## 5:00–5:30 — Easter Eggs (rapid fire, keep it fun)
+## 2:30–3:30 — Demo 2: Sandboxing + Securitate (cerința #2)
 
-Go fast, keep energy high:
+**Arată:** Alege un fișier Python sau Rust. Apasă Run.
 
-1. **Rubber Duck** — *"Stuck? Talk to the duck."*
-2. **Matrix Rain** — trigger it. *"Because why not."*
-3. **Pomodoro Timer** — *"We care about burnout."*
-4. **Subway Surfer 3D / Spotify** — *"3am hackathon energy, built in."*
-5. **CoderMatch** — *"Tinder for finding a pair programmer."*
-6. **Code Roast** — *"Ask the AI to roast your code. It will."*
+1. Terminalul afișează live stdout/stderr în timp ce containerul Docker execută codul. Spune: *"Container Docker izolat, pornit din mers, pentru orice limbaj."*
+2. Deschide **Security Scan** — declanșează-l pe un fișier cu un secret hardcodat sau un pattern de SQL injection. Arată vulnerabilitățile detectate înainte de execuție.
+3. Opțional: menționează limitele de CPU și memorie aplicate pe container.
 
-One liner per egg, show don't explain.
+**Acoperă:** Docker sandboxing, output live, scanare de vulnerabilități pre-execuție, resource limits.
 
 ---
 
-## 5:30–6:00 — Close
+## 3:30–4:15 — Demo 3: Terminal Comun (Side-quest #1)
 
-> "You asked for Figma, but for code. Multi-human, multi-AI, one window, no conflicts, runs anything, scans for vulnerabilities before it executes, and deploys when you're ready. That's iTECify."
+**Arată:** Deschide terminalul în ambele ferestre.
 
-If there's a deploy feature ready — deploy something live right now as the final beat. Nothing closes a demo like shipping in front of the judges.
+1. Scrie o comandă într-o fereastră — ambele văd output-ul simultan.
+2. Spune: *"Nu doar editorul e colaborativ. Și terminalul e."*
+
+Scurt — maxim 45 de secunde. E un side-quest, tratează-l ca atare.
 
 ---
 
-## Timing Summary
+## 4:15–5:00 — Demo 4: Time-Travel Debugging (Side-quest #2)
 
-| Segment | Time | Criteria covered |
+**Arată:** Bara de timeline din workspace.
+
+1. Navighează înapoi prin 3-4 checkpoint-uri. Arată diff-ul pentru fiecare.
+2. Restaurează o stare anterioară. Spune: *"Fiecare acțiune AI creează un checkpoint. Dai rewind sesiunii ca la un replay."*
+
+Folosește exact expresia "Time-Travel Debugging" — e termenul lor din PDF.
+
+---
+
+## 5:00–5:30 — Easter Eggs (rapid, cu energie)
+
+Mergi rapid, menține energia sus:
+
+1. **Rubber Duck** — *"Blocat? Vorbește cu rățușca."*
+2. **Matrix Rain** — declanșează-l. *"Pentru că de ce nu."*
+3. **Pomodoro Timer** — *"Ne pasă de burnout."*
+4. **Subway Surfer 3D / Spotify** — *"Energie de hackathon la 3 dimineața, inclusă în platformă."*
+5. **CoderMatch** — *"Tinder pentru găsit un pair programmer."*
+6. **Code Roast** — *"Cere-i AI-ului să-ți roasteze codul. O va face."*
+
+Un singur liner per easter egg — arată, nu explica.
+
+---
+
+## 5:30–6:00 — Închidere
+
+> "Ați cerut Figma, dar pentru cod. Multi-human, multi-AI, o singură fereastră, fără conflicte, rulează orice, scanează vulnerabilități înainte de execuție și deployează când ești gata. Asta e iTECify."
+
+Dacă feature-ul de deploy e funcțional — deployează ceva live chiar acum, ca ultimul beat. Nimic nu închide un demo mai bine decât să shipi în fața juriului.
+
+---
+
+## Rezumat timing
+
+| Segment | Durată | Criterii acoperite |
 |---|---|---|
-| Hook | 0:30 | Engagement |
-| Problem framing | 0:30 | Context |
-| Collaboration demo | 1:30 | Required: CRDT, AI blocks |
-| Sandboxing + Security | 1:00 | Required: Docker, scan |
-| Shared Terminal | 0:45 | Side-quest |
+| Hook | 0:30 | Implicare |
+| Problema | 0:30 | Context |
+| Demo Colaborare | 1:30 | Obligatoriu: CRDT, AI blocks |
+| Demo Sandboxing + Securitate | 1:00 | Obligatoriu: Docker, scanare |
+| Terminal Comun | 0:45 | Side-quest |
 | Timeline / Time-travel | 0:45 | Side-quest |
 | Easter eggs | 0:30 | Bonus |
-| Close | 0:30 | Impact |
+| Închidere | 0:30 | Impact |
 
 ---
 
-**One rule:** never leave the app. Every transition should be a click inside the UI, not a slide. The interface is dense and impressive — let it do the talking.
+**O singură regulă:** nu ieși niciodată din aplicație. Fiecare tranziție trebuie să fie un click în interfață, nu un slide. Interfața e densă și impresionantă — lasă-o să vorbească.
