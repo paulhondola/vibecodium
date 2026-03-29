@@ -183,7 +183,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 					</div>
 				</section>
 
-				{/* Bento Grid with Overlapping Elements */}
+				{/* Feature Bento Grid */}
 				<section className="py-32 px-6 max-w-7xl mx-auto relative">
 					<div className="absolute top-0 right-0 w-96 h-96 bg-[rgba(168,85,247,0.1)] blur-[150px] -z-10"></div>
 					<div className="absolute bottom-0 left-0 w-96 h-96 bg-[rgba(59,130,246,0.1)] blur-[150px] -z-10"></div>
@@ -191,83 +191,102 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 					<div className="mb-20 text-center lg:text-left flex flex-col lg:flex-row items-end justify-between gap-10">
 						<div className="max-w-2xl">
 							<h2 className="text-5xl font-['Space_Grotesk'] font-bold tracking-tighter mb-6 text-glow">
-								Architected for <span className="text-[#A855F7]">Light Speed</span>.
+								Everything you need. <span className="text-[#A855F7]">Nothing you don't.</span>
 							</h2>
 							<p className="text-slate-400 text-lg">
-								Hyper-optimized components for the next generation of performance-driven software architects.
+								A real IDE in the browser — with live collaboration, an AI agent that shows its work, and sandboxed execution for six languages.
 							</p>
 						</div>
 						<div className="hidden lg:block h-[1px] flex-1 bg-gradient-to-r from-[rgba(168,85,247,0.5)] to-transparent mb-4"></div>
 					</div>
 
 					<div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-						{/* Asymmetric Large Feature */}
+						{/* Collaboration — large card */}
 						<div className="md:col-span-8 glass-card p-10 relative overflow-hidden group">
-							<div className="absolute top-0 right-0 w-64 h-64 bg-[rgba(59,130,246,0.05)] blur-3xl -z-10 group-hover:bg-[rgba(59,130,246,0.2)] transition-all duration-700"></div>
+							<div className="absolute top-0 right-0 w-64 h-64 bg-[rgba(59,130,246,0.05)] blur-3xl -z-10 group-hover:bg-[rgba(59,130,246,0.15)] transition-all duration-700"></div>
 							<div className="flex flex-col md:flex-row gap-10 h-full">
 								<div className="flex-1">
 									<div className="mb-8 w-14 h-14 rounded-2xl bg-[rgba(59,130,246,0.2)] flex items-center justify-center border border-[rgba(59,130,246,0.3)] shadow-[0_0_20px_rgba(59,130,246,0.3)]">
-										<span className="material-symbols-outlined text-[#3B82F6] text-3xl fill-1">hub</span>
+										<span className="material-symbols-outlined text-[#3B82F6] text-3xl fill-1">group</span>
 									</div>
-									<h3 className="text-3xl font-['Space_Grotesk'] font-bold mb-5 tracking-tight">Kinetic Collaboration</h3>
+									<h3 className="text-3xl font-['Space_Grotesk'] font-bold mb-5 tracking-tight">Live Collaboration</h3>
 									<p className="text-slate-400 leading-relaxed mb-8">
-										Multi-cursor synchronization with sub-5ms global latency. Share entire development environments as single neural links.
+										Multiple developers, one editor — powered by Yjs CRDT. Colored cursors show exactly who is editing what file. Changes merge conflict-free in real time over WebSocket.
 									</p>
-									<div className="flex -space-x-3 items-center">
-										<img
-											alt="Avatar"
-											className="w-12 h-12 rounded-full border-2 border-[rgba(168,85,247,0.4)] p-0.5 object-cover"
-											src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2q2NOe8rpubJsKNRyuGl5bx1jOwXvU5Phzd-WY9zbU3xopgRGK80DPolznn8NUaxUKiMzhnFcRAXyqNJacEYeSUTochygQDU0tl7hBC1DCpMefGJJB9hRTOrbcRRIt-qerNfm98JiUIErglxBmQdAKQjGlA9nzThCOGSRKBKijO1EmcuFZY4G23ebVcGfgSYYIj3nacMwKwbMYtdU8QzqVDo05t9Bw1yK8fA9_Y6iYZXHcMKAmC-IQt3kOQDqTtFkf0NBJ3QxNCxO"
-										/>
-										<img
-											alt="Avatar"
-											className="w-12 h-12 rounded-full border-2 border-[rgba(59,130,246,0.4)] p-0.5 object-cover"
-											src="https://lh3.googleusercontent.com/aida-public/AB6AXuBqCpkYX18iZ3f54mhYJJ9UQKEBvqYp2aXzPW-nj8do_HiKRVf3QG22TjOyiakzh9OAWmmsDnrv7trzxJUvRp8ZX45IZA9HWKvEv4ZYohjyBvrRj2X-MK16ltlPK3zDRlD8LaTsEZqqXy5UZd4Jgv4BFJfCOF_wcnTwx0OhgwGPRJj68uL39ldkkREuNanaTZfDCNry1VH_3z3Q3rOa9s7HQ_rB3EWWWgrWjUVifgXRwNkaQd4W-WLwblfAPMOdbbY6-p6TKknW9J2h"
-										/>
-										<div className="w-12 h-12 rounded-full bg-[#1a1f2e] flex items-center justify-center text-xs font-bold border border-white/10 text-white">+24</div>
-										<span className="ml-6 text-[10px] text-[#10B981] uppercase tracking-[0.3em] animate-pulse">● Live Now</span>
+									<div className="flex items-center gap-3 flex-wrap">
+										<span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-[rgba(59,130,246,0.15)] border border-[rgba(59,130,246,0.3)] text-[#3B82F6]">Yjs CRDT</span>
+										<span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-[rgba(59,130,246,0.15)] border border-[rgba(59,130,246,0.3)] text-[#3B82F6]">Y-Monaco</span>
+										<span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-[rgba(59,130,246,0.15)] border border-[rgba(59,130,246,0.3)] text-[#3B82F6]">WebSocket</span>
+										<span className="ml-2 text-[10px] text-[#10B981] uppercase tracking-[0.3em] animate-pulse">● Live Now</span>
 									</div>
 								</div>
-								<div className="flex-1 relative hidden lg:block">
-									<div className="absolute inset-0 bg-gradient-to-tr from-[rgba(168,85,247,0.1)] to-transparent rounded-2xl border border-white/5 rotate-3 -translate-y-4"></div>
-									<div className="absolute inset-0 bg-black/40 rounded-2xl border border-white/10 -rotate-2"></div>
+								<div className="flex-1 hidden lg:flex flex-col gap-3 justify-center font-mono text-xs">
+									<div className="p-3 bg-black/40 rounded-xl border border-white/5 flex items-center gap-3">
+										<span className="w-2.5 h-2.5 rounded-full bg-[#A855F7] shadow-[0_0_8px_#A855F7] flex-shrink-0"></span>
+										<span className="text-slate-400">Alex is editing <span className="text-white">server/index.ts</span></span>
+									</div>
+									<div className="p-3 bg-black/40 rounded-xl border border-white/5 flex items-center gap-3">
+										<span className="w-2.5 h-2.5 rounded-full bg-[#10B981] shadow-[0_0_8px_#10B981] flex-shrink-0"></span>
+										<span className="text-slate-400">Radu is editing <span className="text-white">client/Workspace.tsx</span></span>
+									</div>
+									<div className="p-3 bg-black/40 rounded-xl border border-white/5 flex items-center gap-3">
+										<span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] shadow-[0_0_8px_#3B82F6] flex-shrink-0"></span>
+										<span className="text-slate-400">Ana joined the session</span>
+									</div>
 								</div>
 							</div>
 						</div>
 
+						{/* Deploy — small card */}
 						<div className="md:col-span-4 glass-card p-10 flex flex-col justify-between group">
 							<div className="mb-8 w-14 h-14 rounded-2xl bg-[rgba(16,185,129,0.2)] flex items-center justify-center border border-[rgba(16,185,129,0.3)]">
 								<span className="material-symbols-outlined text-[#10B981] text-3xl">rocket_launch</span>
 							</div>
 							<div>
-								<h3 className="text-2xl font-['Space_Grotesk'] font-bold mb-4 tracking-tight">Instant Deployment</h3>
+								<h3 className="text-2xl font-['Space_Grotesk'] font-bold mb-4 tracking-tight">One-Click Deploy</h3>
 								<p className="text-slate-400 text-sm leading-relaxed">
-									Push to production at the edge. Automatic SSL, infinite scaling, and global distribution in under 2 seconds.
+									Connect your Vercel token in profile settings and deploy your project straight from the editor. Deployment logs stream back in the terminal in real time.
 								</p>
 							</div>
 						</div>
 
-						{/* Sentient AI Section */}
+						{/* AI Agent — full-width */}
 						<div className="md:col-span-12 glass-card p-1 border-[rgba(168,85,247,0.3)] relative group overflow-hidden sentient-ai">
 							<div className="absolute inset-0 bg-gradient-to-r from-[rgba(168,85,247,0.05)] via-[rgba(59,130,246,0.05)] to-[rgba(168,85,247,0.05)] animate-pulse"></div>
-							<div className="relative bg-[#0a0c14] p-12 rounded-[14px] flex flex-col lg:flex-row items-center gap-16">
+							<div className="relative bg-[#0a0c14] p-12 rounded-[14px] flex flex-col lg:flex-row items-start gap-16">
 								<div className="lg:w-3/5">
 									<div className="inline-flex items-center gap-3 mb-8 px-4 py-2 rounded-xl bg-[rgba(168,85,247,0.1)] border border-[rgba(168,85,247,0.2)]">
 										<span className="material-symbols-outlined text-[#A855F7] fill-1 sentient-ai">bolt</span>
-										<span className="text-xs font-black text-[#A855F7] uppercase tracking-[0.4em]">Autonomous Intelligence</span>
+										<span className="text-xs font-black text-[#A855F7] uppercase tracking-[0.4em]">AI Agent</span>
 									</div>
-									<h3 className="text-4xl font-['Space_Grotesk'] font-bold mb-6 text-glow">The IDE that Thinks with You</h3>
-									<p className="text-slate-400 text-lg leading-relaxed max-w-2xl">
-										iTECify's AI isn't just an autocomplete engine. It's a sentient development partner that understands your system's architectural intent and executes refactors before you even hit save.
+									<h3 className="text-4xl font-['Space_Grotesk'] font-bold mb-6 text-glow">AI that shows its work</h3>
+									<p className="text-slate-400 text-lg leading-relaxed max-w-2xl mb-6">
+										The agent streams token-by-token via SSE, reads your files, writes proposed changes, and runs commands — all in a tool loop. Every edit surfaces as a diff you <span className="text-[#10B981] font-semibold">Accept</span> or <span className="text-red-400 font-semibold">Reject</span> inline in Monaco before anything touches your files.
 									</p>
+									<div className="flex gap-3 flex-wrap">
+										<span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-[rgba(168,85,247,0.15)] border border-[rgba(168,85,247,0.3)] text-[#A855F7]">SSE Streaming</span>
+										<span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-[rgba(168,85,247,0.15)] border border-[rgba(168,85,247,0.3)] text-[#A855F7]">Tool Loop</span>
+										<span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-[rgba(168,85,247,0.15)] border border-[rgba(168,85,247,0.3)] text-[#A855F7]">Accept / Reject Diffs</span>
+										<span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-[rgba(168,85,247,0.15)] border border-[rgba(168,85,247,0.3)] text-[#A855F7]">DeepSeek / LM Studio</span>
+									</div>
 								</div>
 								<div className="lg:w-2/5 w-full">
-									<div className="space-y-4 font-mono text-xs">
-										<div className="p-5 glass-card border-[rgba(168,85,247,0.3)] rounded-2xl sentient-ai">
-											<span className="text-[#A855F7] font-bold">SENTIENT AI:</span> "I've detected a race condition in your WebSocket handler. Generating a deadlock-free factory pattern..."
+									<div className="space-y-3 font-mono text-xs">
+										<div className="p-4 glass-card border-[rgba(168,85,247,0.3)] rounded-2xl sentient-ai">
+											<div className="text-[#A855F7] font-bold mb-1 text-[10px] uppercase tracking-widest">Agent → read_file</div>
+											<span className="text-slate-400">Reading <span className="text-white">server/routes/agent.ts</span>...</span>
 										</div>
-										<div className="p-5 glass-card border-white/5 rounded-2xl opacity-50 blur-[1px] hover:blur-0 transition-all">
-											<span className="text-[#10B981] font-bold">SYSTEM:</span> Optimized 24 modules. Performance increased by 18%.
+										<div className="p-4 glass-card border-[rgba(168,85,247,0.3)] rounded-2xl sentient-ai">
+											<div className="text-[#A855F7] font-bold mb-1 text-[10px] uppercase tracking-widest">Agent → write_file</div>
+											<span className="text-slate-400">Proposing changes to <span className="text-white">agent.ts</span></span>
+											<div className="flex gap-2 mt-3">
+												<button className="px-3 py-1 text-[10px] bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30 font-bold rounded uppercase tracking-widest">✓ Accept</button>
+												<button className="px-3 py-1 text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 font-bold rounded uppercase tracking-widest">✗ Reject</button>
+											</div>
+										</div>
+										<div className="p-4 glass-card border-white/5 rounded-2xl opacity-60">
+											<div className="text-[#10B981] font-bold mb-1 text-[10px] uppercase tracking-widest">Agent → execute_command</div>
+											<span className="text-slate-400">$ bun run build</span>
 										</div>
 									</div>
 								</div>
@@ -276,64 +295,100 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 					</div>
 				</section>
 
-				{/* Interactive Features Grid */}
+				{/* Secondary Features */}
 				<section className="py-32 bg-black/40 relative">
-					<div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-24 items-center">
-						<div className="relative group">
-							<div className="absolute -inset-10 bg-[rgba(168,85,247,0.2)] blur-[120px] rounded-full opacity-30 group-hover:opacity-60 transition-opacity"></div>
-							<div className="relative rounded-3xl overflow-hidden glass-card border-[rgba(168,85,247,0.2)] shadow-2xl transform hover:scale-[1.02] transition-transform duration-500">
-								<img
-									alt="Circuitry"
-									className="w-full opacity-80"
-									src="https://lh3.googleusercontent.com/aida-public/AB6AXuCsvbzu4BHV8r-oN3Co6cqaiF2y3A9bEqMkjffBjz9jwmxciYwCqlw22e5tpsc5NnSXJ9SR_OxReis5rt_nzBZs73RuKvE1uPXmsm-HqarQ6IIzvOja63nWHAnoS4Gisl7rhevYH1TlQZNIQuJ8sA69jzMC6Oarqzc5DnHa2-9ny5jMI6DuSdQicoeG8_S92cf-wf_hujntNlbwzqauQ-hNAMjLd8PRyfVTxI38dLniTRoQjh2x7hTGZeqsnS3rvknHNpc78aTF-eUu"
-								/>
-								<div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
-							</div>
-						</div>
-						<div className="space-y-12">
-							<h2 className="text-5xl font-['Space_Grotesk'] font-bold tracking-tighter text-glow">
-								Built for the <br/>
-								<span className="text-[#A855F7]">Kinetic Developer</span>
+					<div className="max-w-7xl mx-auto px-6">
+						<div className="text-center mb-20">
+							<h2 className="text-5xl font-['Space_Grotesk'] font-bold tracking-tighter mb-6 text-glow">
+								Built for real <span className="text-[#A855F7]">developer workflows</span>
 							</h2>
-							<div className="space-y-10">
-								<div className="flex gap-6 group">
-									<div className="flex-shrink-0 w-14 h-14 glass-card flex items-center justify-center border-[rgba(59,130,246,0.3)] group-hover:scale-110 transition-transform">
-										<span className="material-symbols-outlined text-[#3B82F6] text-2xl">security</span>
-									</div>
-									<div>
-										<h4 className="text-xl font-bold font-['Space_Grotesk'] mb-2 text-[#f8fafc] group-hover:text-[#3B82F6] transition-colors">
-											Zero-Trust Neural Security
-										</h4>
-										<p className="text-slate-500 text-sm leading-relaxed">
-											End-to-end encrypted sessions with biometric validation. Your source code remains yours, even in our cloud.
-										</p>
-									</div>
+							<p className="text-slate-400 text-lg max-w-2xl mx-auto">
+								From sandboxed execution to code history — every feature solves a problem that matters.
+							</p>
+						</div>
+
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+							<div className="flex gap-6 group p-8 glass-card rounded-2xl hover:border-[rgba(59,130,246,0.3)] transition-colors">
+								<div className="flex-shrink-0 w-12 h-12 glass-card flex items-center justify-center border-[rgba(59,130,246,0.3)] group-hover:scale-110 transition-transform rounded-xl">
+									<span className="material-symbols-outlined text-[#3B82F6] text-xl">code_blocks</span>
 								</div>
-								<div className="flex gap-6 group">
-									<div className="flex-shrink-0 w-14 h-14 glass-card flex items-center justify-center border-[rgba(16,185,129,0.3)] group-hover:scale-110 transition-transform">
-										<span className="material-symbols-outlined text-[#10B981] text-2xl">cloud_sync</span>
-									</div>
-									<div>
-										<h4 className="text-xl font-bold font-['Space_Grotesk'] mb-2 text-[#f8fafc] group-hover:text-[#10B981] transition-colors">
-											Global Edge Synchronization
-										</h4>
-										<p className="text-slate-500 text-sm leading-relaxed">
-											Instant file-system mirroring across 24 availability zones. Work from anywhere with zero latency lag.
-										</p>
-									</div>
+								<div>
+									<h4 className="text-lg font-bold font-['Space_Grotesk'] mb-2 text-[#f8fafc] group-hover:text-[#3B82F6] transition-colors">
+										Sandboxed Execution
+									</h4>
+									<p className="text-slate-500 text-sm leading-relaxed">
+										Run Python, Node, C++, Rust, Go, and Bun inside isolated Docker containers. 2 GB RAM limit, network off, 3-second timeout — code can't escape.
+									</p>
 								</div>
-								<div className="flex gap-6 group">
-									<div className="flex-shrink-0 w-14 h-14 glass-card flex items-center justify-center border-[rgba(168,85,247,0.3)] group-hover:scale-110 transition-transform">
-										<span className="material-symbols-outlined text-[#A855F7] text-2xl">extension</span>
-									</div>
-									<div>
-										<h4 className="text-xl font-bold font-['Space_Grotesk'] mb-2 text-[#f8fafc] group-hover:text-[#A855F7] transition-colors">
-											Universal Extension Architecture
-										</h4>
-										<p className="text-slate-500 text-sm leading-relaxed">
-											Full compatibility with the VS Code marketplace. Bring your themes, keybindings, and plugins into the void.
-										</p>
-									</div>
+							</div>
+
+							<div className="flex gap-6 group p-8 glass-card rounded-2xl hover:border-[rgba(168,85,247,0.3)] transition-colors">
+								<div className="flex-shrink-0 w-12 h-12 glass-card flex items-center justify-center border-[rgba(168,85,247,0.3)] group-hover:scale-110 transition-transform rounded-xl">
+									<span className="material-symbols-outlined text-[#A855F7] text-xl">history</span>
+								</div>
+								<div>
+									<h4 className="text-lg font-bold font-['Space_Grotesk'] mb-2 text-[#f8fafc] group-hover:text-[#A855F7] transition-colors">
+										Timeline &amp; Checkpoints
+									</h4>
+									<p className="text-slate-500 text-sm leading-relaxed">
+										Click any checkpoint to restore that file state instantly — or ask the AI to explain what changed between two points.
+									</p>
+								</div>
+							</div>
+
+							<div className="flex gap-6 group p-8 glass-card rounded-2xl hover:border-[rgba(16,185,129,0.3)] transition-colors">
+								<div className="flex-shrink-0 w-12 h-12 glass-card flex items-center justify-center border-[rgba(16,185,129,0.3)] group-hover:scale-110 transition-transform rounded-xl">
+									<span className="material-symbols-outlined text-[#10B981] text-xl">shield_check</span>
+								</div>
+								<div>
+									<h4 className="text-lg font-bold font-['Space_Grotesk'] mb-2 text-[#f8fafc] group-hover:text-[#10B981] transition-colors">
+										Security Scanner
+									</h4>
+									<p className="text-slate-500 text-sm leading-relaxed">
+										Static analysis runs before every execution. Critical issues like fork bombs and disk wipers are blocked outright. High, medium, and low findings surface with explanations.
+									</p>
+								</div>
+							</div>
+
+							<div className="flex gap-6 group p-8 glass-card rounded-2xl hover:border-[rgba(59,130,246,0.3)] transition-colors">
+								<div className="flex-shrink-0 w-12 h-12 glass-card flex items-center justify-center border-[rgba(59,130,246,0.3)] group-hover:scale-110 transition-transform rounded-xl">
+									<span className="material-symbols-outlined text-[#3B82F6] text-xl">link</span>
+								</div>
+								<div>
+									<h4 className="text-lg font-bold font-['Space_Grotesk'] mb-2 text-[#f8fafc] group-hover:text-[#3B82F6] transition-colors">
+										Session Sharing
+									</h4>
+									<p className="text-slate-500 text-sm leading-relaxed">
+										Generate a shareable link with a signed token — valid for 7 days. Recipients can access the project without an account. Revoke anytime.
+									</p>
+								</div>
+							</div>
+
+							<div className="flex gap-6 group p-8 glass-card rounded-2xl hover:border-[rgba(168,85,247,0.3)] transition-colors">
+								<div className="flex-shrink-0 w-12 h-12 glass-card flex items-center justify-center border-[rgba(168,85,247,0.3)] group-hover:scale-110 transition-transform rounded-xl">
+									<span className="material-symbols-outlined text-[#A855F7] text-xl">terminal</span>
+								</div>
+								<div>
+									<h4 className="text-lg font-bold font-['Space_Grotesk'] mb-2 text-[#f8fafc] group-hover:text-[#A855F7] transition-colors">
+										Shared Terminal
+									</h4>
+									<p className="text-slate-500 text-sm leading-relaxed">
+										A real xterm.js terminal backed by a PTY process over WebSocket. Run a command and everyone in the session sees the output at the same time.
+									</p>
+								</div>
+							</div>
+
+							<div className="flex gap-6 group p-8 glass-card rounded-2xl hover:border-[rgba(16,185,129,0.3)] transition-colors">
+								<div className="flex-shrink-0 w-12 h-12 glass-card flex items-center justify-center border-[rgba(16,185,129,0.3)] group-hover:scale-110 transition-transform rounded-xl">
+									<span className="material-symbols-outlined text-[#10B981] text-xl">forum</span>
+								</div>
+								<div>
+									<h4 className="text-lg font-bold font-['Space_Grotesk'] mb-2 text-[#f8fafc] group-hover:text-[#10B981] transition-colors">
+										Community &amp; CoderMatch
+									</h4>
+									<p className="text-slate-500 text-sm leading-relaxed">
+										Post your repo for community code review. Or spin the CoderMatch wheel and get randomly paired with another developer for a session.
+									</p>
 								</div>
 							</div>
 						</div>
