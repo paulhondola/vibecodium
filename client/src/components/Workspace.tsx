@@ -282,7 +282,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         setShowTerminal(true); // Show terminal to see logs
         try {
             const token = await getAccessTokenSilently();
-            const res = await fetch(`http://localhost:3000/api/deploy/${projectId}`, {
+            const res = await fetch(`${API_BASE}/api/deploy/${projectId}`, {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${token}`

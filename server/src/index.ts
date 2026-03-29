@@ -69,12 +69,20 @@ const EXEC_COMMANDS: Record<string, () => string[]> = {
 };
 
 export const app = new Hono()
+	.onError((err, c) => {
+		const name = (err as any)?.name ?? "";
+		if (name === "MongooseServerSelectionError" || name === "MongooseError" || name.includes("Mongo")) {
+			return c.json({ success: false, error: "Database unavailable", details: err.message }, 503);
+		}
+		console.error("Unhandled error:", err);
+		return c.json({ success: false, error: "Internal server error" }, 500);
+	})
 	.use(logger())
 	.use(cors({
-		origin: (origin) => origin ?? "http://localhost:5173",
-		allowHeaders: ["Content-Type", "Authorization"],
+		origin: "*",
+		allowHeaders: ["*"],
 		allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-		credentials: true,
+		credentials: false,
 	}))
 	.route("/api/git", gitRoutes)
 	.route("/api/projects", projectsRoutes)
