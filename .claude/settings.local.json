@@ -24,7 +24,10 @@
       "Bash(python3 -c \":*)",
       "Bash(claude plugin:*)",
       "Bash(grep -r \"itecify\\\\|iTEC\" /Users/paulhondola/Developer/vibecodium --include=*.ts --include=*.tsx --include=*.json --include=*.html --include=*.css --include=*.md -n)",
-      "Bash(grep -r \"iTECify\\\\|itecify\" /Users/paulhondola/Developer/vibecodium --include=*.ts --include=*.tsx --include=*.html --include=*.css --include=*.md --include=*.json -n)"
+      "Bash(grep -r \"iTECify\\\\|itecify\" /Users/paulhondola/Developer/vibecodium --include=*.ts --include=*.tsx --include=*.html --include=*.css --include=*.md --include=*.json -n)",
+      "Bash(mkdir -p /Users/paulhondola/Developer/vibecodium/scripts)",
+      "Bash(mv /Users/paulhondola/Developer/vibecodium/setup_docker.sh /Users/paulhondola/Developer/vibecodium/scripts/setup_docker.sh)",
+      "Bash(chmod +x /Users/paulhondola/Developer/vibecodium/scripts/setup_docker.sh)"
     ]
   }
 }

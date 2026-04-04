@@ -25,7 +25,7 @@ Built for the **iTEC 2026 Web Development** track.
 | Terminal | **Xterm.js + node-pty** | PTY multiplexed via WebSocket. Real interactive shell. |
 | Real-time | **Yjs CRDT** | Editor sync via `ws/collaboration.ts`. |
 | AI Agent | **OpenAI-compatible API** | Default: DeepSeek (`https://api.deepseek.com/v1`). Provider-agnostic via env vars. |
-| Execution | **Docker** | 6 sandbox images built by `setup_docker.sh`. |
+| Execution | **Docker** | 6 sandbox images built by `scripts/setup_docker.sh`. |
 | Lint/Format | **Biome** | `bun run lint`, `bun run format`. Not ESLint. |
 
 ---
@@ -56,7 +56,7 @@ bun run format
 bun run type-check
 
 # Build Docker sandbox images (also runs on postinstall)
-./setup_docker.sh
+./scripts/setup_docker.sh
 # or
 bun run setup:docker
 ```
@@ -140,7 +140,7 @@ vibecodium/
 
 **AI agent:** `server/src/routes/agent.ts` — streams tokens via SSE, detects tool calls, executes tools, loops back. Tools: `read_file`, `write_file`, `execute_command`.
 
-**Code execution:** Docker sandbox images (built by `setup_docker.sh`) for Python, Node, C++, Rust, Go, Bun. Each run gets an isolated container.
+**Code execution:** Docker sandbox images (built by `scripts/setup_docker.sh`) for Python, Node, C++, Rust, Go, Bun. Each run gets an isolated container.
 
 ### Frontend architecture
 
