@@ -20,7 +20,7 @@
 1. Mergi la: https://console.cloud.google.com/
 2. Click pe dropdown-ul de proiecte (sus stânga)
 3. Click **"NEW PROJECT"**
-4. Nume: `VibeCodium` sau `iTECify`
+4. Nume: `VibeCodium`
 5. Click **"CREATE"**
 
 ### Pasul 2: Enable YouTube Data API
@@ -191,7 +191,7 @@ Când deploy-uiești pe Vercel/Netlify/Cloudflare:
 
 1. Adaugă `YOUTUBE_API_KEY` în environment variables
 2. În Google Cloud Console, update API key restrictions:
-   - HTTP referrers: add production domain (ex: `itecify.com/*`)
+   - HTTP referrers: add production domain (ex: `vibecodium.dev/*`)
 
 ---
 

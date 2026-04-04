@@ -1,4 +1,4 @@
-# 🚀 VibeCodium / iTECify — Product Roadmap & Innovation Plan
+# 🚀 VibeCodium — Product Roadmap & Innovation Plan
 
 > **Status:** iTEC 2026 Web Development Track
 > **Team:** Brigada Inginerilor Amărâți (Brigade of Miserable Engineers)
