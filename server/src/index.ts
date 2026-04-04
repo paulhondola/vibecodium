@@ -447,7 +447,7 @@ export default {
 
                     let container: Docker.Container | null = null;
                     try {
-                        broadcastToRoom("\x1b[1;36m[iTECify]\x1b[0m Syncing project files...\r\n");
+                        broadcastToRoom("\x1b[1;36m[VibeCodium]\x1b[0m Syncing project files...\r\n");
                         const hostDir = await syncProjectFilesToDisk(roomId);
 
                         // Load file list for language detection + security scan

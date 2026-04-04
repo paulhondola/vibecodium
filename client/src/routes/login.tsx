@@ -64,7 +64,7 @@ function Login() {
           </div>
           
           <h1 className="text-3xl font-bold tracking-tight text-white mb-2">
-            Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">iTECify</span>
+            Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">VibeCodium</span>
           </h1>
           <p className="text-sm text-gray-400 mb-10 max-w-xs leading-relaxed">
             The premium collaborative environment for modern developers. Secure your identity to continue.

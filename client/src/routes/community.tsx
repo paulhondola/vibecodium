@@ -85,7 +85,7 @@ function CommunityPage() {
                         className="flex items-center gap-2 text-gray-400 hover:text-cyan-400 transition-colors text-sm"
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                        Back to iTECify
+                        Back to VibeCodium
                     </button>
                     <div className="flex items-center gap-2">
                         <Users size={16} className="text-[#A855F7]" />
@@ -105,7 +105,7 @@ function CommunityPage() {
                         Community Help Board
                     </h1>
                     <p className="text-gray-400 text-sm max-w-xl mx-auto">
-                        Browse help requests from the community. Open any project directly in iTECify's sandbox to debug together.
+                        Browse help requests from the community. Open any project directly in VibeCodium's sandbox to debug together.
                     </p>
                 </div>
 

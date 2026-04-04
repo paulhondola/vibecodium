@@ -13,7 +13,7 @@ githubRoutes.use("/*", async (c, next) => {
 async function ghHeaders(auth0Id?: string): Promise<Record<string, string>> {
     const h: Record<string, string> = {
         Accept: "application/vnd.github.v3+json",
-        "User-Agent": "iTECify-App",
+        "User-Agent": "VibeCodium-App",
     };
     
     let token = process.env.GITHUB_TOKEN;

@@ -64,7 +64,7 @@ deployRoutes.post("/:projectId", async (c) => {
         if (!projectRow) throw new Error("Project not found in database.");
         const projectName = projectRow.projectName
             || projectRow.repoUrl?.split("/").pop()?.replace(".git", "")
-            || "itecify-app";
+            || "vibecodium-app";
 
         // 2. Security scan
         sendLog("🛡️ Running pre-deploy security scan...");

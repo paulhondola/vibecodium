@@ -558,7 +558,7 @@ export default function EditorArea({
                     <div className="flex h-full w-full items-center justify-center bg-[#09090b] select-none">
                         <div className="text-center flex flex-col items-center">
                             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-[#09090b] text-3xl font-bold mb-6 shadow-[0_0_30px_rgba(34,211,238,0.2)]">iT</div>
-                            <h2 className="text-2xl font-bold text-gray-300 mb-2 font-['Space_Grotesk']">iTECify Editor</h2>
+                            <h2 className="text-2xl font-bold text-gray-300 mb-2 font-['Space_Grotesk']">VibeCodium Editor</h2>
                             <p className="text-gray-500 text-sm mb-10">Select a file from the explorer to begin coding.</p>
                             <div className="flex flex-col items-start text-xs text-gray-500 gap-3 font-mono border-t border-[#27272a] pt-6">
                                 <div className="flex items-center justify-between w-64"><span className="text-gray-600">Show Explorer</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-gray-400">⌘ E</span></div>
