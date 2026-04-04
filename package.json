@@ -21,8 +21,8 @@
     "lint": "biome lint .",
     "type-check": "turbo type-check",
     "test": "turbo test",
-    "setup:docker": "./setup_docker.sh",
-    "postinstall": "turbo build --filter=shared --filter=server && ./setup_docker.sh",
+    "setup:docker": "./scripts/setup_docker.sh",
+    "postinstall": "turbo build --filter=shared --filter=server && ./scripts/setup_docker.sh",
     "format": "biome format . --write"
   },
   "keywords": [

@@ -135,7 +135,7 @@ VibeCodium is a **real-time collaborative code editor** with an embedded AI agen
 - **Code Roaster** — LLM-powered sarcastic code review (morale-destroying, accuracy guaranteed)
 
 ### Sandboxed Code Execution
-Six custom Docker images (`vibecodium-{python,node,cpp,rust,go,bun}:latest`) built with `setup_docker.sh`:
+Six custom Docker images (`vibecodium-{python,node,cpp,rust,go,bun}:latest`) built with `scripts/setup_docker.sh`:
 
 | Language | Runtime | Compile Step |
 |----------|---------|-------------|
@@ -298,7 +298,8 @@ vibecodium/
 │   └── src/types/index.ts   # ExecuteRequest, ExecuteResponse, WS message types
 │
 ├── Dockerfile.{python,node,cpp,rust,go,bun}
-├── setup_docker.sh          # Build all sandbox images
+├── scripts/
+│   └── setup_docker.sh      # Build all sandbox images
 └── turbo.json
 ```
 
