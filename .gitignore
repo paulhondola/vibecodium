@@ -46,3 +46,5 @@ bun.lockb
 # MacOS
 .DS_Store
 Icon?
+
+.remember/

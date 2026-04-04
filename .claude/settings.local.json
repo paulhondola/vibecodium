@@ -20,7 +20,9 @@
       "WebFetch(domain:fly.io)",
       "WebFetch(domain:api-docs.render.com)",
       "Bash(git remote:*)",
-      "Bash(xargs -I {} basename {})"
+      "Bash(xargs -I {} basename {})",
+      "Bash(python3 -c \":*)",
+      "Bash(claude plugin:*)"
     ]
   }
 }
