@@ -22,7 +22,9 @@
       "Bash(git remote:*)",
       "Bash(xargs -I {} basename {})",
       "Bash(python3 -c \":*)",
-      "Bash(claude plugin:*)"
+      "Bash(claude plugin:*)",
+      "Bash(grep -r \"itecify\\\\|iTEC\" /Users/paulhondola/Developer/vibecodium --include=*.ts --include=*.tsx --include=*.json --include=*.html --include=*.css --include=*.md -n)",
+      "Bash(grep -r \"iTECify\\\\|itecify\" /Users/paulhondola/Developer/vibecodium --include=*.ts --include=*.tsx --include=*.html --include=*.css --include=*.md --include=*.json -n)"
     ]
   }
 }

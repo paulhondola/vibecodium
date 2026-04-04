@@ -395,9 +395,9 @@ projectsRoutes.post("/:id/push", async (c) => {
         const targetDir = await syncProjectFilesToDisk(projectId);
 
         // 2. Execute git commands
-        const gitConfigUser = Bun.spawn(["git", "config", "user.name", "iTECify Live Collaboration"], { cwd: targetDir });
+        const gitConfigUser = Bun.spawn(["git", "config", "user.name", "VibeCodium Live Collaboration"], { cwd: targetDir });
         await gitConfigUser.exited;
-        const gitConfigEmail = Bun.spawn(["git", "config", "user.email", "live@itecify.cloud"], { cwd: targetDir });
+        const gitConfigEmail = Bun.spawn(["git", "config", "user.email", "live@vibecodium.cloud"], { cwd: targetDir });
         await gitConfigEmail.exited;
 
         const gitAdd = Bun.spawn(["git", "add", "."], { cwd: targetDir });
@@ -631,9 +631,9 @@ projectsRoutes.get("/:id/commits", async (c) => {
 
         const headers: Record<string, string> = {
             "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "iTECify-App"
+            "User-Agent": "VibeCodium-App"
         };
-        
+
         if (process.env.GITHUB_TOKEN && process.env.GITHUB_TOKEN !== "undefined") {
             headers["Authorization"] = `Bearer ${process.env.GITHUB_TOKEN}`;
         }

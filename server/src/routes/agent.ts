@@ -12,7 +12,7 @@ const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
 const LLM_KEY = process.env.LLM_KEY ?? "";
 const LLM_MODEL = process.env.LLM_MODEL ?? "deepseek-chat";
 
-const SYSTEM_PROMPT = `You are a surgical coding agent inside iTECify, a collaborative IDE.
+const SYSTEM_PROMPT = `You are a surgical coding agent inside VibeCodium, a collaborative IDE.
 The user will share a file and an instruction. Your task: suggest the MINIMAL change needed.
 
 You have four action types. Use ONLY what the instruction requires.

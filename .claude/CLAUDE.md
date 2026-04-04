@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is this project?
 
-VibeCodium (branded **iTECify** for the iTEC 2026 hackathon) is a collaborative code editor and sandboxing platform. Real-time multi-user editing via Yjs CRDT, AI agent with SSE streaming, sandboxed code execution via Docker, and Vercel deployment integration.
+VibeCodium is a collaborative code editor and sandboxing platform, built for the iTEC 2026 hackathon. Real-time multi-user editing via Yjs CRDT, AI agent with SSE streaming, sandboxed code execution via Docker, and Vercel deployment integration.
 
 Built for the **iTEC 2026 Web Development** track.
 

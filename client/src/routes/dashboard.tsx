@@ -277,7 +277,7 @@ function DashboardPage() {
         <div className="flex items-center gap-12">
           <div className="text-xl font-bold tracking-tighter text-[#A855F7] font-['Space_Grotesk'] flex items-center gap-2 cursor-pointer" onClick={() => navigate({ to: "/", search: { w: undefined } })}>
             <span className="material-symbols-outlined text-[#A855F7] fill-1 animate-pulse">terminal</span>
-              iTECify  
+              VibeCodium
           </div>
         </div>
         <div className="flex items-center gap-6">
@@ -309,7 +309,7 @@ function DashboardPage() {
         <div className="px-8 mb-12">
           <div className="text-[9px] uppercase tracking-[0.4em] font-black text-[rgba(168,85,247,0.6)] mb-2">iTEC 2026</div>
           <div className="text-sm font-['Space_Grotesk'] font-bold text-[#f8fafc] tracking-widest flex items-center gap-2">
-            iTECify
+            VibeCodium
             <span className="w-1.5 h-1.5 rounded-full bg-[#A855F7] animate-pulse" />
           </div>
           <div className="text-[9px] font-['JetBrains_Mono'] text-slate-500 mt-1">Collaborative IDE</div>
@@ -734,7 +734,7 @@ function DashboardPage() {
             GitHub Connected
           </div>
           <div className="text-[#A855F7] font-['JetBrains_Mono'] text-[8px] uppercase tracking-[0.3em] font-black" style={{ textShadow: '0 0 12px rgba(168, 85, 247, 0.6)' }}>
-            iTECify v1.0
+            VibeCodium v1.0
           </div>
         </div>
       </footer>

@@ -2,7 +2,7 @@
 
 <img src="client/public/vibecodium_icon.svg" alt="VibeCodium" width="80" />
 
-# VibeCodium · iTECify
+# VibeCodium
 
 **A collaborative cloud IDE where AI writes code beside you — in real time.**
 

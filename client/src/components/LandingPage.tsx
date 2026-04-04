@@ -19,7 +19,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 				<div className="flex items-center gap-10">
 					<span className="text-xl font-bold text-[#A855F7] tracking-tighter font-['Space_Grotesk'] flex items-center gap-2">
 						<span className="material-symbols-outlined text-[#A855F7] fill-1 animate-pulse">terminal</span>
-						iTECify
+						VibeCodium
 					</span>
 
 				</div>
@@ -98,7 +98,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 								<div className="w-3 h-3 rounded-full bg-yellow-500/50"></div>
 								<div className="w-3 h-3 rounded-full bg-green-500/50"></div>
 							</div>
-							<div className="text-[10px] font-['Space_Grotesk'] text-slate-500 uppercase tracking-[0.4em]">system.core — iTECify_v4</div>
+							<div className="text-[10px] font-['Space_Grotesk'] text-slate-500 uppercase tracking-[0.4em]">system.core — vibecodium_v4</div>
 							<div className="flex gap-4 opacity-50">
 								<span className="material-symbols-outlined text-sm">bolt</span>
 							</div>
@@ -110,7 +110,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 									<span className="text-[#3B82F6]">import</span>
 									<span>{'{ NeuralMesh }'}</span>
 									<span className="text-[#3B82F6]">from</span>
-									<span className="text-[#10B981]">'@itecify/v4'</span>;
+									<span className="text-[#10B981]">'@vibecodium/v4'</span>;
 								</div>
 								<div className="flex gap-4 text-slate-600 mb-1">
 									<span className="w-6 text-right">02</span>
@@ -161,10 +161,10 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 									<span className="w-2 h-2 rounded-full bg-[#10B981] shadow-[0_0_10px_#10B981]"></span>
 									CORE ONLINE
 								</div>
-								<div className="text-slate-500">$ itecify deploy --global</div>
+								<div className="text-slate-500">$ vibecodium deploy --global</div>
 								<div className="text-slate-400 mt-2">Connecting to Neural Edge...</div>
 								<div className="text-[#A855F7] mt-3 font-bold">SYCHRONIZING [████████████] 100%</div>
-								<div className="text-[#10B981] mt-2">DEPLOYED: https://void-x1.itecify.dev</div>
+								<div className="text-[#10B981] mt-2">DEPLOYED: https://void-x1.vibecodium.dev</div>
 								<div className="mt-10 border-t border-[rgba(168,85,247,0.1)] pt-4">
 									<div className="flex items-center gap-2 text-[rgba(168,85,247,0.6)]">
 										<span className="material-symbols-outlined text-xs">radar</span>
@@ -431,7 +431,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 						Edge Synchronized
 					</div>
 					<div className="text-[#A855F7] font-['JetBrains_Mono'] text-[9px] uppercase tracking-[0.2em] font-bold">
-						iTECify v4.0.2 Stable
+						VibeCodium v4.0.2 Stable
 					</div>
 				</div>
 			</footer>
