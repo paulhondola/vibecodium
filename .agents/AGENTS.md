@@ -1,32 +1,30 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI agents when working with code in this repository.
 
 ## What is this project?
 
 VibeCodium is a collaborative code editor and sandboxing platform, built for the iTEC 2026 hackathon. Real-time multi-user editing via Yjs CRDT, AI agent with SSE streaming, sandboxed code execution via Docker, and Vercel deployment integration.
 
-Built for the **iTEC 2026 Web Development** track.
-
 ---
 
 ## Stack
 
-| Layer | Tech | Notes |
-|-------|------|-------|
-| Runtime | **Bun** | Use Bun APIs everywhere — `Bun.spawn`, `Bun.serve`, `Bun.sqlite`. No Node-specific APIs. |
-| Monorepo | **Turborepo** + Bun workspaces | Three packages: `client`, `server`, `shared` |
-| Server | **Hono** | Lightweight. SSE via `streamText()`. WebSocket via Bun adapter. |
-| Frontend | **React 19 + Vite + TanStack Router** | File-based routing in `client/src/routes/`. |
-| Local DB | **Bun.sqlite + Drizzle ORM** | SQLite for files/projects/sessions/snapshots. Schema in `server/src/db/schema.ts`. No migrations — schema is static. |
-| Cloud DB | **MongoDB + Mongoose** | Users, timeline events, help posts, deployed apps. Models in `server/src/db/models/`. |
-| Auth | **Auth0** | JWKS-validated JWTs in `server/src/middleware/authMiddleware.ts`. |
-| Editor | **Monaco** (`@monaco-editor/react`) | In `client/src/components/EditorArea.tsx`. |
-| Terminal | **Xterm.js + node-pty** | PTY multiplexed via WebSocket. Real interactive shell. |
-| Real-time | **Yjs CRDT** | Editor sync via `ws/collaboration.ts`. |
-| AI Agent | **OpenAI-compatible API** | Default: DeepSeek (`https://api.deepseek.com/v1`). Provider-agnostic via env vars. |
-| Execution | **Docker** | 6 sandbox images built by `scripts/setup_docker.sh`. |
-| Lint/Format | **Biome** | `bun run lint`, `bun run format`. Not ESLint. |
+| Layer       | Tech                                  | Notes                                                                                                                |
+| ----------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Runtime     | **Bun**                               | Use Bun APIs everywhere — `Bun.spawn`, `Bun.serve`, `Bun.sqlite`. No Node-specific APIs.                             |
+| Monorepo    | **Turborepo** + Bun workspaces        | Three packages: `client`, `server`, `shared`                                                                         |
+| Server      | **Hono**                              | Lightweight. SSE via `streamText()`. WebSocket via Bun adapter.                                                      |
+| Frontend    | **React 19 + Vite + TanStack Router** | File-based routing in `client/src/routes/`.                                                                          |
+| Local DB    | **Bun.sqlite + Drizzle ORM**          | SQLite for files/projects/sessions/snapshots. Schema in `server/src/db/schema.ts`. No migrations — schema is static. |
+| Cloud DB    | **MongoDB + Mongoose**                | Users, timeline events, help posts, deployed apps. Models in `server/src/db/models/`.                                |
+| Auth        | **Auth0**                             | JWKS-validated JWTs in `server/src/middleware/authMiddleware.ts`.                                                    |
+| Editor      | **Monaco** (`@monaco-editor/react`)   | In `client/src/components/EditorArea.tsx`.                                                                           |
+| Terminal    | **Xterm.js + node-pty**               | PTY multiplexed via WebSocket. Real interactive shell.                                                               |
+| Real-time   | **Yjs CRDT**                          | Editor sync via `ws/collaboration.ts`.                                                                               |
+| AI Agent    | **OpenAI-compatible API**             | Default: DeepSeek (`https://api.deepseek.com/v1`). Provider-agnostic via env vars.                                   |
+| Execution   | **Docker**                            | 6 sandbox images built by `scripts/setup_docker.sh`.                                                                 |
+| Lint/Format | **Biome**                             | `bun run lint`, `bun run format`. Not ESLint.                                                                        |
 
 ---
 
@@ -70,6 +68,7 @@ Client dev server runs on `:5173`. Server runs on `:3000`.
 Copy `server/.env.example` to `server/.env`. The client reads from `client/.env`.
 
 **Server (`server/.env`):**
+
 ```
 LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_KEY=your-deepseek-key-here
@@ -88,6 +87,7 @@ PORT=3000
 ```
 
 **Client (`client/.env`):**
+
 ```
 VITE_AUTH0_DOMAIN=...
 VITE_AUTH0_CLIENT_ID=...
@@ -116,6 +116,7 @@ vibecodium/
 **Entry point:** `server/src/index.ts` — mounts all routes, sets up WebSocket upgrade handlers.
 
 **Routes:** `server/src/routes/`
+
 - `projects.ts` — CRUD for projects + files (SQLite). Also handles GitHub import.
 - `agent.ts` — SSE streaming AI agent loop with tool calling.
 - `deploy.ts` — Vercel deployment orchestration.
@@ -129,10 +130,12 @@ vibecodium/
 - `scan` / `roast` / `ping-llm` — in `index.ts` directly.
 
 **WebSocket handlers:** `server/src/ws/collaboration.ts`
+
 - `/ws/collab/:id` — Yjs CRDT sync for real-time editor collaboration.
 - `/ws/terminal` — PTY terminal multiplexed to all clients in a session.
 
 **Database split:**
+
 - SQLite (Drizzle): `projects`, `files`, `snapshots`, `sessions` — local, per-instance data.
 - MongoDB (Mongoose): `User`, `Project`, `TimelineEvent`, `HelpPost`, `DeployedApp`, `UserToken` — cloud, user-owned data.
 
@@ -145,6 +148,7 @@ vibecodium/
 ### Frontend architecture
 
 **Routing:** TanStack Router with file-based routes in `client/src/routes/`:
+
 - `/` — Landing page
 - `/login` — Auth0 callback handler
 - `/dashboard` — Main IDE workspace (large: `dashboard.tsx` ~39KB)
@@ -154,6 +158,7 @@ vibecodium/
 **Main workspace:** `client/src/components/Workspace.tsx` orchestrates the 3-column layout. Heavy lifting is in `dashboard.tsx`.
 
 **Key components:**
+
 - `EditorArea.tsx` — Monaco editor wrapper
 - `TerminalArea.tsx` — Xterm.js + WebSocket PTY connection
 - `VibeChat.tsx` — SSE streaming AI chat
@@ -167,6 +172,7 @@ vibecodium/
 ### Shared package
 
 `shared/src/types/index.ts` exports types used by both client and server:
+
 - `WsEditorUpdate` / `WsServerUpdate` — Yjs sync messages
 - `ExecuteRequest` / `ExecuteResponse` — code execution
 - `ApiResponse` — standard API response shape
@@ -207,6 +213,7 @@ CSS Grid 3 columns: `220px | 1fr | 300px`
 ## Architecture diagrams
 
 Reference diagrams in the repo root:
+
 - `diag_stack.svg` — full stack layers
 - `diag_ui_layout.svg` — 3-column layout
 - `diag_backend.svg` — Hono routes and agent fan-out
