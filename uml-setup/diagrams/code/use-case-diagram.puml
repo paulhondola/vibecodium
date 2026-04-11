@@ -1,0 +1,57 @@
+@startuml VibeCodium - Use Case Diagram
+' ============================================================
+' VibeCodium - PlantUML Diagrams
+' Generate: java -jar plantuml.jar diagrams-plantuml.puml
+' Or use: https://www.plantuml.com/plantuml/
+' ============================================================
+
+title VibeCodium - Use Case Diagram
+
+left to right direction
+
+actor "Utilizator\nAnonim" as Anon
+actor "Utilizator\nAutentificat" as Auth
+actor "Colaborator" as Collab
+
+rectangle "VibeCodium System" {
+  usecase UC1 as "Autentificare"
+  usecase UC2 as "Creare Proiect"
+  usecase UC3 as "Editare Colaborativă"
+  usecase UC4 as "Rulare Cod"
+  usecase UC5 as "Deploy pe Vercel"
+  usecase UC6 as "Chat cu AI Agent"
+  usecase UC7 as "Import GitHub"
+  usecase UC8 as "Salvare Snapshot"
+  usecase UC9 as "Partajare Proiect"
+  usecase UC10 as "Postare Help"
+  usecase UC11 as "CoderMatch"
+  usecase UC12 as "Terminal Interactiv"
+}
+
+Anon --> UC1
+Anon --> UC2
+Anon --> UC3
+Anon --> UC4
+Anon --> UC12
+
+Auth --> UC1
+Auth --> UC2
+Auth --> UC3
+Auth --> UC4
+Auth --> UC5
+Auth --> UC6
+Auth --> UC7
+Auth --> UC8
+Auth --> UC9
+Auth --> UC10
+Auth --> UC11
+Auth --> UC12
+
+Collab --> UC3
+Collab --> UC12
+
+UC7 .> UC2 : <<includes>>
+UC5 .> UC7 : <<requires>>
+UC9 .> UC3 : <<enables>>
+
+@enduml

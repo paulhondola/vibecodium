@@ -1,0 +1,46 @@
+@startuml VibeCodium - Sequence (Vercel Deploy)
+title VibeCodium - Deploy pe Vercel
+
+actor User
+participant Client
+participant "Deploy\nRoute" as Server
+participant "GitHub\nAPI" as GitHub
+participant "Vercel\nAPI" as Vercel
+
+User -> Client : Click "Deploy"
+Client -> Server : POST /api/deploy {projectId}
+
+Server -> Server : Check user has vercelToken & githubToken
+
+alt No tokens
+  Server --> Client : 400 Bad Request: "Missing tokens"
+  Client -> User : Redirect to /profile
+  User -> Client : Add tokens
+  Client -> Server : POST /api/deploy {projectId}
+end
+
+Server -> GitHub : POST /user/repos\n{name: "vibecodium-proj_123", private: true}
+GitHub --> Server : {clone_url: "https://github.com/user/..."}
+
+Server -> Server : Create temp dir
+Server -> Server : Write project files
+Server -> Server : git init && add && commit
+Server -> Server : git push origin main
+GitHub --> Server : Push accepted
+
+Server -> Vercel : POST /v13/deployments\n{name: "...", gitSource: {...}}
+Vercel --> Server : {id: "dpl_xyz", readyState: "BUILDING"}
+
+Server -> Server : Poll deployment status every 5s
+loop Until ready or timeout
+  Server -> Vercel : GET /v13/deployments/dpl_xyz
+  Vercel --> Server : {readyState: "BUILDING"}
+  Server -> Server : Wait 5s
+end
+
+Vercel --> Server : {readyState: "READY",\nurl: "vibecodium-proj-123.vercel.app"}
+Server -> Server : Save DeployedApp to MongoDB
+Server --> Client : {url: "...", status: "ready"}
+Client -> User : Open deployment in new tab
+
+@enduml

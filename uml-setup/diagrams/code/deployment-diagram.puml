@@ -1,0 +1,52 @@
+@startuml VibeCodium - Deployment Diagram
+title VibeCodium - Production Infrastructure
+
+node "User Devices" {
+  artifact Browser1
+  artifact Browser2
+  artifact Browser3
+}
+
+cloud "Vercel Edge Network" {
+  component CDN
+  component [Static Client\nReact SPA] as StaticClient
+}
+
+cloud "Railway Cloud" {
+  component [Hono Server\nBun Runtime] as Server
+  component [Docker Host\nSandbox Containers] as DockerHost
+}
+
+cloud "MongoDB Atlas" {
+  database [MongoDB Cluster\nUsers, Projects, Help] as MongoCluster
+}
+
+node "Server Local Storage" {
+  database [SQLite DB\nFiles, Snapshots] as SQLiteDB
+}
+
+cloud "External APIs" {
+  component Auth0Service
+  component VercelAPI
+  component GitHubAPI
+  component DeepSeekAPI
+}
+
+Browser1 --> CDN : HTTPS
+Browser2 --> CDN : HTTPS
+Browser3 --> CDN : HTTPS
+
+CDN --> StaticClient
+Browser1 --> Server : WebSocket/SSE
+Browser2 --> Server : WebSocket/SSE
+Browser3 --> Server : WebSocket/SSE
+
+Server --> SQLiteDB
+Server --> MongoCluster
+Server --> DockerHost
+Server --> Auth0Service
+Server --> VercelAPI
+Server --> GitHubAPI
+Server --> DeepSeekAPI
+
+@enduml
