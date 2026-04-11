@@ -1,0 +1,52 @@
+@startuml VibeCodium - Sequence (AI Agent Loop)
+title VibeCodium - AI Agent Loop
+
+actor User
+participant "VibeChat" as Client
+participant "AgentRoute" as Server
+participant "DeepSeek\nAPI" as LLM
+participant "Tool\nExecutor" as Tools
+participant "File\nSystem" as FS
+
+User -> Client : Type "read main.py and add error handling"
+Client -> Server : POST /api/agent/chat (SSE stream)
+
+Server -> LLM : POST /v1/chat/completions (stream=true)
+note over Server,LLM : Messages: system prompt + history + user message
+
+LLM --> Server : SSE: {"delta": {"content": "I'll"}}
+Server --> Client : SSE: {"token": "I'll"}
+LLM --> Server : SSE: {"delta": {"content": " read"}}
+Server --> Client : SSE: {"token": " read"}
+LLM --> Server : SSE: {"delta": {"content": " the file"}}
+Server --> Client : SSE: {"token": " the file"}
+
+LLM --> Server : SSE: {"delta": {"tool_calls": [...]}}
+note over Server : Tool: read_file(main.py)
+Server -> Tools : executeTools(read_file, {path: "main.py"})
+Tools -> FS : Read main.py
+FS --> Tools : content: "def main():\n  print('hi')"
+Tools --> Server : {result: "def main()..."}
+
+Server -> LLM : POST /v1/chat/completions (add tool result)
+note over Server,LLM : Messages: [..., tool result]
+
+LLM --> Server : SSE: {"delta": {"content": "Here's the improved code"}}
+Server --> Client : SSE: {"token": "Here's the improved code"}
+
+LLM --> Server : SSE: {"delta": {"tool_calls": [write_file, ...]}}
+note over Server : Tool: write_file(main.py)
+Server -> Tools : executeTools(write_file, {...})
+Tools -> FS : Write main.py
+FS --> Tools : OK
+Tools --> Server : {result: "File written successfully"}
+
+Server -> LLM : POST /v1/chat/completions (add tool result)
+LLM --> Server : SSE: {"delta": {"content": "Done!"}}
+Server --> Client : SSE: {"token": "Done!"}
+LLM --> Server : SSE: [DONE]
+Server --> Client : SSE: event: done
+
+Client -> User : Display full message
+
+@enduml
