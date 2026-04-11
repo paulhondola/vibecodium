@@ -1,4 +1,5 @@
 > This file extends [common/hooks.md](../common/hooks.md) with web-specific hook recommendations.
+> **Project note**: This project uses **Bun** and **Biome**. Use `bun run` commands below — not `pnpm`, `eslint`, or `prettier`.
 
 # Web Hooks
 
@@ -8,7 +9,7 @@ Prefer project-local tooling. Do not wire hooks to remote one-off package execut
 
 ### Format on Save
 
-Use the project's existing formatter entrypoint after edits:
+Use the project's Biome formatter after edits:
 
 ```json
 {
@@ -16,15 +17,13 @@ Use the project's existing formatter entrypoint after edits:
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
-        "command": "pnpm prettier --write \"$FILE_PATH\"",
-        "description": "Format edited frontend files"
+        "command": "bun run format",
+        "description": "Format edited files with Biome"
       }
     ]
   }
 }
 ```
-
-Equivalent local commands via `yarn prettier` or `npm exec prettier --` are fine when they use repo-owned dependencies.
 
 ### Lint Check
 
@@ -34,8 +33,8 @@ Equivalent local commands via `yarn prettier` or `npm exec prettier --` are fine
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
-        "command": "pnpm eslint --fix \"$FILE_PATH\"",
-        "description": "Run ESLint on edited frontend files"
+        "command": "bun run lint",
+        "description": "Run Biome lint on edited files"
       }
     ]
   }
@@ -50,24 +49,8 @@ Equivalent local commands via `yarn prettier` or `npm exec prettier --` are fine
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
-        "command": "pnpm tsc --noEmit --pretty false",
-        "description": "Type-check after frontend edits"
-      }
-    ]
-  }
-}
-```
-
-### CSS Lint
-
-```json
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "command": "pnpm stylelint --fix \"$FILE_PATH\"",
-        "description": "Lint edited stylesheets"
+        "command": "bun run type-check",
+        "description": "TypeScript check after edits"
       }
     ]
   }
@@ -103,7 +86,7 @@ Block oversized writes from tool input content, not from a file that may not exi
   "hooks": {
     "Stop": [
       {
-        "command": "pnpm build",
+        "command": "bun run build",
         "description": "Verify the production build at session end"
       }
     ]
@@ -114,7 +97,7 @@ Block oversized writes from tool input content, not from a file that may not exi
 ## Ordering
 
 Recommended order:
-1. format
-2. lint
-3. type check
-4. build verification
+1. format (`bun run format`)
+2. lint (`bun run lint`)
+3. type check (`bun run type-check`)
+4. build verification (`bun run build`)
