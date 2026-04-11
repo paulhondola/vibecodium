@@ -1,0 +1,27 @@
+@startuml VibeCodium - State Diagram (Collaboration Session)
+title VibeCodium - Sesiune Colaborare
+
+[*] --> Idle : No users connected
+
+Idle --> SingleUser : First user joins
+
+SingleUser --> Syncing : Load Y.Doc state
+Syncing --> Active : Sync complete
+
+Active --> SingleUser : User editing
+Active --> MultiUser : Second user joins
+
+MultiUser --> Syncing : New user sync
+Syncing --> MultiUser : Sync complete
+MultiUser --> MultiUser : Concurrent edits
+MultiUser --> Conflict : Simultaneous edits
+Conflict --> MultiUser : CRDT merge
+
+MultiUser --> SingleUser : Users disconnect
+SingleUser --> Idle : Last user disconnects
+
+Active --> Expired : Session timeout
+MultiUser --> Expired : Session timeout
+Expired --> [*]
+
+@enduml

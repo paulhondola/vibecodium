@@ -1,0 +1,76 @@
+@startuml VibeCodium - Activity Diagram
+title VibeCodium - User Journey (Create → Deploy)
+
+start
+
+:User opens VibeCodium;
+
+if (Logged in?) then (no)
+  :Click Login → Auth0;
+  :Redirect to dashboard;
+else (yes)
+  :View Dashboard;
+endif
+
+:Click "New Project";
+
+if (Choose template) then (Blank)
+  :Create empty project;
+else (Import GitHub)
+  :Enter GitHub URL;
+  :Server clones repo;
+  :Parse files → SQLite;
+endif
+
+:Open in Editor;
+
+repeat
+  :What to do?;
+
+  split
+    :Write code in Monaco;
+  split again
+    :Click Run;
+    :Execute in Docker;
+    if (Exit code?) then (0)
+      :Show stdout;
+    else (non-zero)
+      :Show stderr;
+    endif
+  split again
+    :Type message in VibeChat;
+    :AI streams response;
+    if (AI calls tools?) then (yes)
+      :Execute tool;
+      :Update files;
+    else (no)
+      :Display response;
+    endif
+  split again
+    :Create snapshot;
+  split again
+    :Deploy;
+    if (Has Vercel token?) then (no)
+      :Redirect to /profile;
+      :Add Vercel token;
+    else (yes)
+      :Create GitHub repo;
+      :Push code to GitHub;
+      :Trigger Vercel deployment;
+      :Poll deployment status;
+      if (Status?) then (READY)
+        :Open deployed URL;
+        stop
+      else if (ERROR) then
+        :Show error;
+      else (BUILDING)
+        :Continue polling;
+      endif
+    endif
+  end split
+
+repeat while (Continue editing?) is (yes)
+
+stop
+
+@enduml

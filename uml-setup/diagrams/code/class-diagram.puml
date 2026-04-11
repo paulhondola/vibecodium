@@ -1,0 +1,191 @@
+@startuml VibeCodium - Class Diagram
+title VibeCodium - Class Diagram
+
+' Frontend Components
+package "Frontend (React)" {
+  class Dashboard {
+    +currentProject: Project
+    +files: File[]
+    +handleFileSelect(): void
+    +handleRun(): void
+    +handleDeploy(): void
+  }
+
+  class EditorArea {
+    +content: string
+    +language: string
+    +onChange(): void
+    +onCursorChange(): void
+    -initMonaco(): void
+  }
+
+  class TerminalArea {
+    +pty: WebSocket
+    +onData(): void
+    +write(data: string): void
+    -initXterm(): void
+  }
+
+  class VibeChat {
+    +messages: Message[]
+    +sendMessage(text: string): void
+    -handleSSE(): void
+  }
+
+  class FileExplorer {
+    +files: File[]
+    +onSelect(file: File): void
+    +onCreate(path: string): void
+    +onDelete(id: string): void
+  }
+
+  class TimelineBar {
+    +snapshots: Snapshot[]
+    +events: TimelineEvent[]
+    +onRestore(id: string): void
+  }
+}
+
+' Backend Components
+package "Backend (Hono)" {
+  class HonoServer {
+    +app: Hono
+    +routes: Routes[]
+    +middlewares: Middleware[]
+    +serve(): void
+  }
+
+  class ProjectsRoute {
+    +create(ctx: Context): Response
+    +read(ctx: Context): Response
+    +update(ctx: Context): Response
+    +delete(ctx: Context): Response
+    +listFiles(ctx: Context): Response
+  }
+
+  class AgentRoute {
+    +chat(ctx: Context): Response
+    +getHistory(ctx: Context): Response
+    -executeTools(tools: Tool[]): ToolResult[]
+    -streamSSE(ctx: Context): void
+  }
+
+  class ExecutionRoute {
+    +execute(ctx: Context): Response
+    -selectEngine(lang: string): Engine
+    -runDocker(cmd: string): ExecResult
+  }
+
+  class DeployRoute {
+    +deploy(ctx: Context): Response
+    +getStatus(id: string): Response
+    -createGitHubRepo(name: string): string
+    -triggerVercel(repo: string): Deployment
+  }
+
+  class CollaborationWS {
+    +clients: Map<string, WebSocket>
+    +ydocs: Map<string, Y.Doc>
+    +onConnect(ws: WebSocket): void
+    +onUpdate(data: Uint8Array): void
+    +broadcast(data: Uint8Array): void
+  }
+
+  class TerminalWS {
+    +pty: IPty
+    +clients: Set<WebSocket>
+    +onInput(data: string): void
+    +onOutput(data: string): void
+  }
+}
+
+' Database Models
+package "Database Models" {
+  class Project {
+    +id: string
+    +name: string
+    +language: string
+    +description: string
+    +createdAt: number
+    +updatedAt: number
+  }
+
+  class File {
+    +id: string
+    +projectId: string
+    +path: string
+    +content: string
+    +createdAt: number
+    +updatedAt: number
+  }
+
+  class Snapshot {
+    +id: string
+    +projectId: string
+    +name: string
+    +files: string
+    +createdAt: number
+  }
+
+  class Session {
+    +id: string
+    +projectId: string
+    +token: string
+    +expiresAt: number
+    +createdAt: number
+  }
+
+  class User {
+    +sub: string
+    +email: string
+    +name: string
+    +picture: string
+    +githubToken: string
+    +vercelToken: string
+  }
+
+  class TimelineEvent {
+    +userId: string
+    +projectId: string
+    +type: string
+    +message: string
+    +timestamp: Date
+  }
+
+  class HelpPost {
+    +userId: string
+    +title: string
+    +content: string
+    +tags: string[]
+    +answers: Answer[]
+    +upvotes: number
+  }
+}
+
+' Relationships
+Dashboard --> EditorArea
+Dashboard --> TerminalArea
+Dashboard --> VibeChat
+Dashboard --> FileExplorer
+Dashboard --> TimelineBar
+
+HonoServer --> ProjectsRoute
+HonoServer --> AgentRoute
+HonoServer --> ExecutionRoute
+HonoServer --> DeployRoute
+HonoServer --> CollaborationWS
+HonoServer --> TerminalWS
+
+ProjectsRoute --> Project
+ProjectsRoute --> File
+
+Project "1" *-- "*" File : contains
+Project "1" *-- "*" Snapshot : has
+Project "1" *-- "*" Session : shares
+Project "1" *-- "*" TimelineEvent : logs
+
+User "1" *-- "*" Project : owns
+User "1" *-- "*" HelpPost : creates
+User "1" *-- "*" TimelineEvent : generates
+
+@enduml
