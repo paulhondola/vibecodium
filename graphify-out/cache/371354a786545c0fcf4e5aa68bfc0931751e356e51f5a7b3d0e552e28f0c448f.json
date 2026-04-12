@@ -1,0 +1,1 @@
+{"nodes": [{"id": "project", "label": "Project.ts", "file_type": "code", "source_file": "server/src/db/models/Project.ts", "source_location": "L1"}], "edges": [{"source": "project", "target": "mongoose", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "server/src/db/models/Project.ts", "source_location": "L1", "weight": 1.0}]}
