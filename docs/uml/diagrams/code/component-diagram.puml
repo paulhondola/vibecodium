@@ -1,0 +1,57 @@
+@startuml VibeCodium - Component Diagram
+title VibeCodium - Arhitectură Componente
+
+package "Client (Browser)" {
+  component [React UI\nComponents] as UI
+  component [TanStack\nRouter] as Router
+  component [Monaco\nEditor] as Monaco
+  component [Xterm.js\nTerminal] as Xterm
+  component [Yjs\nClient] as YjsClient
+  component [SSE\nClient] as SSEClient
+  component [WebSocket\nClient] as WSClient
+}
+
+package "Server (Hono)" {
+  component [REST API\nRoutes] as API
+  component [SSE\nHandler] as SSEServer
+  component [WebSocket\nHandlers] as WSServer
+  component [Auth\nMiddleware] as Auth
+  component [Agent\nTools] as Tools
+  component [Execution\nEngines] as Engines
+}
+
+package "Databases" {
+  database "SQLite\nLocal Data" as SQLite
+  database "MongoDB\nCloud Data" as MongoDB
+}
+
+package "External Services" {
+  cloud "Auth0" as Auth0
+  cloud "DeepSeek\nLLM API" as DeepSeek
+  cloud "Docker\nEngine" as Docker
+  cloud "Vercel\nDeploy API" as Vercel
+  cloud "GitHub\nAPI" as GitHub
+}
+
+UI --> Router
+UI --> Monaco
+UI --> Xterm
+Router --> API
+Monaco --> YjsClient
+YjsClient --> WSServer
+SSEClient --> SSEServer
+Xterm --> WSClient
+WSClient --> WSServer
+
+API --> Auth
+API --> SQLite
+API --> MongoDB
+Auth --> Auth0
+SSEServer --> Tools
+SSEServer --> DeepSeek
+Tools --> Engines
+Engines --> Docker
+API --> Vercel
+API --> GitHub
+
+@enduml

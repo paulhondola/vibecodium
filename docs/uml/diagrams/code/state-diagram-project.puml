@@ -1,0 +1,39 @@
+@startuml VibeCodium - State Diagram (Project)
+title VibeCodium - Ciclul de Viață Proiect
+
+[*] --> Created : User creates project
+
+Created --> Editing : Open in editor
+
+Editing --> Editing : Edit files
+Editing --> Running : Click "Run"
+Editing --> Collaborating : Share session
+Editing --> Snapshotted : Save checkpoint
+Editing --> Deploying : Click "Deploy"
+Editing --> Archived : User archives
+Editing --> Deleted : User deletes
+
+Running --> Editing : View results
+Running --> Failed : Execution error
+
+Failed --> Editing : Fix errors
+
+Collaborating --> Editing : All users disconnect
+Collaborating --> Collaborating : Multiple users edit
+
+Snapshotted --> Editing : Continue editing
+Snapshotted --> Restored : Restore checkpoint
+
+Restored --> Editing : Resume work
+
+Deploying --> Deployed : Vercel success
+Deploying --> DeployFailed : Vercel error
+
+Deployed --> Editing : Make changes
+DeployFailed --> Editing : Fix issues
+
+Archived --> Editing : User unarchives
+
+Deleted --> [*]
+
+@enduml
