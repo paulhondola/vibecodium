@@ -1,0 +1,1 @@
+{"nodes": [{"id": "root", "label": "__root.tsx", "file_type": "code", "source_file": "client/src/routes/__root.tsx", "source_location": "L1"}], "edges": [{"source": "root", "target": "react_router", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "client/src/routes/__root.tsx", "source_location": "L1", "weight": 1.0}]}

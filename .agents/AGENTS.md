@@ -1,10 +1,32 @@
 # AGENTS.md
 
 This file provides guidance to AI agents when working with code in this repository.
+It is read by **Gemini (Antigravity)**, **Claude Code**, and **GitHub Copilot**.
+
+## 🚨 Agent Context Routing (MANDATORY STEP)
+
+Before executing a task or generating code, you MUST read the relevant rule sets for your domain. Use your file reading tools (e.g., `view_file`) to scan these directories based on what you are doing:
+
+| Domain                          | Read this first                                                                           |
+| ------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Frontend / UI**               | `.agents/skills/web/` (all files)                                                         |
+| **Backend / APIs**              | `.agents/skills/api-design/SKILL.md` + `.agents/skills/backend-patterns/SKILL.md`         |
+| **Security / Auth**             | `.agents/skills/security-review/SKILL.md`                                                 |
+| **TypeScript / General**        | `.agents/skills/typescript/coding-style.md`                                               |
+| **Database (SQLite/Drizzle)**   | Review `server/src/db/schema.ts` — no migrations, schema is static                        |
+| **Database (MongoDB/Mongoose)** | Review `server/src/db/models/`                                                            |
+| **Real-time / WebSocket / Yjs** | Review `server/src/ws/collaboration.ts` before making changes                             |
+| **AI Agent / SSE tool loop**    | Review `server/src/routes/agent.ts` — understand the SSE stream + tool call pattern first |
+| **Docker / Code Execution**     | Review `scripts/setup_docker.sh` before touching sandbox images                           |
+| **Deployment / CI**             | `.agents/skills/deployment-patterns/SKILL.md` (see Bun/Vercel notes)                      |
+
+Do NOT proceed with major architecture implementations before consuming these domain modules.
+
+---
 
 ## What is this project?
 
-VibeCodium is a collaborative code editor and sandboxing platform, built for the iTEC 2026 hackathon. Real-time multi-user editing via Yjs CRDT, AI agent with SSE streaming, sandboxed code execution via Docker, and Vercel deployment integration.
+VibeCodium is a collaborative code editor and sandboxing platform. Real-time multi-user editing via Yjs CRDT, AI agent with SSE streaming, sandboxed code execution via Docker, and Vercel deployment integration.
 
 ---
 
@@ -207,16 +229,3 @@ CSS Grid 3 columns: `220px | 1fr | 300px`
 │  (snapshots) │                                │               │
 └──────────────┴────────────────────────────────┴───────────────┘
 ```
-
----
-
-## Architecture diagrams
-
-Reference diagrams in the repo root:
-
-- `diag_stack.svg` — full stack layers
-- `diag_ui_layout.svg` — 3-column layout
-- `diag_backend.svg` — Hono routes and agent fan-out
-- `diag_agent.svg` — agent tool loop
-- `diag_execution.svg` — execution router with Docker
-- `diag_schema.svg` — database tables and FK relationships
