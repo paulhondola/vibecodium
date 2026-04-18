@@ -1,0 +1,34 @@
+@startuml VibeCodium - Sequence (AI Agent Loop)
+title VibeCodium - AI Agent Loop
+
+actor User
+participant "VibeChat" as Client
+participant "Backend" as Server
+participant "AI Model\n(DeepSeek)" as LLM
+participant "Project\nFiles" as FS
+
+User -> Client : "Add error handling to main.py"
+Client -> Server : Send message
+
+Server -> LLM : Send message + conversation history
+LLM --> Server : Stream response tokens
+Server --> Client : Stream to user
+
+LLM --> Server : Call tool — read_file(main.py)
+Server -> FS : Read file
+FS --> Server : File contents
+Server -> LLM : Return file contents
+
+LLM --> Server : Stream improved code
+Server --> Client : Stream to user
+
+LLM --> Server : Call tool — write_file(main.py)
+Server -> FS : Write updated file
+FS --> Server : File saved
+Server -> LLM : Confirm write
+
+LLM --> Server : "Done! I've added error handling."
+Server --> Client : Final response
+Client -> User : Display result
+
+@enduml

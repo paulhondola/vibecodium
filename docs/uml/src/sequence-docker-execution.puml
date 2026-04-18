@@ -1,0 +1,30 @@
+@startuml VibeCodium - Sequence (Docker Execution)
+title VibeCodium - Sandboxed Code Execution
+
+actor User
+participant "VibeCodium\nEditor" as Client
+participant "Backend" as Server
+participant "Docker\nSandbox" as Docker
+
+User -> Client : Click "Run"
+Client -> Server : Run project (language + entrypoint)
+
+Server -> Docker : Spawn isolated container\nwith project files
+
+alt Execution succeeds
+  Docker --> Server : Output (stdout)
+  Server --> Client : Show output
+  Client -> User : Display result
+
+else Runtime error
+  Docker --> Server : Error message (stderr)
+  Server --> Client : Show error
+  Client -> User : Display error
+
+else Timeout (30s limit)
+  Docker --> Server : Execution timed out
+  Server --> Client : Show timeout message
+  Client -> User : Display timeout error
+end
+
+@enduml

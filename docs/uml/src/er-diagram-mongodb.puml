@@ -1,0 +1,82 @@
+@startuml VibeCodium - ER Diagram (MongoDB)
+title VibeCodium - MongoDB Schema
+
+entity "USER" as user {
+  * auth0Id : string <<PK, unique>>
+  --
+  * name : string
+  * email : string
+    picture : string
+    bio : string
+    language : string
+    location : string
+  * createdAt : date
+}
+
+entity "PROJECT" as proj {
+  * _id : ObjectId <<PK>>
+  --
+  * userId : string <<FK>>
+  * projectName : string
+  * repoUrl : string
+  * status : string <<cloning|ready|error>>
+    localPath : string
+  * createdAt : date
+}
+
+entity "TIMELINE_EVENT" as event {
+  * _id : ObjectId <<PK>>
+  --
+  * projectId : string <<FK>>
+  * filePath : string
+  * eventType : string <<code_update|agent_accepted>>
+  * userId : string <<FK>>
+  * userName : string
+  * userColor : string
+  * content : text
+    cursorPosition : object
+  * isCheckpoint : boolean
+  * createdAt : date
+}
+
+entity "HELP_POST" as help {
+  * _id : ObjectId <<PK>>
+  --
+  * auth0_id : string <<FK>>
+  * userName : string
+  * title : string
+  * description : text
+  * repoUrl : string
+  * difficulty : string <<easy|medium|hard>>
+  * createdAt : date
+}
+
+entity "DEPLOYED_APP" as deploy {
+  * _id : ObjectId <<PK>>
+  --
+  * auth0_id : string <<FK>>
+  * title : string
+  * project_repo : string
+  * project_link : string
+  * createdAt : date
+}
+
+entity "USER_TOKEN" as token {
+  * _id : ObjectId <<PK>>
+  --
+  * auth0Id : string <<FK, unique>>
+    githubToken : string
+    vercelToken : string
+  * createdAt : date
+  * updatedAt : date
+}
+
+user ||--o{ proj
+user ||--o{ event
+user ||--o{ help
+user ||--o{ deploy
+user ||--|| token
+
+proj ||--o{ event
+
+@enduml

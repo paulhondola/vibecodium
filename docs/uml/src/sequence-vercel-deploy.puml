@@ -1,0 +1,32 @@
+@startuml VibeCodium - Sequence (Vercel Deploy)
+title VibeCodium - Deploy to Vercel
+
+actor User
+participant "VibeCodium\nApp" as Client
+participant "Backend" as Server
+participant "GitHub" as GitHub
+participant "Vercel" as Vercel
+
+User -> Client : Click "Deploy"
+
+alt Missing API tokens
+  Client -> User : Redirect to Profile — add tokens
+end
+
+Client -> Server : Deploy project
+Server -> GitHub : Create repository & push code
+GitHub --> Server : Repository ready
+
+Server -> Vercel : Trigger deployment
+Vercel --> Server : Build in progress...
+
+loop Waiting for build
+  Server -> Vercel : Check status
+  Vercel --> Server : Still building...
+end
+
+Vercel --> Server : Deployment ready\n(live URL)
+Server --> Client : Share live URL
+Client -> User : Open app in new tab
+
+@enduml

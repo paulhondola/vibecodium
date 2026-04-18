@@ -1,0 +1,45 @@
+@startuml VibeCodium - ER Diagram (SQLite)
+title VibeCodium - SQLite Schema
+
+entity "PROJECTS" as proj {
+  * id : string <<PK>>
+  --
+  * name : string
+  * repo_url : string
+  * created_at : string
+}
+
+entity "FILES" as file {
+  * id : string <<PK>>
+  --
+  * project_id : string <<FK>>
+  * path : string
+    content : text
+    updated_at : integer
+  <<UNIQUE(project_id, path)>>
+}
+
+entity "SNAPSHOTS" as snap {
+  * id : string <<PK>>
+  --
+  * project_id : string <<FK>>
+  * path : string
+    content : text
+  * timestamp : integer
+}
+
+entity "SESSIONS" as sess {
+  * token : string <<PK>>
+  --
+  * project_id : string <<FK>>
+  * created_at : integer
+  * expires_at : integer
+  * created_by : string
+    label : string
+}
+
+proj ||--o{ file
+proj ||--o{ snap
+proj ||--o{ sess
+
+@enduml

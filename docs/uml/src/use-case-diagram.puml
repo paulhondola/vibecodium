@@ -1,0 +1,52 @@
+@startuml VibeCodium - Use Case Diagram
+title VibeCodium - Use Case Diagram
+
+left to right direction
+
+actor "Anonymous\nUser" as Anon
+actor "Authenticated\nUser" as Auth
+actor "Collaborator" as Collab
+
+rectangle "VibeCodium System" {
+  usecase UC1 as "Authentication"
+  usecase UC2 as "Create Project"
+  usecase UC3 as "Collaborative Editing"
+  usecase UC4 as "Run Code"
+  usecase UC5 as "Deploy to Vercel"
+  usecase UC6 as "Chat with AI Agent"
+  usecase UC7 as "Import from GitHub"
+  usecase UC8 as "Save Snapshot"
+  usecase UC9 as "Share Project"
+  usecase UC10 as "Post for Help"
+  usecase UC11 as "CoderMatch"
+  usecase UC12 as "Interactive Terminal"
+  usecase UC13 as "Roast My Code"
+  usecase UC14 as "Security Scan"
+}
+
+Anon --> UC1
+
+Auth --> UC2
+Auth --> UC3
+Auth --> UC4
+Auth --> UC5
+Auth --> UC6
+Auth --> UC7
+Auth --> UC8
+Auth --> UC9
+Auth --> UC10
+Auth --> UC11
+Auth --> UC12
+Auth --> UC13
+Auth --> UC14
+
+Collab --> UC3
+Collab --> UC12
+
+UC7 .> UC2 : <<includes>>
+UC5 .> UC7 : <<requires>>
+UC9 .> UC3 : <<enables>>
+UC14 .> UC4 : <<guards>>
+UC14 .> UC5 : <<guards>>
+
+@enduml

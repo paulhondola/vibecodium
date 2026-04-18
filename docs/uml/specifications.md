@@ -1,10 +1,5 @@
 # VibeCodium - Specificații Tehnice Complete
 
-**Versiune:** 1.0
-**Data:** Aprilie 2026
-**Competiție:** iTEC 2026 - Web Development Track
-**Echipă:** Brigada Inginerilor Amărâți
-
 ---
 
 ## 1. Prezentare Generală
@@ -15,7 +10,7 @@ VibeCodium este o platformă colaborativă de editare și execuție de cod în c
 
 - **Editare colaborativă în timp real** prin CRDT (Yjs)
 - **Agent AI integrat** cu streaming SSE pentru asistență la programare
-- **Execuție sandboxată** de cod în Docker pentru 6 limbaje
+- **Execuție în sandbox** de cod în Docker pentru câteva limbaje
 - **Deploy automat** pe Vercel
 - **Terminal interactiv** multiplexat prin WebSocket
 - **Timeline & Snapshots** pentru versioning rapid
@@ -23,16 +18,13 @@ VibeCodium este o platformă colaborativă de editare și execuție de cod în c
 
 ### 1.2 Obiective
 
-1. Democratizarea accesului la medii de dezvoltare profesionale
-2. Facilitarea învățării programării prin colaborare și AI
-3. Simplificarea workflow-ului: cod → testare → deploy
-4. Crearea unei comunități de developeri care se ajută reciproc
+1. Simplificarea workflow-ului: cod → testare → deploy
+2. Crearea unui mediu de lucru colaborativ în timp real, system-agnostic
 
 ### 1.3 Public țintă
 
 - Studenți și începători în programare
 - Echipe mici care lucrează remote
-- Educatori care predau coding
 - Developeri care vor rapid prototyping fără setup local
 
 ---

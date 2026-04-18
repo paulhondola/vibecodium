@@ -1,14 +1,16 @@
 @startuml VibeCodium - Component Diagram
-title VibeCodium - Arhitectură Componente
+title VibeCodium - Component Architecture
 
 package "Client (Browser)" {
   component [React UI\nComponents] as UI
   component [TanStack\nRouter] as Router
   component [Monaco\nEditor] as Monaco
   component [Xterm.js\nTerminal] as Xterm
+  component [tldraw\nWhiteboard] as Whiteboard
   component [Yjs\nClient] as YjsClient
   component [SSE\nClient] as SSEClient
   component [WebSocket\nClient] as WSClient
+  component [Reels\nWidget] as Reels
 }
 
 package "Server (Hono)" {
@@ -18,6 +20,7 @@ package "Server (Hono)" {
   component [Auth\nMiddleware] as Auth
   component [Agent\nTools] as Tools
   component [Execution\nEngines] as Engines
+  component [Security\nScanner] as Scanner
 }
 
 package "Databases" {
@@ -31,11 +34,14 @@ package "External Services" {
   cloud "Docker\nEngine" as Docker
   cloud "Vercel\nDeploy API" as Vercel
   cloud "GitHub\nAPI" as GitHub
+  cloud "YouTube\nAPI" as YouTube
 }
 
 UI --> Router
 UI --> Monaco
 UI --> Xterm
+UI --> Whiteboard
+UI --> Reels
 Router --> API
 Monaco --> YjsClient
 YjsClient --> WSServer
@@ -50,8 +56,11 @@ Auth --> Auth0
 SSEServer --> Tools
 SSEServer --> DeepSeek
 Tools --> Engines
+Tools --> Scanner
 Engines --> Docker
+Scanner --> Docker
 API --> Vercel
 API --> GitHub
+API --> YouTube
 
 @enduml

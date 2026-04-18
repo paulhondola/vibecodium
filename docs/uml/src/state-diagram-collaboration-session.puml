@@ -1,5 +1,5 @@
 @startuml VibeCodium - State Diagram (Collaboration Session)
-title VibeCodium - Sesiune Colaborare
+title VibeCodium - Collaboration Session
 
 [*] --> Idle : No users connected
 

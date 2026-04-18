@@ -92,10 +92,11 @@ package "Backend (Hono)" {
   }
 
   class TerminalWS {
-    +pty: IPty
+    +containers: Map<string, Container>
     +clients: Set<WebSocket>
     +onInput(data: string): void
     +onOutput(data: string): void
+    -spawnContainer(room: string): Container
   }
 }
 
@@ -136,29 +137,41 @@ package "Database Models" {
   }
 
   class User {
-    +sub: string
+    +auth0Id: string
     +email: string
     +name: string
     +picture: string
+    +bio: string
+    +language: string
+    +location: string
+  }
+
+  class UserToken {
+    +auth0Id: string
     +githubToken: string
     +vercelToken: string
   }
 
   class TimelineEvent {
-    +userId: string
     +projectId: string
-    +type: string
-    +message: string
-    +timestamp: Date
+    +filePath: string
+    +eventType: string
+    +userId: string
+    +userName: string
+    +userColor: string
+    +content: string
+    +isCheckpoint: boolean
+    +createdAt: Date
   }
 
   class HelpPost {
-    +userId: string
+    +auth0_id: string
+    +userName: string
     +title: string
-    +content: string
-    +tags: string[]
-    +answers: Answer[]
-    +upvotes: number
+    +description: string
+    +repoUrl: string
+    +difficulty: string
+    +createdAt: Date
   }
 }
 
@@ -187,5 +200,6 @@ Project "1" *-- "*" TimelineEvent : logs
 User "1" *-- "*" Project : owns
 User "1" *-- "*" HelpPost : creates
 User "1" *-- "*" TimelineEvent : generates
+User "1" *-- "1" UserToken : stores tokens
 
 @enduml

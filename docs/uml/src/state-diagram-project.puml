@@ -1,5 +1,5 @@
 @startuml VibeCodium - State Diagram (Project)
-title VibeCodium - Ciclul de Viață Proiect
+title VibeCodium - Project Lifecycle
 
 [*] --> Created : User creates project
 

@@ -1,0 +1,27 @@
+@startuml VibeCodium - Sequence (Real-Time Collaboration)
+title VibeCodium - Real-Time Collaboration
+
+participant "User 1" as U1
+participant "User 2" as U2
+participant "Collaboration\nServer" as WS
+
+U1 -> WS : Join project session
+WS --> U1 : Sync current document state
+note over U1,WS : User 1 is up to date
+
+U2 -> WS : Join same project session
+WS --> U2 : Sync current document state
+note over U2,WS : User 2 is up to date
+
+U1 -> WS : Edit — type "hello"
+WS --> U2 : Broadcast change
+note over U2 : Sees "hello" appear instantly
+
+U2 -> WS : Edit — type " world"
+WS --> U1 : Broadcast change
+note over U1 : Sees "hello world"
+
+U1 -> WS : Save file
+WS --> U1 : Saved successfully
+
+@enduml
