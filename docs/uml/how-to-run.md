@@ -10,5 +10,5 @@ java -jar java/plantuml.jar "src/*.puml" -o "../photos/"
 **Check if graphviz is installed**
 
 ```bash
-java -jar plantuml.jar -testdot
+java -jar java/plantuml.jar -testdot
 ```
