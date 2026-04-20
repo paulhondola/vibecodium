@@ -1,400 +1,299 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../middleware/authMiddleware";
-import { db } from "../db";
-import { projects, files, snapshots } from "../db/schema";
-import { eq, and, desc } from "drizzle-orm";
-import * as fs from "node:fs";
-import * as path from "node:path";
-import mongoose from "mongoose";
-import { connectMongo } from "../db/mongoose";
-import { Project } from "../db/models/Project";
+import { supabase } from "../db/supabase";
 import { syncProjectFilesToDisk } from "../utils/sync";
 import { getUserTokens } from "../utils/tokens";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 const projectsRoutes = new Hono();
 
-// Skip auth for OPTIONS preflight — the CORS middleware on the main app handles those
+// All project routes require auth except OPTIONS
 projectsRoutes.use("/*", async (c, next) => {
     if (c.req.method === "OPTIONS") return next();
     return authMiddleware(c, next);
 });
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function getAllFilesRecursive(dir: string, baseDir: string): { path: string; content: string }[] {
     const results: { path: string; content: string }[] = [];
-    const items = fs.readdirSync(dir);
-
-    for (const item of items) {
+    for (const item of fs.readdirSync(dir)) {
         if (item === ".git" || item === "node_modules") continue;
-
         const fullPath = path.join(dir, item);
         const stat = fs.statSync(fullPath);
-
         if (stat.isDirectory()) {
             results.push(...getAllFilesRecursive(fullPath, baseDir));
         } else {
-            if (stat.size > 2 * 1024 * 1024) continue; // Skip files over 2MB
+            if (stat.size > 2 * 1024 * 1024) continue;
             try {
-                let content = fs.readFileSync(fullPath, "utf-8");
-                if (content.includes("\x00")) continue; // Skip binary files
-                
-                const relativePath = path.relative(baseDir, fullPath);
-                results.push({ path: relativePath, content });
-            } catch (e) {
-                // skip unreadable files gracefully
-            }
+                const content = fs.readFileSync(fullPath, "utf-8");
+                if (content.includes("\x00")) continue;
+                results.push({ path: path.relative(baseDir, fullPath), content });
+            } catch { /* skip unreadable */ }
         }
     }
-
     return results;
 }
 
+async function upsertFiles(projectId: string, allFiles: { path: string; content: string }[]) {
+    const BATCH_SIZE = 100;
+    const now = Math.floor(Date.now() / 1000);
+    for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
+        const batch = allFiles.slice(i, i + BATCH_SIZE).map((f) => ({
+            id: crypto.randomUUID(),
+            project_id: projectId,
+            path: f.path,
+            content: f.content,
+            updated_at: now,
+        }));
+        const { error } = await supabase
+            .from("files")
+            .upsert(batch, { onConflict: "project_id,path" });
+        if (error) throw error;
+    }
+}
+
+// ─── Routes ──────────────────────────────────────────────────────────────────
+
+// GET /api/projects — list all projects for the current user
 projectsRoutes.get("/", async (c) => {
     try {
-        await connectMongo();
         const user = (c.get as any)("user");
-        if (!user || (!user.sub && !user.nickname)) {
-            return c.json({ error: "Unauthorized user" }, 401);
-        }
+        if (!user?.sub) return c.json({ error: "Unauthorized user" }, 401);
 
-        const userId = user.sub || user.nickname;
-        const userProjects = await Project.find({ userId }).sort({ createdAt: -1 });
+        const { data, error } = await supabase
+            .from("projects")
+            .select("id, project_name, repo_url, status, local_path, created_at")
+            .eq("user_id", user.sub)
+            .order("created_at", { ascending: false });
 
-        return c.json({ success: true, projects: userProjects }, 200);
+        if (error) throw error;
+
+        // Normalise to the shape the client expects (projectName, repoUrl)
+        const projects = (data ?? []).map((p) => ({
+            _id: p.id,
+            projectName: p.project_name,
+            repoUrl: p.repo_url,
+            status: p.status,
+            localPath: p.local_path,
+            createdAt: p.created_at,
+        }));
+
+        return c.json({ success: true, projects }, 200);
     } catch (err: any) {
         return c.json({ error: `Failed to fetch projects: ${err.message}` }, 500);
     }
 });
 
+// GET /api/projects/user/:userId — list projects for any user (public)
 projectsRoutes.get("/user/:userId", async (c) => {
     try {
-        await connectMongo();
         const userId = c.req.param("userId");
         if (!userId) return c.json({ error: "Missing userId" }, 400);
 
-        const userProjects = await Project.find({ userId }).sort({ createdAt: -1 });
-        return c.json({ success: true, projects: userProjects }, 200);
+        const { data, error } = await supabase
+            .from("projects")
+            .select("id, project_name, repo_url, status, created_at")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        return c.json({ success: true, projects: data ?? [] }, 200);
     } catch (err: any) {
         return c.json({ error: `Failed to fetch user projects: ${err.message}` }, 500);
     }
 });
 
+// POST /api/projects/import — clone a repo and index its files
 projectsRoutes.post("/import", async (c) => {
     try {
-        await connectMongo();
         const payload = await c.req.json();
         const repoUrl = payload.repoUrl as string;
-        
-        if (!repoUrl) {
-            return c.json({ error: "Missing repoUrl parameter" }, 400);
-        }
 
-        if (!repoUrl.startsWith("https://github.com/")) {
+        if (!repoUrl) return c.json({ error: "Missing repoUrl parameter" }, 400);
+        if (!repoUrl.startsWith("https://github.com/"))
             return c.json({ error: "Only GitHub URLs are supported." }, 400);
-        }
 
         const user = (c.get as any)("user");
-        const userId = user ? (user.sub || user.nickname) : "anonymous";
+        const userId = user?.sub ?? "anonymous";
 
-        // Check if the user already imported this repository
-        const existingProject = await Project.findOne({ userId, repoUrl });
-        if (existingProject) {
-            const projectId = existingProject._id.toString();
-            const targetDir = existingProject.localPath || `/tmp/vibecodium/${projectId}`;
-            
-            // Check if files exist in SQLite
-            const sqliteFiles = await db.select({ id: files.id })
-                .from(files)
-                .where(eq(files.projectId, projectId))
+        // Check if already imported
+        const { data: existing } = await supabase
+            .from("projects")
+            .select("id, project_name, repo_url, local_path")
+            .eq("user_id", userId)
+            .eq("repo_url", repoUrl)
+            .maybeSingle();
+
+        if (existing) {
+            const projectId = existing.id;
+            const targetDir = existing.local_path || `/tmp/vibecodium/${projectId}`;
+
+            const { data: existingFiles } = await supabase
+                .from("files")
+                .select("id")
+                .eq("project_id", projectId)
                 .limit(1);
 
-            if (sqliteFiles.length === 0) {
+            if (!existingFiles?.length) {
                 if (fs.existsSync(targetDir)) {
                     console.log(`Re-indexing existing project ${projectId} from disk...`);
-
-                    // Ensure project entry exists in SQLite
-                    await db.insert(projects).values({
-                        id: projectId,
-                        name: existingProject.projectName,
-                        repoUrl: existingProject.repoUrl,
-                        createdAt: existingProject.createdAt.toISOString()
-                    }).onConflictDoNothing();
-
                     const allFiles = getAllFilesRecursive(targetDir, targetDir);
-                    const BATCH_SIZE = 100;
-                    for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
-                        const batch = allFiles.slice(i, i + BATCH_SIZE);
-                        const filesToInsert = batch.map((f) => ({
-                            id: crypto.randomUUID(),
-                            projectId: projectId,
-                            path: f.path,
-                            content: f.content,
-                            updatedAt: Math.floor(Date.now() / 1000)
-                        }));
-                        await db.insert(files).values(filesToInsert);
-                    }
-
-                    return c.json({
-                        success: true,
-                        message: "Repository re-indexed successfully",
-                        projectId: projectId,
-                        name: existingProject.projectName,
-                        filesCount: allFiles.length
-                    }, 200);
+                    await upsertFiles(projectId, allFiles);
+                    return c.json({ success: true, message: "Repository re-indexed", projectId, name: existing.project_name, filesCount: allFiles.length }, 200);
                 } else {
-                    // Disk dir is gone (e.g. /tmp cleared after server restart) — re-clone
-                    console.log(`Re-cloning project ${projectId} (disk dir missing)...`);
-                    await Project.findByIdAndUpdate(projectId, { status: "cloning" });
-
+                    // Re-clone
+                    console.log(`Re-cloning project ${projectId}...`);
+                    await supabase.from("projects").update({ status: "cloning" }).eq("id", projectId);
                     fs.mkdirSync("/tmp/vibecodium", { recursive: true });
-                    const cloneProc = Bun.spawn(["git", "clone", repoUrl, targetDir], {
-                        stdout: "pipe",
-                        stderr: "pipe"
-                    });
-                    const cloneExit = await cloneProc.exited;
-
-                    if (cloneExit !== 0) {
+                    const cloneProc = Bun.spawn(["git", "clone", repoUrl, targetDir], { stdout: "pipe", stderr: "pipe" });
+                    if (await cloneProc.exited !== 0) {
                         const errText = await new Response(cloneProc.stderr).text();
-                        await Project.findByIdAndUpdate(projectId, { status: "error" });
+                        await supabase.from("projects").update({ status: "error" }).eq("id", projectId);
                         return c.json({ error: `Re-clone failed: ${errText}` }, 500);
                     }
-
-                    await Project.findByIdAndUpdate(projectId, { status: "ready", localPath: targetDir });
-
-                    await db.insert(projects).values({
-                        id: projectId,
-                        name: existingProject.projectName,
-                        repoUrl: existingProject.repoUrl,
-                        createdAt: existingProject.createdAt.toISOString()
-                    }).onConflictDoNothing();
-
+                    await supabase.from("projects").update({ status: "ready", local_path: targetDir }).eq("id", projectId);
                     const allFiles = getAllFilesRecursive(targetDir, targetDir);
-                    const BATCH_SIZE = 100;
-                    for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
-                        const batch = allFiles.slice(i, i + BATCH_SIZE);
-                        const filesToInsert = batch.map((f) => ({
-                            id: crypto.randomUUID(),
-                            projectId: projectId,
-                            path: f.path,
-                            content: f.content,
-                            updatedAt: Math.floor(Date.now() / 1000)
-                        }));
-                        await db.insert(files).values(filesToInsert);
-                    }
-
-                    return c.json({
-                        success: true,
-                        message: "Repository re-cloned and indexed successfully",
-                        projectId: projectId,
-                        name: existingProject.projectName,
-                        filesCount: allFiles.length
-                    }, 200);
+                    await upsertFiles(projectId, allFiles);
+                    return c.json({ success: true, message: "Repository re-cloned", projectId, name: existing.project_name, filesCount: allFiles.length }, 200);
                 }
             }
 
-            return c.json({
-                success: true,
-                message: "Repository already imported",
-                projectId: projectId,
-                name: existingProject.projectName,
-            }, 200);
+            return c.json({ success: true, message: "Repository already imported", projectId, name: existing.project_name }, 200);
         }
 
-        const projectId = new mongoose.Types.ObjectId().toString();
+        // New import — generate ID, clone, index
+        const projectId = crypto.randomUUID();
         const targetDir = `/tmp/vibecodium/${projectId}`;
         const projectName = repoUrl.split("/").pop()?.replace(".git", "") || "Untitled";
 
-        console.log(`Cloning ${repoUrl} to ${targetDir}...`);
-        
-        // 1. Save entry to MongoDB with status "cloning"
-        await Project.create({
-            _id: projectId,
-            userId: userId,
-            projectName: projectName,
-            repoUrl: repoUrl,
-            status: "cloning"
+        const { error: insertErr } = await supabase.from("projects").insert({
+            id: projectId,
+            user_id: userId,
+            project_name: projectName,
+            repo_url: repoUrl,
+            status: "cloning",
         });
+        if (insertErr) throw insertErr;
 
         fs.mkdirSync("/tmp/vibecodium", { recursive: true });
-
-        const proc = Bun.spawn(["git", "clone", repoUrl, targetDir], {
-            stdout: "pipe",
-            stderr: "pipe"
-        });
-
+        const proc = Bun.spawn(["git", "clone", repoUrl, targetDir], { stdout: "pipe", stderr: "pipe" });
         const exitCode = await proc.exited;
 
         if (exitCode !== 0) {
             const errorText = await new Response(proc.stderr).text();
-            await Project.findByIdAndUpdate(projectId, { status: "error" });
+            await supabase.from("projects").update({ status: "error" }).eq("id", projectId);
             return c.json({ error: `Failed to clone repository: ${errorText}` }, 500);
         }
 
-        // 2. Clone finished successfully. Update status to "ready" and localPath
-        await Project.findByIdAndUpdate(projectId, { status: "ready", localPath: targetDir });
-
-        // Also insert into SQLite projects table for referential integrity
-        await db.insert(projects).values({
-            id: projectId,
-            name: projectName,
-            repoUrl: repoUrl,
-            createdAt: new Date().toISOString()
-        }).onConflictDoNothing();
+        await supabase.from("projects").update({ status: "ready", local_path: targetDir }).eq("id", projectId);
 
         const allFiles = getAllFilesRecursive(targetDir, targetDir);
+        await upsertFiles(projectId, allFiles);
 
-        // Maximum chunk sizes roughly to 100 on sqlite batching
-        const BATCH_SIZE = 100;
-        for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
-            const batch = allFiles.slice(i, i + BATCH_SIZE);
-            const filesToInsert = batch.map((f) => ({
-                id: crypto.randomUUID(),
-                projectId: projectId,
-                path: f.path,
-                content: f.content,
-                updatedAt: Math.floor(Date.now() / 1000)
-            }));
-            await db.insert(files).values(filesToInsert);
-        }
-
-        return c.json({
-            success: true,
-            message: "Repository imported and indexed successfully",
-            projectId: projectId,
-            name: projectName,
-            filesCount: allFiles.length
-        }, 200);
+        return c.json({ success: true, message: "Repository imported and indexed", projectId, name: projectName, filesCount: allFiles.length }, 200);
 
     } catch (error: any) {
         return c.json({ error: `Internal Server Error: ${error.message}` }, 500);
     }
 });
 
+// GET /api/projects/:id/files
 projectsRoutes.get("/:id/files", async (c) => {
     try {
         const projectId = c.req.param("id");
         if (!projectId) return c.json({ error: "Missing projectId" }, 400);
 
-        // Fetch project name from MongoDB
-        await connectMongo();
-        const project = await Project.findById(projectId).select("projectName repoUrl localPath");
-        const projectName = project?.projectName
-            || project?.repoUrl?.split("/").pop()?.replace(".git", "")
-            || "Untitled";
+        const { data: project } = await supabase
+            .from("projects")
+            .select("project_name, repo_url, local_path")
+            .eq("id", projectId)
+            .maybeSingle();
 
-        let projectFiles = await db.select({
-            id: files.id,
-            path: files.path,
-            content: files.content
-        })
-        .from(files)
-        .where(eq(files.projectId, projectId));
+        const projectName = project?.project_name ||
+            project?.repo_url?.split("/").pop()?.replace(".git", "") || "Untitled";
 
-        // Auto-recover: SQLite is empty but disk still has the files (e.g. after server restart)
-        if (projectFiles.length === 0 && project) {
-            const diskDir = project.localPath || `/tmp/vibecodium/${projectId}`;
+        let { data: projectFiles, error } = await supabase
+            .from("files")
+            .select("id, path, content")
+            .eq("project_id", projectId);
+
+        if (error) throw error;
+
+        // Auto-recover: re-index from disk if SQLite cleared
+        if (!projectFiles?.length && project) {
+            const diskDir = project.local_path || `/tmp/vibecodium/${projectId}`;
             if (fs.existsSync(diskDir)) {
                 console.log(`[files] Re-indexing ${projectId} from disk on read...`);
-
-                await db.insert(projects).values({
-                    id: projectId,
-                    name: projectName,
-                    repoUrl: project.repoUrl || "",
-                    createdAt: (project as any).createdAt?.toISOString?.() ?? new Date().toISOString()
-                }).onConflictDoNothing();
-
                 const diskFiles = getAllFilesRecursive(diskDir, diskDir);
-                const BATCH_SIZE = 100;
-                for (let i = 0; i < diskFiles.length; i += BATCH_SIZE) {
-                    const batch = diskFiles.slice(i, i + BATCH_SIZE);
-                    await db.insert(files).values(batch.map(f => ({
-                        id: crypto.randomUUID(),
-                        projectId,
-                        path: f.path,
-                        content: f.content,
-                        updatedAt: Math.floor(Date.now() / 1000)
-                    })));
-                }
-
-                // Re-query so the response includes the freshly indexed files
-                projectFiles = await db.select({
-                    id: files.id,
-                    path: files.path,
-                    content: files.content
-                })
-                .from(files)
-                .where(eq(files.projectId, projectId));
+                await upsertFiles(projectId, diskFiles);
+                const { data: fresh } = await supabase.from("files").select("id, path, content").eq("project_id", projectId);
+                projectFiles = fresh ?? [];
             }
         }
 
-        return c.json({ success: true, files: projectFiles, projectName, repoUrl: project?.repoUrl ?? null });
+        return c.json({ success: true, files: projectFiles ?? [], projectName, repoUrl: project?.repo_url ?? null });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }
 });
 
+// GET /api/projects/:id/snapshots
 projectsRoutes.get("/:id/snapshots", async (c) => {
     try {
         const projectId = c.req.param("id");
         const filePath = c.req.query("path");
         if (!projectId) return c.json({ error: "Missing projectId" }, 400);
-        
-        const query = db.select({
-            id: snapshots.id,
-            path: snapshots.path,
-            content: snapshots.content,
-            timestamp: snapshots.timestamp
-        }).from(snapshots);
 
-        let projectSnapshots;
-        if (filePath) {
-            projectSnapshots = await query
-                .where(and(eq(snapshots.projectId, projectId), eq(snapshots.path, filePath)))
-                .orderBy(desc(snapshots.timestamp));
-        } else {
-            projectSnapshots = await query
-                .where(eq(snapshots.projectId, projectId))
-                .orderBy(desc(snapshots.timestamp));
-        }
+        let query = supabase
+            .from("snapshots")
+            .select("id, path, content, timestamp")
+            .eq("project_id", projectId)
+            .order("timestamp", { ascending: false });
 
-        return c.json({ success: true, snapshots: projectSnapshots });
+        if (filePath) query = query.eq("path", filePath);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        return c.json({ success: true, snapshots: data ?? [] });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }
 });
 
+// POST /api/projects/:id/push — commit & push to GitHub
 projectsRoutes.post("/:id/push", async (c) => {
     try {
         const projectId = c.req.param("id");
         if (!projectId) return c.json({ error: "Missing projectId" }, 400);
 
         const user = (c.get as any)("user");
-        const userId = user?.sub || user?.nickname;
-        
-        if (!userId) {
-            return c.json({ error: "Unauthorized" }, 401);
-        }
+        const userId = user?.sub;
+        if (!userId) return c.json({ error: "Unauthorized" }, 401);
 
-        // Check for GitHub Token
         const tokens = await getUserTokens(userId);
-        let githubToken = tokens.githubToken || process.env.GITHUB_TOKEN_REPO || process.env.GITHUB_TOKEN;
+        const githubToken = tokens.githubToken || process.env.GITHUB_TOKEN_REPO || process.env.GITHUB_TOKEN;
 
         if (!githubToken || githubToken === "undefined") {
-            return c.json({ 
-                success: false, 
-                error: "GITHUB_TOKEN_REQUIRED", 
-                message: "You need to register your GitHub Token in your profile to commit and push changes." 
+            return c.json({
+                success: false,
+                error: "GITHUB_TOKEN_REQUIRED",
+                message: "You need to register your GitHub Token in your profile to commit and push changes.",
             }, 403);
         }
 
-        // Fetch project from MongoDB to get repoUrl (if needed)
-        await connectMongo();
-        const project = await Project.findById(projectId);
+        const { data: project } = await supabase
+            .from("projects")
+            .select("repo_url, local_path")
+            .eq("id", projectId)
+            .maybeSingle();
+
         if (!project) return c.json({ error: "Project not found" }, 404);
 
-        // 1. Sync all files to disk
         const targetDir = await syncProjectFilesToDisk(projectId);
 
-        // 2. Execute git commands
         const gitConfigUser = Bun.spawn(["git", "config", "user.name", "VibeCodium Live Collaboration"], { cwd: targetDir });
         await gitConfigUser.exited;
         const gitConfigEmail = Bun.spawn(["git", "config", "user.email", "live@vibecodium.cloud"], { cwd: targetDir });
@@ -406,27 +305,19 @@ projectsRoutes.post("/:id/push", async (c) => {
         const gitCommit = Bun.spawn(["git", "commit", "-m", "Auto-Save Sandbox Commit"], { cwd: targetDir });
         await gitCommit.exited;
 
-        // Use the user's token for pushing
-        const repoUrl = project.repoUrl;
-        let authenticatedUrl = repoUrl;
-        if (repoUrl.startsWith("https://github.com/")) {
-            authenticatedUrl = repoUrl.replace("https://github.com/", `https://${githubToken}@github.com/`);
-        }
+        const repoUrl = project.repo_url;
+        const authenticatedUrl = repoUrl.startsWith("https://github.com/")
+            ? repoUrl.replace("https://github.com/", `https://${githubToken}@github.com/`)
+            : repoUrl;
 
-        const gitPush = Bun.spawn(["git", "push", authenticatedUrl, "HEAD:main", "--force"], { 
-            cwd: targetDir, 
-            stdout: "pipe", 
-            stderr: "pipe" 
+        const gitPush = Bun.spawn(["git", "push", authenticatedUrl, "HEAD:main", "--force"], {
+            cwd: targetDir, stdout: "pipe", stderr: "pipe",
         });
         const exitCode = await gitPush.exited;
-        
         const stdout = await new Response(gitPush.stdout).text();
         const stderr = await new Response(gitPush.stderr).text();
 
-        if (exitCode !== 0) {
-            return c.json({ error: "Failed to push to GitHub", details: stderr }, 500);
-        }
-
+        if (exitCode !== 0) return c.json({ error: "Failed to push to GitHub", details: stderr }, 500);
         return c.json({ success: true, message: "Successfully pushed to GitHub", output: stdout });
 
     } catch (e: any) {
@@ -434,30 +325,19 @@ projectsRoutes.post("/:id/push", async (c) => {
     }
 });
 
-// ── File Management ──────────────────────────────────────────────────────────
+// ── File Management ───────────────────────────────────────────────────────────
 
-// Create a file (or overwrite)
 projectsRoutes.post("/:id/files/create", async (c) => {
     try {
         const projectId = c.req.param("id");
         const { path: filePath, content = "" } = await c.req.json<{ path: string; content?: string }>();
         if (!projectId || !filePath) return c.json({ error: "Missing projectId or path" }, 400);
 
-        const existing = await db.select({ id: files.id })
-            .from(files)
-            .where(eq(files.projectId, projectId))
-            .then(rows => rows.find(r => r.id)); // just check if project has files
-
-        await db.insert(files).values({
-            id: crypto.randomUUID(),
-            projectId,
-            path: filePath,
-            content,
-            updatedAt: Math.floor(Date.now() / 1000),
-        }).onConflictDoUpdate({
-            target: [files.projectId, files.path],
-            set: { content, updatedAt: Math.floor(Date.now() / 1000) },
-        });
+        const { error } = await supabase.from("files").upsert(
+            { id: crypto.randomUUID(), project_id: projectId, path: filePath, content, updated_at: Math.floor(Date.now() / 1000) },
+            { onConflict: "project_id,path" }
+        );
+        if (error) throw error;
 
         return c.json({ success: true, path: filePath });
     } catch (e: any) {
@@ -465,24 +345,18 @@ projectsRoutes.post("/:id/files/create", async (c) => {
     }
 });
 
-// Delete a file or all files under a folder prefix
 projectsRoutes.delete("/:id/files", async (c) => {
     try {
         const projectId = c.req.param("id");
         const { path: filePath } = await c.req.json<{ path: string }>();
         if (!projectId || !filePath) return c.json({ error: "Missing projectId or path" }, 400);
 
-        // Delete exact match (file) AND any children (folder prefix)
-        const allFiles = await db.select({ id: files.id, path: files.path })
-            .from(files)
-            .where(eq(files.projectId, projectId));
+        const { data: allFiles } = await supabase.from("files").select("id, path").eq("project_id", projectId);
+        const toDelete = (allFiles ?? []).filter((f) => f.path === filePath || f.path.startsWith(filePath + "/"));
 
-        const toDelete = allFiles.filter(f =>
-            f.path === filePath || f.path.startsWith(filePath + "/")
-        );
-
-        for (const f of toDelete) {
-            await db.delete(files).where(eq(files.id, f.id));
+        if (toDelete.length) {
+            const { error } = await supabase.from("files").delete().in("id", toDelete.map((f) => f.id));
+            if (error) throw error;
         }
 
         return c.json({ success: true, deleted: toDelete.length });
@@ -491,35 +365,22 @@ projectsRoutes.delete("/:id/files", async (c) => {
     }
 });
 
-// Rename a file or folder (prefix rename)
 projectsRoutes.patch("/:id/files/rename", async (c) => {
     try {
         const projectId = c.req.param("id");
         const { oldPath, newPath } = await c.req.json<{ oldPath: string; newPath: string }>();
         if (!projectId || !oldPath || !newPath) return c.json({ error: "Missing fields" }, 400);
 
-        const allFiles = await db.select()
-            .from(files)
-            .where(eq(files.projectId, projectId));
-
-        const toRename = allFiles.filter(f =>
-            f.path === oldPath || f.path.startsWith(oldPath + "/")
-        );
+        const { data: allFiles } = await supabase.from("files").select("*").eq("project_id", projectId);
+        const toRename = (allFiles ?? []).filter((f) => f.path === oldPath || f.path.startsWith(oldPath + "/"));
 
         for (const f of toRename) {
             const renamedPath = newPath + f.path.slice(oldPath.length);
-            // Insert new, delete old (SQLite has no UPDATE on unique constraints easily)
-            await db.insert(files).values({
-                id: crypto.randomUUID(),
-                projectId,
-                path: renamedPath,
-                content: f.content,
-                updatedAt: Math.floor(Date.now() / 1000),
-            }).onConflictDoUpdate({
-                target: [files.projectId, files.path],
-                set: { content: f.content, updatedAt: Math.floor(Date.now() / 1000) },
-            });
-            await db.delete(files).where(eq(files.id, f.id));
+            await supabase.from("files").upsert(
+                { id: crypto.randomUUID(), project_id: projectId, path: renamedPath, content: f.content, updated_at: Math.floor(Date.now() / 1000) },
+                { onConflict: "project_id,path" }
+            );
+            await supabase.from("files").delete().eq("id", f.id);
         }
 
         return c.json({ success: true, renamed: toRename.length });
@@ -528,67 +389,45 @@ projectsRoutes.patch("/:id/files/rename", async (c) => {
     }
 });
 
-// ── GitHub Integration ───────────────────────────────────────────────────────
+// ── GitHub Integration ────────────────────────────────────────────────────────
 
-// Create a new GitHub repository
 projectsRoutes.post("/create-repo", async (c) => {
     try {
         const user = (c.get as any)("user");
-        const userId = user ? (user.sub || user.nickname) : null;
+        const userId = user?.sub;
         if (!userId) return c.json({ error: "Unauthorized" }, 401);
 
-        const { name, description, isPrivate } = await c.req.json<{
-            name: string;
-            description?: string;
-            isPrivate?: boolean;
-        }>();
-
+        const { name, description, isPrivate } = await c.req.json<{ name: string; description?: string; isPrivate?: boolean }>();
         if (!name) return c.json({ error: "Repository name is required" }, 400);
 
-        // Check for GitHub Token
         const tokens = await getUserTokens(userId);
         const githubToken = tokens.githubToken || process.env.GITHUB_TOKEN_REPO || process.env.GITHUB_TOKEN;
 
         if (!githubToken || githubToken === "undefined") {
-            return c.json({ 
-                success: false, 
-                error: "GITHUB_TOKEN_REQUIRED", 
-                message: "You need to register your GitHub Token in your profile to create repositories." 
-            }, 403);
+            return c.json({ success: false, error: "GITHUB_TOKEN_REQUIRED", message: "Register your GitHub Token in your profile to create repositories." }, 403);
         }
 
-        // Get GitHub username from Auth0 user
+        // GitHub username is the nickname normalised from Supabase metadata
         const githubUsername = user.nickname;
-        if (!githubUsername) {
-            return c.json({ error: "GitHub username not found in profile" }, 400);
-        }
+        if (!githubUsername) return c.json({ error: "GitHub username not found in profile" }, 400);
 
-        // Create repository via GitHub API
         const response = await fetch("https://api.github.com/user/repos", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${githubToken}`,
+                Authorization: `Bearer ${githubToken}`,
                 "Content-Type": "application/json",
-                "Accept": "application/vnd.github.v3+json",
-                "User-Agent": "VibeCodium-App"
+                Accept: "application/vnd.github.v3+json",
+                "User-Agent": "VibeCodium-App",
             },
-            body: JSON.stringify({
-                name,
-                description: description || undefined,
-                private: isPrivate || false,
-                auto_init: true
-            })
+            body: JSON.stringify({ name, description: description || undefined, private: isPrivate || false, auto_init: true }),
         });
 
         if (!response.ok) {
             const errorData = await response.json() as any;
-            return c.json({
-                error: errorData.message || "Failed to create repository on GitHub"
-            }, response.status as any);
+            return c.json({ error: errorData.message || "Failed to create repository on GitHub" }, response.status as any);
         }
 
         const repoData = await response.json() as any;
-
         return c.json({
             success: true,
             repository: {
@@ -598,8 +437,8 @@ projectsRoutes.post("/create-repo", async (c) => {
                 html_url: repoData.html_url,
                 description: repoData.description,
                 private: repoData.private,
-                created_at: repoData.created_at
-            }
+                created_at: repoData.created_at,
+            },
         }, 201);
 
     } catch (err: any) {
@@ -612,56 +451,47 @@ projectsRoutes.get("/:id/commits", async (c) => {
         const projectId = c.req.param("id");
         if (!projectId) return c.json({ error: "Missing projectId" }, 400);
 
-        await connectMongo();
-        const project = await Project.findById(projectId).select("repoUrl");
-        if (!project || !project.repoUrl) {
-            return c.json({ error: "Project or repoUrl not found" }, 404);
-        }
+        const { data: project } = await supabase
+            .from("projects")
+            .select("repo_url")
+            .eq("id", projectId)
+            .maybeSingle();
 
-        const urlStr = project.repoUrl.replace(".git", "");
+        if (!project?.repo_url) return c.json({ error: "Project or repoUrl not found" }, 404);
+
+        const urlStr = project.repo_url.replace(".git", "");
         const urlParams = urlStr.split("github.com/");
-        if (urlParams.length < 2) {
-            return c.json({ error: "Invalid GitHub URL format" }, 400);
-        }
-        
+        if (urlParams.length < 2) return c.json({ error: "Invalid GitHub URL format" }, 400);
+
         const [owner, repo] = urlParams[1].split("/");
-        if (!owner || !repo) {
-            return c.json({ error: "Could not extract owner/repo from URL" }, 400);
-        }
+        if (!owner || !repo) return c.json({ error: "Could not extract owner/repo from URL" }, 400);
 
         const headers: Record<string, string> = {
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "VibeCodium-App"
+            Accept: "application/vnd.github.v3+json",
+            "User-Agent": "VibeCodium-App",
         };
-
         if (process.env.GITHUB_TOKEN && process.env.GITHUB_TOKEN !== "undefined") {
             headers["Authorization"] = `Bearer ${process.env.GITHUB_TOKEN}`;
         }
 
         const ghResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits`, { headers });
-
-        if (!ghResponse.ok) {
-            return c.json({ error: `GitHub API error: ${ghResponse.statusText}` }, 500);
-        }
+        if (!ghResponse.ok) return c.json({ error: `GitHub API error: ${ghResponse.statusText}` }, 500);
 
         const commitsData = await ghResponse.json() as any[];
-
         const parsedCommits = commitsData.slice(0, 50).map((commitItem: any) => ({
             sha: commitItem.sha,
             message: commitItem.commit?.message?.split("\n")[0] || "No message",
             author: {
                 name: commitItem.commit?.author?.name || "Unknown",
-                avatar: commitItem.author?.avatar_url || null
+                avatar: commitItem.author?.avatar_url || null,
             },
-            date: commitItem.commit?.author?.date || null
+            date: commitItem.commit?.author?.date || null,
         }));
 
         return c.json({ success: true, commits: parsedCommits }, 200);
-
     } catch (err: any) {
         return c.json({ error: err.message }, 500);
     }
 });
 
 export default projectsRoutes;
-

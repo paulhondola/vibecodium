@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../middleware/authMiddleware";
-import { connectMongo } from "../db/mongoose";
-import { TimelineEvent } from "../db/models/TimelineEvent";
+import { supabase } from "../db/supabase";
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
 const LLM_KEY      = process.env.LLM_KEY ?? "";
@@ -9,59 +8,49 @@ const LLM_MODEL    = process.env.LLM_MODEL ?? "deepseek-chat";
 
 const timelineRoutes = new Hono();
 
-// ──────────────────────────────────────────────────────────────────
 // GET /api/timeline/:projectId
-// Returns all timeline events for a project (optionally filtered by file path),
-// sorted oldest → newest (ASC). This is the inverse of the existing
-// GET /api/projects/:id/snapshots endpoint which returns DESC.
-// ──────────────────────────────────────────────────────────────────
 timelineRoutes.get("/:projectId", authMiddleware, async (c) => {
     try {
-        await connectMongo();
-
         const projectId = c.req.param("projectId");
         const filePath  = c.req.query("path");
         const limit     = Math.min(parseInt(c.req.query("limit") ?? "200", 10), 500);
-        const before    = c.req.query("before"); // optional ISO timestamp cursor for pagination
+        const before    = c.req.query("before"); // ISO timestamp cursor
 
         if (!projectId) {
             return c.json({ success: false, error: "Missing projectId" }, 400);
         }
 
-        const filter: Record<string, unknown> = { projectId };
-        if (filePath) filter.filePath = filePath;
-        if (before)   filter.createdAt = { $lt: new Date(before) };
+        let query = supabase
+            .from("timeline_events")
+            .select("id, project_id, file_path, event_type, user_id, user_name, user_color, content, cursor_line, cursor_column, is_checkpoint, created_at")
+            .eq("project_id", projectId)
+            .order("created_at", { ascending: true })
+            .limit(limit + 1);
 
-        const events = await TimelineEvent
-            .find(filter)
-            .sort({ createdAt: 1 }) // oldest first so array index === timeline position
-            .limit(limit + 1)       // fetch one extra to determine hasMore
-            .select("-__v")
-            .lean();
+        if (filePath) query = query.eq("file_path", filePath);
+        if (before)   query = query.lt("created_at", before);
 
-        const hasMore = events.length > limit;
-        if (hasMore) events.pop();
+        const { data: events, error } = await query;
+        if (error) throw error;
 
-        return c.json({ success: true, events, hasMore }, 200);
+        const rows = events ?? [];
+        const hasMore = rows.length > limit;
+        if (hasMore) rows.pop();
+
+        return c.json({ success: true, events: rows, hasMore }, 200);
     } catch (error: any) {
         console.error("GET /api/timeline error:", error);
         return c.json({ success: false, error: error.message }, 500);
     }
 });
 
-// ──────────────────────────────────────────────────────────────────
-// POST /api/timeline/:projectId/analyze
-// Fetches up to 10 named events, builds a diff summary prompt,
-// calls the configured LLM, and returns a plain-text analysis.
-// ──────────────────────────────────────────────────────────────────
+// POST /api/timeline/:projectId/analyze — LLM diff analysis
 timelineRoutes.post("/:projectId/analyze", authMiddleware, async (c) => {
     if (!LLM_KEY) {
         return c.json({ success: false, error: "LLM_KEY not configured" }, 500);
     }
 
     try {
-        await connectMongo();
-
         const projectId = c.req.param("projectId");
         const body = await c.req.json<{
             filePath: string;
@@ -74,27 +63,26 @@ timelineRoutes.post("/:projectId/analyze", authMiddleware, async (c) => {
         }
 
         const ids = body.eventIds.slice(0, 10);
-        const events = await TimelineEvent
-            .find({ _id: { $in: ids }, projectId })
-            .sort({ createdAt: 1 })
-            .select("eventType userName userColor content createdAt filePath")
-            .lean();
+        const { data: events, error } = await supabase
+            .from("timeline_events")
+            .select("id, event_type, user_name, user_color, content, created_at, file_path")
+            .in("id", ids)
+            .eq("project_id", projectId)
+            .order("created_at", { ascending: true });
 
-        if (events.length === 0) {
+        if (error) throw error;
+        if (!events?.length) {
             return c.json({ success: false, error: "No events found for given IDs" }, 404);
         }
 
-        // Build diff summary: compare each event's content against the previous
         const LINES = 200;
         const truncate = (s: string) => s.split("\n").slice(0, LINES).join("\n");
 
         const diffSections = events.map((ev, i) => {
-            const prev  = i === 0 ? "" : truncate((events[i - 1] as any).content ?? "");
-            const curr  = truncate((ev as any).content ?? "");
-            const actor = (ev as any).eventType === "agent_accepted"
-                ? `🤖 AI Agent`
-                : `👤 ${(ev as any).userName}`;
-            const ts    = new Date((ev as any).createdAt).toLocaleTimeString();
+            const prev  = i === 0 ? "" : truncate(events[i - 1]!.content ?? "");
+            const curr  = truncate(ev.content ?? "");
+            const actor = ev.event_type === "agent_accepted" ? "🤖 AI Agent" : `👤 ${ev.user_name}`;
+            const ts    = new Date(ev.created_at).toLocaleTimeString();
 
             return [
                 `--- Change ${i + 1} at ${ts} by ${actor} ---`,

@@ -16,8 +16,7 @@
 
 import { createMiddleware } from "hono/factory";
 import { jwtVerify } from "jose";
-import { connectMongo } from "../db/mongoose";
-import { User } from "../db/models/User";
+import { upsertUser } from "../utils/tokens";
 
 const FUN_BIOS = [
   "I use Arch btw.",
@@ -102,25 +101,8 @@ export const authMiddleware = createMiddleware(async (c, next) => {
       : now + 15 * 60 * 1000;
     tokenCache.set(token, { user: userPayload, expiresAt: Math.min(expMs, now + 15 * 60 * 1000) });
 
-    // ── 5. Upsert user in MongoDB (fire-and-forget, non-blocking) ─────────────
-    connectMongo()
-      .then(() =>
-        User.findOneAndUpdate(
-          { auth0Id: userPayload.sub },
-          {
-            auth0Id: userPayload.sub,
-            name: userPayload.name || userPayload.nickname || "Anonymous Coder",
-            email: userPayload.email || "no-email@vibecodium.com",
-            picture: userPayload.picture,
-            bio: FUN_BIOS[Math.floor(Math.random() * FUN_BIOS.length)],
-            language: LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)],
-            location: LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)],
-            createdAt: Date.now(),
-          },
-          { upsert: true, new: true, setDefaultsOnInsert: true },
-        ),
-      )
-      .catch((e) => console.error("[auth] MongoDB upsert failed:", e));
+    // ── 5. Upsert user in Supabase (fire-and-forget, non-blocking) ─────────────
+    upsertUser(userPayload as Parameters<typeof upsertUser>[0]).catch((e) => console.error("[auth] upsertUser failed:", e));
 
     c.set("user", userPayload);
     await next();

@@ -1,19 +1,15 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../middleware/authMiddleware";
-import { db } from "../db";
-import { sessions, files } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { supabase } from "../db/supabase";
 
-type Variables = { user: { sub: string; [key: string]: unknown } };
-
-const sessionsRoutes = new Hono<{ Variables: Variables }>();
+const sessionsRoutes = new Hono();
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 // POST /api/sessions — create a session token for a project (auth required)
 sessionsRoutes.post("/", authMiddleware, async (c) => {
     try {
-        const user = c.get("user");
+        const user = (c.get as any)("user");
         const body = await c.req.json<{ projectId: string; label?: string; expiresInDays?: number }>();
 
         if (!body.projectId) {
@@ -24,14 +20,16 @@ sessionsRoutes.post("/", authMiddleware, async (c) => {
         const expiresAt = now + (body.expiresInDays ?? 7) * 24 * 60 * 60 * 1000;
         const token = crypto.randomUUID();
 
-        await db.insert(sessions).values({
+        const { error } = await supabase.from("sessions").insert({
             token,
-            projectId: body.projectId,
-            createdAt: now,
-            expiresAt,
-            createdBy: user.sub,
+            project_id: body.projectId,
+            created_at: now,
+            expires_at: expiresAt,
+            created_by: user.sub,
             label: body.label ?? null,
         });
+
+        if (error) throw error;
 
         const origin = c.req.header("origin") ?? "http://localhost:5173";
         const shareUrl = `${origin}/?session=${token}`;
@@ -46,17 +44,17 @@ sessionsRoutes.post("/", authMiddleware, async (c) => {
 sessionsRoutes.get("/:token", async (c) => {
     try {
         const token = c.req.param("token");
-        const [session] = await db.select().from(sessions).where(eq(sessions.token, token));
+        const { data: session, error } = await supabase
+            .from("sessions")
+            .select("project_id, label, expires_at")
+            .eq("token", token)
+            .maybeSingle();
 
-        if (!session) {
-            return c.json({ error: "Session not found" }, 404);
-        }
+        if (error) throw error;
+        if (!session) return c.json({ error: "Session not found" }, 404);
+        if (session.expires_at < Date.now()) return c.json({ error: "Session expired" }, 410);
 
-        if (session.expiresAt < Date.now()) {
-            return c.json({ error: "Session expired" }, 410);
-        }
-
-        return c.json({ projectId: session.projectId, label: session.label, expiresAt: session.expiresAt });
+        return c.json({ projectId: session.project_id, label: session.label, expiresAt: session.expires_at });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }
@@ -66,22 +64,24 @@ sessionsRoutes.get("/:token", async (c) => {
 sessionsRoutes.get("/:token/files", async (c) => {
     try {
         const token = c.req.param("token");
-        const [session] = await db.select().from(sessions).where(eq(sessions.token, token));
+        const { data: session, error: sErr } = await supabase
+            .from("sessions")
+            .select("project_id, expires_at")
+            .eq("token", token)
+            .maybeSingle();
 
-        if (!session) {
-            return c.json({ error: "Session not found" }, 404);
-        }
+        if (sErr) throw sErr;
+        if (!session) return c.json({ error: "Session not found" }, 404);
+        if (session.expires_at < Date.now()) return c.json({ error: "Session expired" }, 410);
 
-        if (session.expiresAt < Date.now()) {
-            return c.json({ error: "Session expired" }, 410);
-        }
+        const { data: projectFiles, error: fErr } = await supabase
+            .from("files")
+            .select("id, path, content")
+            .eq("project_id", session.project_id);
 
-        const projectFiles = await db
-            .select({ id: files.id, path: files.path, content: files.content })
-            .from(files)
-            .where(eq(files.projectId, session.projectId));
+        if (fErr) throw fErr;
 
-        return c.json({ success: true, files: projectFiles });
+        return c.json({ success: true, files: projectFiles ?? [] });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }
@@ -90,20 +90,21 @@ sessionsRoutes.get("/:token/files", async (c) => {
 // DELETE /api/sessions/:token — revoke (owner only, auth required)
 sessionsRoutes.delete("/:token", authMiddleware, async (c) => {
     try {
-        const user = c.get("user");
+        const user = (c.get as any)("user");
         const token = c.req.param("token");
 
-        const [session] = await db.select().from(sessions).where(eq(sessions.token, token));
+        const { data: session, error: sErr } = await supabase
+            .from("sessions")
+            .select("created_by")
+            .eq("token", token)
+            .maybeSingle();
 
-        if (!session) {
-            return c.json({ error: "Session not found" }, 404);
-        }
+        if (sErr) throw sErr;
+        if (!session) return c.json({ error: "Session not found" }, 404);
+        if (session.created_by !== user.sub) return c.json({ error: "Forbidden" }, 403);
 
-        if (session.createdBy !== user.sub) {
-            return c.json({ error: "Forbidden" }, 403);
-        }
-
-        await db.delete(sessions).where(eq(sessions.token, token));
+        const { error } = await supabase.from("sessions").delete().eq("token", token);
+        if (error) throw error;
 
         return c.body(null, 204);
     } catch (e: any) {
@@ -114,22 +115,22 @@ sessionsRoutes.delete("/:token", authMiddleware, async (c) => {
 // GET /api/sessions?projectId=... — list active sessions for a project (auth required)
 sessionsRoutes.get("/", authMiddleware, async (c) => {
     try {
-        const user = c.get("user");
+        const user = (c.get as any)("user");
         const projectId = c.req.query("projectId");
 
-        if (!projectId) {
-            return c.json({ error: "Missing projectId query param" }, 400);
-        }
+        if (!projectId) return c.json({ error: "Missing projectId query param" }, 400);
 
         const now = Date.now();
-        const projectSessions = await db
-            .select()
-            .from(sessions)
-            .where(and(eq(sessions.projectId, projectId), eq(sessions.createdBy, user.sub)));
+        const { data, error } = await supabase
+            .from("sessions")
+            .select("*")
+            .eq("project_id", projectId)
+            .eq("created_by", user.sub)
+            .gt("expires_at", now);
 
-        const active = projectSessions.filter((s) => s.expiresAt > now);
+        if (error) throw error;
 
-        return c.json({ sessions: active });
+        return c.json({ sessions: data ?? [] });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }

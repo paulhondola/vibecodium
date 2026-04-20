@@ -15,13 +15,9 @@ import usersRouter from "./routes/users";
 import deployRoutes from "./routes/deploy";
 import helpRoutes from "./routes/help";
 import timelineRoutes from "./routes/timeline";
-import { connectMongo } from "./db/mongoose";
-import { TimelineEvent } from "./db/models/TimelineEvent";
 import { syncProjectFilesToDisk } from "./utils/sync";
-import { db } from "./db";
-import { files, snapshots } from "./db/schema";
+import { supabase } from "./db/supabase";
 import * as nodePath from "node:path";
-import { eq } from "drizzle-orm";
 import { scanCode, hasCriticalVulnerability, type ScanResult } from "./security/scanner";
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
@@ -70,10 +66,6 @@ const EXEC_COMMANDS: Record<string, () => string[]> = {
 
 export const app = new Hono()
 	.onError((err, c) => {
-		const name = (err as any)?.name ?? "";
-		if (name === "MongooseServerSelectionError" || name === "MongooseError" || name.includes("Mongo")) {
-			return c.json({ success: false, error: "Database unavailable", details: err.message }, 503);
-		}
 		console.error("Unhandled error:", err);
 		return c.json({ success: false, error: "Internal server error" }, 500);
 	})
@@ -109,13 +101,14 @@ export const app = new Hono()
 				return c.json({ success: false, error: "Missing projectId" }, 400);
 			}
 
-			// Fetch all project files
-			const projectFiles = await db
-				.select({ path: files.path, content: files.content })
-				.from(files)
-				.where(eq(files.projectId, body.projectId));
+		const { data: projectFiles, error: fErr } = await supabase
+				.from("files")
+				.select("path, content")
+				.eq("project_id", body.projectId);
 
-			const filesToScan = projectFiles
+			if (fErr) throw fErr;
+
+			const filesToScan = (projectFiles ?? [])
 				.filter((f) => f.content)
 				.map((f) => ({ path: f.path, content: f.content! }));
 
@@ -329,10 +322,8 @@ async function stopTerminal(roomId: string): Promise<void> {
 // ──────────────────────────────────────────
 const COLORS = ["#A855F7", "#3B82F6", "#10B981", "#F59E0B", "#EC4899", "#EF4444", "#14B8A6", "#F97316"];
 
-// Fire-and-forget MongoDB timeline logger.
-// Must be called from within an already-async context (e.g. inside a setImmediate IIFE).
-// Save every Nth code_update to MongoDB to avoid flooding the DB.
-// agent_accepted events are always saved (they're rare and always meaningful).
+// Fire-and-forget Supabase timeline logger.
+// Saves every Nth code_update to avoid flooding. agent_accepted events always saved.
 const TIMELINE_SAVE_INTERVAL = 7;
 
 function logTimelineEvent(
@@ -344,28 +335,25 @@ function logTimelineEvent(
     userName: string,
     userColor: string,
 ): void {
-    if (content.length > 500_000) return; // skip snapshots for very large files
+    if (content.length > 500_000) return;
     (async () => {
         try {
-            await connectMongo();
             const key = `${projectId}::${filePath}`;
             const count = (timelineEventCounters.get(key) ?? 0) + 1;
             timelineEventCounters.set(key, count);
 
-            // Throttle: only persist every Nth code_update.
-            // Always persist agent_accepted — they are semantically significant.
             if (eventType === "code_update" && count % TIMELINE_SAVE_INTERVAL !== 0) return;
 
-            await TimelineEvent.create({
-                projectId,
-                filePath,
-                eventType,
-                userId,
-                userName,
-                userColor,
+            await supabase.from("timeline_events").insert({
+                project_id: projectId,
+                file_path: filePath,
+                event_type: eventType,
+                user_id: userId,
+                user_name: userName,
+                user_color: userColor,
                 content,
-                isCheckpoint: count % 50 === 0,
-                createdAt: new Date(),
+                is_checkpoint: count % 50 === 0,
+                created_at: new Date().toISOString(),
             });
         } catch (e) {
             console.error("[Timeline log error]:", e);
@@ -451,14 +439,14 @@ export default {
                         const hostDir = await syncProjectFilesToDisk(roomId);
 
                         // Load file list for language detection + security scan
-                        const projectFiles = await db
-                            .select({ path: files.path, content: files.content })
-                            .from(files)
-                            .where(eq(files.projectId, roomId));
+                        const { data: projectFiles } = await supabase
+                            .from("files")
+                            .select("path, content")
+                            .eq("project_id", roomId);
 
                         // Security scan — block before any container starts
 						const scanResult = await scanCode(
-							projectFiles
+							(projectFiles ?? [])
 								.filter((f) => f.content)
 								.map((f) => ({ path: f.path, content: f.content! }))
 						);
@@ -480,7 +468,7 @@ export default {
 						broadcastToRoom(`\x1b[32m✓ Security scan passed\x1b[0m (${scanResult.scannedFiles} files, ${scanResult.scannedLines} lines, ${scanResult.scanDuration}ms)\r\n`);
 
                         // Pick image from file extensions
-                        const image = detectTerminalImage(projectFiles.map(f => f.path));
+                        const image = detectTerminalImage((projectFiles ?? []).map(f => f.path));
                         broadcastToRoom(`\x1b[90mImage: ${image}  |  ${hostDir} → /usr/src/app\x1b[0m\r\n`);
 
                         // Pull image (instant if already cached)
@@ -692,30 +680,30 @@ export default {
                     };
                     ws.publish(data.projectId, JSON.stringify(broadcast));
 
-                    // Also persist as a normal code_update in SQLite
+                    // Also persist as a normal code_update in Supabase
                     if (payload.filePath && payload.content !== undefined) {
                         setImmediate(() => {
                             (async () => {
                                 try {
-                                    const timestamp = Date.now();
-                                    await db.insert(files).values({
-                                        id: crypto.randomUUID(),
-                                        projectId: data.projectId,
-                                        path: payload.filePath,
-                                        content: payload.content,
-                                        updatedAt: timestamp
-                                    }).onConflictDoUpdate({
-                                        target: [files.projectId, files.path],
-                                        set: { content: payload.content, updatedAt: Math.floor(timestamp / 1000) }
-                                    });
-                                    await db.insert(snapshots).values({
-                                        id: crypto.randomUUID(),
-                                        projectId: data.projectId,
-                                        path: payload.filePath,
-                                        content: payload.content,
-                                        timestamp
-                                    });
-                                    // Log rich event to MongoDB for timeline feature
+                                    await supabase
+                                        .from("files")
+                                        .upsert({
+                                            project_id: data.projectId,
+                                            path: payload.filePath,
+                                            content: payload.content,
+                                            updated_at: Math.floor(Date.now() / 1000),
+                                        }, { onConflict: "project_id,path" });
+
+                                    await supabase
+                                        .from("snapshots")
+                                        .insert({
+                                            project_id: data.projectId,
+                                            path: payload.filePath,
+                                            content: payload.content,
+                                            timestamp: Date.now(),
+                                        });
+
+                                    // Log rich event to Supabase for timeline feature
                                     logTimelineEvent(
                                         data.projectId, payload.filePath, payload.content,
                                         "agent_accepted", data.clientId, data.userName, data.color
@@ -757,27 +745,25 @@ export default {
                         setImmediate(() => {
                             (async () => {
                                 try {
-                                    const timestamp = Date.now();
-                                    await db.insert(files).values({
-                                        id: crypto.randomUUID(),
-                                        projectId: data.projectId,
-                                        path: payload.filePath,
-                                        content: payload.content,
-                                        updatedAt: timestamp
-                                    }).onConflictDoUpdate({
-                                        target: [files.projectId, files.path],
-                                        set: { content: payload.content, updatedAt: Math.floor(timestamp / 1000) }
-                                    });
+                                    await supabase
+                                        .from("files")
+                                        .upsert({
+                                            project_id: data.projectId,
+                                            path: payload.filePath,
+                                            content: payload.content,
+                                            updated_at: new Date().toISOString()
+                                        }, { onConflict: "project_id, path" });
 
-                                    // Insert snapshot for time-travel feature
-                                    await db.insert(snapshots).values({
-                                        id: crypto.randomUUID(),
-                                        projectId: data.projectId,
-                                        path: payload.filePath,
-                                        content: payload.content,
-                                        timestamp
-                                    });
-                                    // Log rich event to MongoDB for timeline feature
+                                    await supabase
+                                        .from("snapshots")
+                                        .insert({
+                                            project_id: data.projectId,
+                                            path: payload.filePath,
+                                            content: payload.content,
+                                            timestamp: Date.now(),
+                                        });
+
+                                    // Log rich event to Supabase for timeline feature
                                     logTimelineEvent(
                                         data.projectId, payload.filePath, payload.content,
                                         "code_update", data.clientId, data.userName, data.color
@@ -834,24 +820,24 @@ export default {
                 }
             }
 
-            // When the last collaborator exits the project, purge timeline events from MongoDB
-            // so the DB doesn't accumulate data from abandoned sessions.
+            // When the last collaborator exits the project, purge timeline events from Supabase
             if (remaining.length === 0) {
                 // Clear in-memory counters for this project
                 for (const key of timelineEventCounters.keys()) {
                     if (key.startsWith(`${data.projectId}::`)) timelineEventCounters.delete(key);
                 }
-                // Fire-and-forget MongoDB cleanup
-                (async () => {
-                    try {
-                        await connectMongo();
-                        await TimelineEvent.deleteMany({ projectId: data.projectId });
-                        console.log(`[Timeline] Purged events for project ${data.projectId}`);
-                    } catch (e) {
-                        console.error("[Timeline purge error]:", e);
-                    }
-                })();
+                // Fire-and-forget Supabase cleanup
+                void supabase
+                    .from("timeline_events")
+                    .delete()
+                    .eq("project_id", data.projectId)
+                    .then(({ error }) => {
+                        if (error) console.error("[Timeline purge error]:", error);
+                        else console.log(`[Timeline] Purged events for project ${data.projectId}`);
+                    });
+
             }
+
 
             console.log(`[WS] ${data.userName} left ${data.projectId}`);
         }
