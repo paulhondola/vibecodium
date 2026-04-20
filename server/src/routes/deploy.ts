@@ -12,7 +12,7 @@ import { authMiddleware } from "../middleware/authMiddleware";
 
 const deployRoutes = new Hono();
 
-// Require Auth0 login but skip OPTIONS preflight
+// Require authenticated Supabase session but skip OPTIONS preflight
 deployRoutes.use("/*", async (c, next) => {
     if (c.req.method === "OPTIONS") return next();
     return authMiddleware(c, next);
