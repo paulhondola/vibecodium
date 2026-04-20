@@ -1,6 +1,6 @@
 import { Heart, X, Flame, MapPin, Code2, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "@/contexts/AuthProvider";
 import { API_BASE } from "@/lib/config";
 
 interface MatchUser {
@@ -19,7 +19,7 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
     const [users, setUsers] = useState<MatchUser[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    const { getAccessTokenSilently } = useAuth0();
+    const { getAccessTokenSilently } = useAuth();
 
     useEffect(() => {
         let isMounted = true;

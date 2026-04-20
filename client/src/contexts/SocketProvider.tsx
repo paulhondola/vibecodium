@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "@/contexts/AuthProvider";
 import { WS_BASE } from "@/lib/config";
 
 interface SocketContextData {
@@ -12,7 +12,7 @@ interface SocketContextData {
 const SocketContext = createContext<SocketContextData | null>(null);
 
 export function SocketProvider({ children, projectId }: { children: React.ReactNode; projectId: string | null }) {
-    const { user, isAuthenticated } = useAuth0();
+    const { user, isAuthenticated } = useAuth();
     const ws = useRef<WebSocket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [lastMessage, setLastMessage] = useState<any>(null);
@@ -24,7 +24,7 @@ export function SocketProvider({ children, projectId }: { children: React.ReactN
         let reconnectTimeout: ReturnType<typeof setTimeout>;
         let isCleaningUp = false;
         
-        const userId = `${user?.sub || "anon"}_${sessionIdRef.current}`;
+        const userId = `${user?._raw.id || "anon"}_${sessionIdRef.current}`;
         const userName = user?.name || user?.nickname || "Anonymous";
         const url = `${WS_BASE}/ws/collab/${projectId}?userId=${encodeURIComponent(userId)}&userName=${encodeURIComponent(userName)}`;
 

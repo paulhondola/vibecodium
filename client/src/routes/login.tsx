@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "../contexts/AuthProvider";
 import { Github, ArrowRight, ShieldCheck, Zap, Sparkles } from "lucide-react";
 import { motion, useMotionTemplate, useMotionValue } from "framer-motion";
 import { MouseEvent, useEffect } from "react";
@@ -9,7 +9,7 @@ export const Route = createFileRoute("/login")({
 });
 
 function Login() {
-  const { loginWithRedirect, isAuthenticated, isLoading } = useAuth0();
+  const { loginWithRedirect, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
   const mouseX = useMotionValue(0);
@@ -71,7 +71,7 @@ function Login() {
           </p>
 
           <button
-            onClick={() => loginWithRedirect({ authorizationParams: { connection: "github" } })}
+            onClick={() => loginWithRedirect()}
             disabled={isLoading}
             className="group relative w-full px-6 py-4 bg-[#18181b] hover:bg-[#27272a] text-white font-semibold rounded-xl transition-all border border-white/10 hover:border-cyan-500/50 shadow-lg hover:shadow-[0_0_20px_rgba(6,182,212,0.2)] flex items-center justify-center gap-3 overflow-hidden"
           >

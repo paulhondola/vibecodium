@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "../contexts/AuthProvider";
 import LandingPage from "../components/LandingPage";
 import Workspace from "../components/Workspace";
 
@@ -18,7 +18,7 @@ function Index() {
     const view: "landing" | "app" = w ? "app" : "landing";
     const [projectId, setProjectId] = useState<string | null>(w ?? null);
     const [manualApp, setManualApp] = useState(false); // entered without a ?w= URL
-    const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
+    const { isAuthenticated, isLoading, loginWithRedirect } = useAuth();
     const navigate = useNavigate();
 
     // Keep projectId in sync when ?w= changes (OAuth restore, shared link navigation)
@@ -34,7 +34,6 @@ function Index() {
         if (inApp && !isLoading && !isAuthenticated) {
             loginWithRedirect({
                 appState: { returnTo: window.location.href },
-                authorizationParams: { connection: "github" },
             });
         }
     }, [inApp, isLoading, isAuthenticated, loginWithRedirect]);

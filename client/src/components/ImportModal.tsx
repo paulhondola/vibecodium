@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Github, X, Loader2 } from "lucide-react";
 import { useState } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "@/contexts/AuthProvider";
 import { API_BASE } from "@/lib/config";
 
 interface ImportModalProps {
@@ -14,7 +14,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
 	const [url, setUrl] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const { getAccessTokenSilently } = useAuth0();
+	const { getAccessTokenSilently } = useAuth();
 
 	const handleImport = async () => {
 		if (!url.startsWith("https://github.com/")) {
