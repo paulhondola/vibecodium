@@ -43,6 +43,9 @@ pnpm-debug.log*
 bun.lockb
 .turbo
 
+# Supabase
+supabase/.temp
+
 # MacOS
 .DS_Store
 Icon?
