@@ -15,7 +15,7 @@
  */
 
 import { createMiddleware } from "hono/factory";
-import { jwtVerify } from "jose";
+import { jwtVerify, decodeProtectedHeader, createRemoteJWKSet } from "jose";
 import { upsertUser } from "../utils/tokens";
 
 const FUN_BIOS = [
@@ -43,6 +43,22 @@ if (!(globalThis as any).__supabaseTokenCache) {
 const tokenCache = (globalThis as any).__supabaseTokenCache as Map<string, CachedUser>;
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Remote JWKS (For Asymmetric ES256 tokens)
+// ──────────────────────────────────────────────────────────────────────────────
+let JWKS: ReturnType<typeof createRemoteJWKSet> | null = null;
+
+function getJWKS() {
+  if (JWKS) return JWKS;
+  const url = process.env.SUPABASE_URL;
+  if (!url) throw new Error("SUPABASE_URL is not set in server/.env");
+  
+  // Construct the JWKS endpoint from the project URL
+  const jwksUrl = new URL("/auth/v1/.well-known/jwks.json", url).toString();
+  JWKS = createRemoteJWKSet(new URL(jwksUrl));
+  return JWKS;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Middleware
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -60,9 +76,6 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 
   try {
     const jwtSecret = process.env.SUPABASE_JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error("SUPABASE_JWT_SECRET is not set in server/.env");
-    }
 
     // ── 1. Check in-memory cache ──────────────────────────────────────────────
     const now = Date.now();
@@ -72,12 +85,27 @@ export const authMiddleware = createMiddleware(async (c, next) => {
       return await next();
     }
 
-    // ── 2. Verify JWT with jose ───────────────────────────────────────────────
-    const secret = new TextEncoder().encode(jwtSecret);
-    const { payload } = await jwtVerify(token, secret, {
-      // Supabase issues HS256 JWTs signed with the JWT secret
-      algorithms: ["HS256"],
-    });
+    // ── 2. Verify JWT ─────────────────────────────────────────────────────────
+    let payload: any;
+    const header = decodeProtectedHeader(token);
+
+    if (header.alg === "ES256") {
+      // Use Remote JWKS for Asymmetric tokens (cloud projects)
+      const { payload: verifiedPayload } = await jwtVerify(token, getJWKS(), {
+        algorithms: ["ES256"],
+      });
+      payload = verifiedPayload;
+    } else {
+      // Fallback to Symmetric HS256 with the secret (local dev or legacy)
+      if (!jwtSecret) {
+        throw new Error("SUPABASE_JWT_SECRET is not set for symmetric token");
+      }
+      const secret = new TextEncoder().encode(jwtSecret);
+      const { payload: verifiedPayload } = await jwtVerify(token, secret, {
+        algorithms: ["HS256", "HS384", "HS512"],
+      });
+      payload = verifiedPayload;
+    }
 
     // ── 3. Normalise payload — keep compat shim for existing routes ───────────
     const meta = (payload.user_metadata ?? {}) as Record<string, any>;
@@ -108,7 +136,16 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     await next();
   } catch (error: any) {
     // JWT verification errors (expired, invalid signature, etc.)
-    console.error("[auth] Token verification failed:", error.message);
+    let diagnosticMsg = "";
+    try {
+      const header = decodeProtectedHeader(token);
+      diagnosticMsg = ` (Token Header: alg=${header.alg})`;
+    } catch (e) {
+      diagnosticMsg = " (Failed to decode header)";
+    }
+
+    const isSecretError = error.message.includes("secret") || error.message.includes("key") || error.message.includes("signature");
+    console.error(`[auth] Token verification failed: ${error.message}${diagnosticMsg}${isSecretError ? " (Check SUPABASE_JWT_SECRET in .env)" : ""}`);
     return c.json({ error: "Unauthorized", details: error.message }, 401);
   }
 });

@@ -84,10 +84,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     // Subscribe to auth state changes (login, logout, token refresh)
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       setUser(newSession ? toAuthUser(newSession.user) : null);
       setIsLoading(false);
+
+      // Handle redirect after successful sign in
+      if (event === "SIGNED_IN") {
+        const returnTo = sessionStorage.getItem("auth_return_to");
+        if (returnTo) {
+          sessionStorage.removeItem("auth_return_to");
+          // Use window.location.replace to ensure the browser history is clean
+          // or at least that we move to the target immediately.
+          window.location.replace(returnTo);
+        }
+      }
     });
 
     return () => listener.subscription.unsubscribe();
@@ -95,7 +106,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithRedirect = useCallback(
     async (opts?: { appState?: { returnTo?: string } }) => {
-      const redirectTo = `${window.location.origin}${opts?.appState?.returnTo ? `?returnTo=${encodeURIComponent(opts.appState.returnTo)}` : ""}`;
+      // Store returnTo in sessionStorage for persistence across OAuth redirect
+      if (opts?.appState?.returnTo) {
+        sessionStorage.setItem("auth_return_to", opts.appState.returnTo);
+      }
+
+      const redirectTo = window.location.origin;
       await supabase.auth.signInWithOAuth({
         provider: "github",
         options: { redirectTo },

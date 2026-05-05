@@ -34,7 +34,7 @@ export async function upsertUser(payload: {
       bio: FUN_BIOS[Math.floor(Math.random() * FUN_BIOS.length)],
       language: LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)],
       location: LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)],
-      created_at: Date.now(),
+      created_at: new Date().toISOString(),
     },
     { onConflict: "id", ignoreDuplicates: false }
   );

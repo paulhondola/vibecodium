@@ -31,10 +31,18 @@ function Index() {
     const inApp = view === "app" || manualApp;
 
     useEffect(() => {
+        // Only trigger login if we are definitely not loading and not authenticated
         if (inApp && !isLoading && !isAuthenticated) {
-            loginWithRedirect({
-                appState: { returnTo: window.location.href },
-            });
+            // Check if we are currently in the middle of an OAuth redirect processing
+            // (Supabase adds access_token etc to the hash/URL)
+            const hasAuthParams = window.location.hash.includes('access_token=') || 
+                                 window.location.search.includes('code=');
+            
+            if (!hasAuthParams) {
+                loginWithRedirect({
+                    appState: { returnTo: window.location.href },
+                });
+            }
         }
     }, [inApp, isLoading, isAuthenticated, loginWithRedirect]);
 
