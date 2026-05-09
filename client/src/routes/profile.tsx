@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "../contexts/AuthProvider";
 import { ArrowLeft, LogOut, Activity, FolderGit2, Zap, Github, Key, Save, Loader2, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
@@ -11,7 +11,7 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const { user, isAuthenticated, isLoading, logout, getAccessTokenSilently } = useAuth0();
+  const { user, isAuthenticated, isLoading, logout, getAccessTokenSilently } = useAuth();
   const navigate = useNavigate();
 
   const [githubRepoCount, setGithubRepoCount] = useState<number | null>(null);
@@ -176,7 +176,7 @@ function ProfilePage() {
                 Edit Profile
               </button>
               <button
-                onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+                onClick={() => logout()}
                 className="w-full py-3 flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-transparent hover:border-red-500/30 rounded-xl transition-all font-['Space_Grotesk'] tracking-widest uppercase text-xs font-bold"
               >
                 <LogOut size={14} /> Disconnect

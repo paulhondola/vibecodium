@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "@/contexts/AuthProvider";
 import type { ProjectFile } from "../components/Workspace";
 import { WS_BASE } from "@/lib/config";
 
@@ -53,7 +53,7 @@ export function useCollabSocket() {
 // ──────────────────────────────────────────
 
 export function WebSocketProvider({ projectId, children }: { projectId: string; children: ReactNode }) {
-    const { user } = useAuth0();
+    const { user } = useAuth();
     const wsRef = useRef<WebSocket | null>(null);
     const sessionIdRef = useRef(Math.random().toString(36).substring(2, 10));
 
@@ -66,7 +66,7 @@ export function WebSocketProvider({ projectId, children }: { projectId: string; 
     const [syncedFiles, setSyncedFiles] = useState<ProjectFile[] | null>(null);
     const [wsReady, setWsReady] = useState(false); // Used to trigger re-renders when WS opens
 
-    const myClientId = `${user?.sub || "anon"}_${sessionIdRef.current}`;
+    const myClientId = `${user?._raw.id || "anon"}_${sessionIdRef.current}`;
 
     const sendMessage = useCallback((msg: object) => {
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -84,7 +84,7 @@ export function WebSocketProvider({ projectId, children }: { projectId: string; 
     }, [sendMessage]);
 
     useEffect(() => {
-        if (!projectId || !user?.sub) return;
+        if (!projectId || !user?._raw.id) return;
 
         const url = new URL(`${WS_BASE}/ws/collab/${projectId}`);
         url.searchParams.set("clientId", myClientId);
@@ -166,7 +166,7 @@ export function WebSocketProvider({ projectId, children }: { projectId: string; 
             setWsReady(false);
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [projectId, user?.sub]);
+    }, [projectId, user?._raw.id]);
 
     const value: WebSocketContextValue = {
         ws: wsReady ? wsRef.current : null,

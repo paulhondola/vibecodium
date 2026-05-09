@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, Loader2, MessageSquareQuote } from "lucide-react";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "@/contexts/AuthProvider";
 import { API_BASE } from "@/lib/config";
 
 interface CommunityHelpModalProps {
@@ -11,7 +11,7 @@ interface CommunityHelpModalProps {
 }
 
 export default function CommunityHelpModal({ isOpen, onClose, repoUrl }: CommunityHelpModalProps) {
-    const { getAccessTokenSilently } = useAuth0();
+    const { getAccessTokenSilently } = useAuth();
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");

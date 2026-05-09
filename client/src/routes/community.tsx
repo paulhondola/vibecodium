@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "../contexts/AuthProvider";
 import { motion } from "framer-motion";
 import { Loader2, Github, ExternalLink, Users, Clock, AlertCircle } from "lucide-react";
 import { API_BASE } from "@/lib/config";
@@ -27,7 +27,7 @@ const DIFFICULTY_STYLES = {
 
 function CommunityPage() {
     const navigate = useNavigate();
-    const { getAccessTokenSilently, isAuthenticated, isLoading: authLoading, loginWithRedirect } = useAuth0();
+    const { getAccessTokenSilently, isAuthenticated, isLoading: authLoading, loginWithRedirect } = useAuth();
     const [posts, setPosts] = useState<HelpPost[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -47,7 +47,7 @@ function CommunityPage() {
 
     const handleOpenProject = async (post: HelpPost) => {
         if (!isAuthenticated) {
-            loginWithRedirect({ appState: { returnTo: "/community" }, authorizationParams: { connection: "github" } });
+            loginWithRedirect({ appState: { returnTo: "/community" } });
             return;
         }
 

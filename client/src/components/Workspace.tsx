@@ -16,7 +16,7 @@ import { API_BASE } from "@/lib/config";
 import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, ChevronDown, Wrench, Key, Rocket, ExternalLink, X } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "@/contexts/AuthProvider";
 import { useNavigate } from "@tanstack/react-router";
 import { SocketProvider, useSocket } from "../contexts/SocketProvider";
 import type { PendingUpdate, AgentFileAction } from "../hooks/useAgentStream";
@@ -73,7 +73,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [pendingUpdate, setPendingUpdate] = useState<PendingUpdate | null>(null);
     const [agentToken, setAgentToken] = useState<string | null>(null);
 
-    const { user, getAccessTokenSilently, isAuthenticated, loginWithRedirect } = useAuth0();
+    const { user, getAccessTokenSilently, isAuthenticated, loginWithRedirect } = useAuth();
     const getTokenRef = useRef(getAccessTokenSilently);
     useEffect(() => { getTokenRef.current = getAccessTokenSilently; }, [getAccessTokenSilently]);
 
@@ -569,7 +569,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                         activeFile={activeFile}
                                         onSelectFile={handleSelectFile}
                                         onCloseFile={handleCloseFile}
-                                        userId={user?.sub ? `${user.sub}_local` : "anon_local"}
+                                        userId={user?._raw.id ? `${user._raw.id}_local` : "anon_local"}
                                         remoteCodeUpdate={remoteCodeUpdate}
                                         remoteCursorUpdate={remoteCursorUpdate}
                                         pendingUpdate={pendingUpdate}

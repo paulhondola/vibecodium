@@ -1,4 +1,4 @@
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "@/contexts/AuthProvider";
 import { useState } from "react";
 import ImportModal from "./ImportModal";
 import { useNavigate } from "@tanstack/react-router";
@@ -8,7 +8,7 @@ interface LandingPageProps {
 }
 
 export default function LandingPage({ onEnter }: LandingPageProps) {
-    const { isAuthenticated, user, isLoading, loginWithRedirect } = useAuth0();
+    const { isAuthenticated, user, isLoading, loginWithRedirect } = useAuth();
     const [isImportModalOpen, setImportModalOpen] = useState(false);
     const navigate = useNavigate();
 

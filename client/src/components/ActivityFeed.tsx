@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { History, Loader2, RefreshCw, GitCommit } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "@/contexts/AuthProvider";
 import { API_BASE } from "@/lib/config";
 
 interface GitHubCommit {
@@ -20,7 +20,7 @@ export default function ActivityFeed({ projectId }: { projectId: string | null }
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const { getAccessTokenSilently } = useAuth0();
+    const { getAccessTokenSilently } = useAuth();
 
     const fetchCommits = async () => {
         if (!projectId) return;

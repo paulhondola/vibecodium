@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "../contexts/AuthProvider";
 import { Loader2, X, ExternalLink } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import CoderMatchModal from "../components/CoderMatchModal";
@@ -40,7 +40,7 @@ interface DeployedApp {
 }
 
 function DashboardPage() {
-  const { user, isAuthenticated, isLoading, getAccessTokenSilently } = useAuth0();
+  const { user, isAuthenticated, isLoading, getAccessTokenSilently } = useAuth();
   const navigate = useNavigate();
 
   const [repos, setRepos] = useState<GithubRepo[]>([]);

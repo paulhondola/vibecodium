@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuth } from "../contexts/AuthProvider";
 import LandingPage from "../components/LandingPage";
 import Workspace from "../components/Workspace";
 
@@ -18,7 +18,7 @@ function Index() {
     const view: "landing" | "app" = w ? "app" : "landing";
     const [projectId, setProjectId] = useState<string | null>(w ?? null);
     const [manualApp, setManualApp] = useState(false); // entered without a ?w= URL
-    const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
+    const { isAuthenticated, isLoading, loginWithRedirect } = useAuth();
     const navigate = useNavigate();
 
     // Keep projectId in sync when ?w= changes (OAuth restore, shared link navigation)
@@ -31,11 +31,18 @@ function Index() {
     const inApp = view === "app" || manualApp;
 
     useEffect(() => {
+        // Only trigger login if we are definitely not loading and not authenticated
         if (inApp && !isLoading && !isAuthenticated) {
-            loginWithRedirect({
-                appState: { returnTo: window.location.href },
-                authorizationParams: { connection: "github" },
-            });
+            // Check if we are currently in the middle of an OAuth redirect processing
+            // (Supabase adds access_token etc to the hash/URL)
+            const hasAuthParams = window.location.hash.includes('access_token=') || 
+                                 window.location.search.includes('code=');
+            
+            if (!hasAuthParams) {
+                loginWithRedirect({
+                    appState: { returnTo: window.location.href },
+                });
+            }
         }
     }, [inApp, isLoading, isAuthenticated, loginWithRedirect]);
 

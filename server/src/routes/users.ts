@@ -1,68 +1,100 @@
 import { Hono } from "hono";
-import { db } from "../db";
+import { supabase } from "../db/supabase";
 import { authMiddleware } from "../middleware/authMiddleware";
-import { ne } from "drizzle-orm";
-import { connectMongo } from "../db/mongoose";
-import { UserToken } from "../db/models/UserToken";
-import { User } from "../db/models/User";
+import { getUserTokens } from "../utils/tokens";
 
 type Variables = { user: { sub: string; [key: string]: any } };
 const router = new Hono<{ Variables: Variables }>();
 
+// GET /api/users/match — return other users for coder-match feature
 router.get("/match", authMiddleware, async (c) => {
     try {
         const currentUser = c.get("user");
 
-        await connectMongo();
-        // Fetch all users except the current user from MongoDB
-        const matchUsers = await User.find({ auth0Id: { $ne: currentUser.sub } });
+        const { data, error } = await supabase
+            .from("users")
+            .select("id, name, email, picture, bio, language, location")
+            .neq("id", currentUser.sub)
+            .limit(20);
 
-        // Shuffle users to randomize matches
-        const shuffled = matchUsers.sort(() => 0.5 - Math.random());
-        
-        // Return top 20 randomized users
-        return c.json({ success: true, users: shuffled.slice(0, 20) });
+        if (error) throw error;
+
+        // Shuffle for randomised matching
+        const shuffled = (data ?? []).sort(() => 0.5 - Math.random());
+        return c.json({ success: true, users: shuffled });
     } catch (error: any) {
         console.error("Fetch match users error:", error);
         return c.json({ success: false, error: "Failed to fetch users" }, 500);
     }
 });
 
+// GET /api/users/tokens — show masked stored PATs
 router.get("/tokens", authMiddleware, async (c) => {
     try {
         const currentUser = c.get("user");
-        await connectMongo();
-        const tokens = await UserToken.findOne({ auth0Id: currentUser.sub });
-        
-        if (!tokens) {
-            return c.json({ success: true, githubToken: null, vercelToken: null });
-        }
+        const tokens = await getUserTokens(currentUser.sub);
 
-        return c.json({ 
-            success: true, 
+        return c.json({
+            success: true,
             githubToken: tokens.githubToken ? "****" + tokens.githubToken.slice(-4) : null,
-            vercelToken: tokens.vercelToken ? "****" + tokens.vercelToken.slice(-4) : null
+            vercelToken: tokens.vercelToken ? "****" + tokens.vercelToken.slice(-4) : null,
         });
     } catch (error: any) {
         return c.json({ success: false, error: error.message }, 500);
     }
 });
 
+// POST /api/users/tokens — save PATs (encrypted in Supabase Vault)
 router.post("/tokens", authMiddleware, async (c) => {
     try {
         const currentUser = c.get("user");
         const body = await c.req.json<{ githubToken?: string; vercelToken?: string }>();
 
-        await connectMongo();
-        await UserToken.findOneAndUpdate(
-            { auth0Id: currentUser.sub },
-            { 
-                githubToken: body.githubToken,
-                vercelToken: body.vercelToken
-            },
-            { upsert: true, new: true }
-        );
+        // Fetch existing vault secret IDs to update in-place rather than create duplicates
+        const { data: existing } = await supabase
+            .from("user_tokens")
+            .select("github_secret_id, vercel_secret_id")
+            .eq("user_id", currentUser.sub)
+            .maybeSingle();
 
+        const patch: Record<string, unknown> = {
+            user_id: currentUser.sub,
+            updated_at: new Date().toISOString(),
+        };
+
+        if (body.githubToken !== undefined) {
+            if (body.githubToken) {
+                const { data: secretId, error } = await supabase.rpc("upsert_vault_secret", {
+                    p_existing_id: existing?.github_secret_id ?? null,
+                    p_secret: body.githubToken,
+                    p_name: `github_token_${currentUser.sub}`,
+                });
+                if (error) throw error;
+                patch.github_secret_id = secretId;
+            } else {
+                patch.github_secret_id = null;
+            }
+        }
+
+        if (body.vercelToken !== undefined) {
+            if (body.vercelToken) {
+                const { data: secretId, error } = await supabase.rpc("upsert_vault_secret", {
+                    p_existing_id: existing?.vercel_secret_id ?? null,
+                    p_secret: body.vercelToken,
+                    p_name: `vercel_token_${currentUser.sub}`,
+                });
+                if (error) throw error;
+                patch.vercel_secret_id = secretId;
+            } else {
+                patch.vercel_secret_id = null;
+            }
+        }
+
+        const { error } = await supabase
+            .from("user_tokens")
+            .upsert(patch, { onConflict: "user_id" });
+
+        if (error) throw error;
         return c.json({ success: true, message: "Tokens updated successfully" });
     } catch (error: any) {
         return c.json({ success: false, error: error.message }, 500);

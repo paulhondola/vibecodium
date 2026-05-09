@@ -4,7 +4,10 @@
       "Bash(ls:*)",
       "Bash(bun run:*)",
       "Bash(curl:*)",
-      "Bash(bun install:*)"
+      "Bash(bun install:*)",
+      "mcp__plugin_supabase_supabase__list_extensions",
+      "mcp__plugin_supabase_supabase__apply_migration",
+      "mcp__plugin_supabase_supabase__execute_sql"
     ]
   }
 }
