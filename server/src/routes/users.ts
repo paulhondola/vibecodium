@@ -44,21 +44,55 @@ router.get("/tokens", authMiddleware, async (c) => {
     }
 });
 
-// POST /api/users/tokens — save PATs
+// POST /api/users/tokens — save PATs (encrypted in Supabase Vault)
 router.post("/tokens", authMiddleware, async (c) => {
     try {
         const currentUser = c.get("user");
         const body = await c.req.json<{ githubToken?: string; vercelToken?: string }>();
 
-        const { error } = await supabase.from("user_tokens").upsert(
-            {
-                user_id: currentUser.sub,
-                github_token: body.githubToken ?? null,
-                vercel_token: body.vercelToken ?? null,
-                updated_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id" }
-        );
+        // Fetch existing vault secret IDs to update in-place rather than create duplicates
+        const { data: existing } = await supabase
+            .from("user_tokens")
+            .select("github_secret_id, vercel_secret_id")
+            .eq("user_id", currentUser.sub)
+            .maybeSingle();
+
+        const patch: Record<string, unknown> = {
+            user_id: currentUser.sub,
+            updated_at: new Date().toISOString(),
+        };
+
+        if (body.githubToken !== undefined) {
+            if (body.githubToken) {
+                const { data: secretId, error } = await supabase.rpc("upsert_vault_secret", {
+                    p_existing_id: existing?.github_secret_id ?? null,
+                    p_secret: body.githubToken,
+                    p_name: `github_token_${currentUser.sub}`,
+                });
+                if (error) throw error;
+                patch.github_secret_id = secretId;
+            } else {
+                patch.github_secret_id = null;
+            }
+        }
+
+        if (body.vercelToken !== undefined) {
+            if (body.vercelToken) {
+                const { data: secretId, error } = await supabase.rpc("upsert_vault_secret", {
+                    p_existing_id: existing?.vercel_secret_id ?? null,
+                    p_secret: body.vercelToken,
+                    p_name: `vercel_token_${currentUser.sub}`,
+                });
+                if (error) throw error;
+                patch.vercel_secret_id = secretId;
+            } else {
+                patch.vercel_secret_id = null;
+            }
+        }
+
+        const { error } = await supabase
+            .from("user_tokens")
+            .upsert(patch, { onConflict: "user_id" });
 
         if (error) throw error;
         return c.json({ success: true, message: "Tokens updated successfully" });

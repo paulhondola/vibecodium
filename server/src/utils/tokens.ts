@@ -42,21 +42,33 @@ export async function upsertUser(payload: {
 }
 
 /**
- * Returns the stored GitHub / Vercel tokens for a user.
+ * Decrypts a single vault secret by its UUID reference.
+ */
+async function readVaultSecret(id: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc("read_vault_secret", { p_id: id });
+  if (error) console.error("[readVaultSecret]", error.message);
+  return (data as string | null) ?? null;
+}
+
+/**
+ * Returns the stored GitHub / Vercel tokens for a user, decrypted from Vault.
  */
 export async function getUserTokens(
   userId: string
 ): Promise<{ githubToken: string | null; vercelToken: string | null }> {
   const { data, error } = await supabase
     .from("user_tokens")
-    .select("github_token, vercel_token")
+    .select("github_secret_id, vercel_secret_id")
     .eq("user_id", userId)
     .maybeSingle();
 
   if (error) console.error("[getUserTokens]", error.message);
+  if (!data) return { githubToken: null, vercelToken: null };
 
-  return {
-    githubToken: data?.github_token ?? null,
-    vercelToken: data?.vercel_token ?? null,
-  };
+  const [githubToken, vercelToken] = await Promise.all([
+    data.github_secret_id ? readVaultSecret(data.github_secret_id) : Promise.resolve(null),
+    data.vercel_secret_id ? readVaultSecret(data.vercel_secret_id) : Promise.resolve(null),
+  ]);
+
+  return { githubToken, vercelToken };
 }

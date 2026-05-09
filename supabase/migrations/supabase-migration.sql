@@ -22,14 +22,53 @@ CREATE TABLE IF NOT EXISTS public.users (
 );
 
 -- ──────────────────────────────────────────────────────────────
--- user_tokens  (GitHub / Vercel PATs stored per user)
+-- user_tokens  (GitHub / Vercel PATs — vault-encrypted references)
+-- Plaintext tokens are never stored; only Vault secret UUIDs.
 -- ──────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.user_tokens (
-    user_id       UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
-    github_token  TEXT,
-    vercel_token  TEXT,
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    user_id           UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+    github_secret_id  UUID,   -- vault.secrets reference
+    vercel_secret_id  UUID,   -- vault.secrets reference
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Vault helper functions (supabase_vault extension must be installed)
+CREATE OR REPLACE FUNCTION public.upsert_vault_secret(
+    p_existing_id uuid,
+    p_secret      text,
+    p_name        text
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, vault
+AS $$
+BEGIN
+    IF p_existing_id IS NULL THEN
+        RETURN vault.create_secret(p_secret, p_name);
+    ELSE
+        PERFORM vault.update_secret(p_existing_id, p_secret, p_name);
+        RETURN p_existing_id;
+    END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.read_vault_secret(p_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, vault
+AS $$
+DECLARE
+    v_secret text;
+BEGIN
+    SELECT decrypted_secret
+    INTO v_secret
+    FROM vault.decrypted_secrets
+    WHERE id = p_id;
+    RETURN v_secret;
+END;
+$$;
 
 -- ──────────────────────────────────────────────────────────────
 -- projects  (imported repos — was MongoDB + SQLite)
