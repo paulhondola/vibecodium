@@ -11,8 +11,7 @@
 [![Hono](https://img.shields.io/badge/Hono-4.12-e36002?style=flat-square&logo=hono&logoColor=white)](https://hono.dev/)
 [![React](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-7.2-646cff?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![SQLite](https://img.shields.io/badge/SQLite-3.45-00376b?style=flat-square&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47a248?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ecf8e?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com/)
 [![Docker](https://img.shields.io/badge/Docker-Sandbox-2496ed?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 
 _Built for the iTEC 2026 Web Development track._
@@ -63,8 +62,8 @@ VibeCodium is a **real-time collaborative code editor** with an embedded AI agen
   │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
   │  │  Auth        │  │  Projects    │  │  Agent       │  │  Execution Router    │  │
   │  │  Middleware  │  │  /api/proj.. │  │  /api/agent  │  │  /execute            │  │
-  │  │  Auth0 JWKS  │  │  Import repo │  │  SSE stream  │  │  Language → Engine   │  │
-  │  │  Token cache │  │  File CRUD   │  │  Tool loop   │  │  Security pre-scan   │  │
+  │  │  Supabase    │  │  Import repo │  │  SSE stream  │  │  Language → Engine   │  │
+  │  │  JWT (JWKS)  │  │  File CRUD   │  │  Tool loop   │  │  Security pre-scan   │  │
   │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────┘  │
   │         │                 │                 │                     │              │
   │  ┌──────▼───────┐  ┌──────▼───────┐  ┌──────▼───────┐             │              │
@@ -83,21 +82,21 @@ VibeCodium is a **real-time collaborative code editor** with an embedded AI agen
                                                        │              │
                ┌───────────────────────────────────────┘              │
                ▼                                                      ▼
-  ┌────────────────────────────┐              ┌──────────────────────────────────────┐
-  │   MONGODB ATLAS  (Cloud)   │              │   DOCKER DESKTOP  (Local daemon)     │
-  │                            │              │                                      │
-  │  ● projects                │              │  ┌─────────┐  ┌─────────┐            │
-  │  ● users (Auth0 upsert)    │              │  │ Python  │  │  Node   │            │
-  │  ● userTokens              │              │  │ sandbox │  │ sandbox │            │
-  │  ● timelineEvents          │              │  └─────────┘  └─────────┘            │
-  │  ● helpPosts               │              │  ┌─────────┐  ┌─────────┐            │
-  │                            │              │  │  C++    │  │  Rust   │            │
-  │  + SQLite (local)          │              │  │ sandbox │  │ sandbox │            │
-  │    ● files (content)       │              │  └─────────┘  └─────────┘            │
-  │    ● snapshots             │              │  ┌─────────┐  ┌─────────┐            │
-  │    ● sessions              │              │  │   Go    │  │   Bun   │            │
-  │                            │              │  │ sandbox │  │ sandbox │            │
-  └────────────────────────────┘              │  └─────────┘  └─────────┘            │
+  ┌─────────────────────────────┐             ┌──────────────────────────────────────┐
+  │   SUPABASE  (Cloud)         │             │   DOCKER DESKTOP  (Local daemon)     │
+  │   PostgreSQL + Vault        │             │                                      │
+  │                             │             │  ┌─────────┐  ┌─────────┐            │
+  │  ● projects                 │             │  │ Python  │  │  Node   │            │
+  │  ● users (Supabase JWT)     │             │  │ sandbox │  │ sandbox │            │
+  │  ● user_tokens (Vault UUIDs)│             │  └─────────┘  └─────────┘            │
+  │  ● files                    │             │  ┌─────────┐  ┌─────────┐            │
+  │  ● snapshots                │             │  │  C++    │  │  Rust   │            │
+  │  ● sessions                 │             │  │ sandbox │  │ sandbox │            │
+  │  ● timeline_events          │             │  └─────────┘  └─────────┘            │
+  │  ● help_posts               │             │  ┌─────────┐  ┌─────────┐            │
+  │                             │             │  │   Go    │  │   Bun   │            │
+  │  vault.secrets (encrypted)  │             │  │ sandbox │  │ sandbox │            │
+  └─────────────────────────────┘             │  └─────────┘  └─────────┘            │
                                               │                                      │
                                               │  Per container:                      │
                                               │  • 2 GB RAM limit                    │
@@ -110,10 +109,10 @@ VibeCodium is a **real-time collaborative code editor** with an embedded AI agen
   │                           EXTERNAL SERVICES                                     │
   │                                                                                 │
   │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐     │
-  │  │   AUTH0      │  │  DEEPSEEK /  │  │  GITHUB API  │  │  VERCEL API      │     │
-  │  │  JWKS auth   │  │  LM Studio   │  │  Repo import │  │  One-click       │     │
-  │  │  User upsert │  │  LLM backend │  │  User lookup │  │  project deploy  │     │
-  │  │  Token cache │  │  Code agent  │  │  Commit feed │  │  Base64 files    │     │
+  │  │  SUPABASE    │  │  DEEPSEEK /  │  │  GITHUB API  │  │  VERCEL API      │     │
+  │  │  Auth (JWT)  │  │  LM Studio   │  │  Repo import │  │  One-click       │     │
+  │  │  PostgreSQL  │  │  LLM backend │  │  User lookup │  │  project deploy  │     │
+  │  │  Vault (enc) │  │  Code agent  │  │  Commit feed │  │  Base64 files    │     │
   │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────────┘     │
   └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -166,7 +165,7 @@ Regex-based static analysis runs before every execution:
 
 ### Timeline & Checkpoints
 
-- Every **7th code edit** is persisted to MongoDB as a `TimelineEvent`
+- Every **7th code edit** is persisted to Supabase as a `timeline_event`
 - Every **50th edit** is flagged as a `checkpoint` (heavier diff marker)
 - Filterable by file path, paginated, orderable oldest-first
 - Click any event → restore that file state instantly
@@ -174,15 +173,15 @@ Regex-based static analysis runs before every execution:
 
 ### One-Click Vercel Deployment
 
-- User stores their Vercel token in profile (masked, stored in MongoDB)
-- `/api/deploy/:projectId` pulls all files from SQLite, encodes as base64, calls Vercel Files API
+- User stores their Vercel token in profile — encrypted in Supabase Vault, only a UUID reference is stored in the DB
+- `/api/deploy/:projectId` pulls all files from Supabase, encodes as base64, calls Vercel Files API
 - Deployment logs stream back over WebSocket in real time
 - Returns live deployment URL when done
 
 ### Session Sharing
 
 - Generate a shareable link with a signed token (7-day TTL by default)
-- Token-holders can access project files without an Auth0 account
+- Token-holders can access project files without a Supabase account
 - Owner can revoke tokens at any time
 
 ### Community & Discovery
@@ -201,14 +200,14 @@ Regex-based static analysis runs before every execution:
 │                                                                 │
 │  packages/                                                      │
 │  ├── client/    React 19 · Vite · TanStack Router               │
-│  ├── server/    Hono · Bun runtime · Drizzle ORM                │
+│  ├── server/    Hono · Bun runtime · Supabase client            │
 │  └── shared/    TypeScript types (ExecuteRequest/Response)      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 | Layer      | Technology                   | Why                                               |
 | ---------- | ---------------------------- | ------------------------------------------------- |
-| Runtime    | **Bun 1.2**                  | Native WebSocket, SQLite, spawn — no extra deps   |
+| Runtime    | **Bun 1.2**                  | Native WebSocket, spawn — no extra deps           |
 | HTTP       | **Hono 4**                   | 5× faster than Express, first-class Bun adapter   |
 | Frontend   | **React 19 + Vite**          | Concurrent features, fastest HMR                  |
 | Routing    | **TanStack Router**          | Type-safe file-based routing, search params typed |
@@ -216,9 +215,9 @@ Regex-based static analysis runs before every execution:
 | CRDT       | **Yjs + Y-Monaco**           | Proven CRDT used by major collab editors          |
 | Terminal   | **xterm.js + node-pty**      | Real PTY, full ANSI support                       |
 | Whiteboard | **tldraw**                   | Infinite canvas, battle-tested                    |
-| ORM        | **Drizzle + SQLite**         | Type-safe queries, zero runtime overhead          |
-| Cloud DB   | **MongoDB Atlas + Mongoose** | Flexible docs for users, events, posts            |
-| Auth       | **Auth0**                    | JWKS validation, token caching                    |
+| Database   | **Supabase (PostgreSQL)**    | Unified cloud DB — files, users, sessions, events |
+| Auth       | **Supabase JWT (JWKS)**      | JWKS-based verification, service-role for backend |
+| Secrets    | **Supabase Vault (pgsodium)**| AES-256-GCM encrypted token storage              |
 | AI         | **DeepSeek / LM Studio**     | OpenAI-compatible, swappable via env              |
 | Sandbox    | **Docker + Dockerode**       | Hard isolation per execution                      |
 | Animations | **Framer Motion**            | Physics-based UI transitions                      |
@@ -231,25 +230,29 @@ Regex-based static analysis runs before every execution:
 
 ```text
 Auth flow
-  Browser → Auth0 → JWT → server authMiddleware → MongoDB upsert → context.user
+  Browser → Supabase Auth → JWT → server authMiddleware (JWKS verify) → context.user
 
 Project import
-  GitHub URL → git clone /tmp/vibecodium/{id} → recursive file index → SQLite batch insert
+  GitHub URL → git clone /tmp/vibecodium/{id} → recursive file index → Supabase batch upsert
 
 Live editing
-  Keystroke → Yjs delta → /ws/collab/:id → broadcast → all Monaco instances
+  Keystroke → Yjs delta → /ws/collab/:id (projectId validated) → broadcast → all Monaco instances
 
 Agent cycle
   User prompt → POST /api/agent/suggest → LLM stream → tool calls
-    → read_file (SQLite) │ write_file (diff overlay) │ execute_command (Docker)
+    → read_file (Supabase) │ write_file (diff overlay) │ execute_command (Docker)
     → loop until no tool calls → SSE close
 
 Code execution
   Run button → security scan → Dockerode.createContainer()
     → inject code via env var → capture stdout/stderr → destroy → return
 
+Token access
+  getUserTokens(user.sub) → fetch github_secret_id / vercel_secret_id UUIDs
+    → vault.read_secret(uuid) → plaintext token (never stored in app DB)
+
 One-click deploy
-  Deploy button → fetch user Vercel token → collect files from SQLite
+  Deploy button → getUserTokens() → decrypt Vercel token from Vault → collect files from Supabase
     → Vercel Files API (base64) → WS log stream → live URL
 ```
 
@@ -294,11 +297,11 @@ vibecodium/
 │       │   ├── reels.ts     # YouTube Shorts proxy + cache
 │       │   └── help.ts      # Community posts
 │       ├── db/
-│       │   ├── index.ts     # SQLite (Drizzle) — files, snapshots, sessions
-│       │   ├── mongoose.ts  # MongoDB — users, events, projects, posts
-│       │   └── models/      # Mongoose schemas
+│       │   └── supabase.ts  # Supabase client (service-role) — all tables
+│       ├── utils/
+│       │   └── tokens.ts    # Supabase Vault — read/write encrypted tokens
 │       ├── middleware/
-│       │   └── authMiddleware.ts  # Auth0 JWKS + user upsert
+│       │   └── authMiddleware.ts  # Supabase JWT (JWKS) verification
 │       ├── security/
 │       │   └── scanner.ts   # Regex vulnerability detection
 │       └── ws/
@@ -321,8 +324,7 @@ vibecodium/
 
 - [Bun](https://bun.sh) ≥ 1.2
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) running
-- [MongoDB Atlas](https://www.mongodb.com/atlas) cluster (free tier works)
-- [Auth0](https://auth0.com) application (SPA type)
+- [Supabase](https://supabase.com) project with the `supabase_vault` extension enabled
 - DeepSeek API key or [LM Studio](https://lmstudio.ai) running locally
 
 ### 1. Clone & install
@@ -346,15 +348,17 @@ cp client/.env.example client/.env
 LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_KEY=sk-...
 LLM_MODEL=deepseek-chat
-AUTH0_DOMAIN=your-tenant.us.auth0.com
-MONGO_URI=mongodb+srv://...
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...   # service-role key (never expose to client)
+SUPABASE_JWT_SECRET=your-jwt-secret
+GITHUB_TOKEN=ghp_...               # optional fallback; users supply their own via profile
 ```
 
 **`client/.env`**
 
 ```env
-VITE_AUTH0_DOMAIN=your-tenant.us.auth0.com
-VITE_AUTH0_CLIENT_ID=...
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ...
 VITE_BACKEND_URL=http://localhost:3000
 ```
 
@@ -388,8 +392,21 @@ cloudflared tunnel --url http://localhost:3000
 | -------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Frontend | **Vercel**            | Root dir: `client` · Install: `cd .. && bun install --frozen-lockfile --ignore-scripts && cd shared && bun run build` · Build: `bun run build` · Output: `dist` |
 | Backend  | **Cloudflare Tunnel** | `cloudflared tunnel --url http://localhost:3000` — exposes local server via HTTPS, no port forwarding needed                                                    |
-| Database | **MongoDB Atlas**     | Set Network Access → `0.0.0.0/0` to allow tunnel exit IPs                                                                                                       |
+| Database | **Supabase**          | Cloud PostgreSQL — apply `supabase/migrations/supabase-migration.sql` via the Supabase dashboard or CLI                                                         |
 | Sandbox  | **Docker Desktop**    | Must run on the same machine as the backend                                                                                                                     |
+
+---
+
+## Security
+
+| Area | Implementation |
+| ---- | -------------- |
+| Authentication | Supabase JWT verified server-side via JWKS on every request |
+| Authorization | Every file-management route verifies `project.user_id === jwt.sub` before mutating |
+| Token storage | GitHub and Vercel tokens encrypted with AES-256-GCM via Supabase Vault — the app DB stores only UUID references, never plaintext |
+| Session expiry | Supabase ISO timestamps compared with `new Date()` — no integer/string coercion bugs |
+| WebSocket gate | WS collab upgrade validates projectId exists in Supabase before accepting the connection |
+| Code execution | Docker containers are network-isolated with 2 GB RAM cap and a 3-second wall-clock timeout; static security scanner runs before container creation |
 
 ---
 
