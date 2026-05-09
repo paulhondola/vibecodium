@@ -23,8 +23,7 @@ sessionsRoutes.post("/", authMiddleware, async (c) => {
         const { error } = await supabase.from("sessions").insert({
             token,
             project_id: body.projectId,
-            created_at: now,
-            expires_at: expiresAt,
+            expires_at: new Date(expiresAt).toISOString(),
             created_by: user.sub,
             label: body.label ?? null,
         });
@@ -52,7 +51,7 @@ sessionsRoutes.get("/:token", async (c) => {
 
         if (error) throw error;
         if (!session) return c.json({ error: "Session not found" }, 404);
-        if (session.expires_at < Date.now()) return c.json({ error: "Session expired" }, 410);
+        if (new Date(session.expires_at) < new Date()) return c.json({ error: "Session expired" }, 410);
 
         return c.json({ projectId: session.project_id, label: session.label, expiresAt: session.expires_at });
     } catch (e: any) {
@@ -72,7 +71,7 @@ sessionsRoutes.get("/:token/files", async (c) => {
 
         if (sErr) throw sErr;
         if (!session) return c.json({ error: "Session not found" }, 404);
-        if (session.expires_at < Date.now()) return c.json({ error: "Session expired" }, 410);
+        if (new Date(session.expires_at) < new Date()) return c.json({ error: "Session expired" }, 410);
 
         const { data: projectFiles, error: fErr } = await supabase
             .from("files")
@@ -126,7 +125,7 @@ sessionsRoutes.get("/", authMiddleware, async (c) => {
             .select("*")
             .eq("project_id", projectId)
             .eq("created_by", user.sub)
-            .gt("expires_at", now);
+            .gt("expires_at", new Date().toISOString());
 
         if (error) throw error;
 

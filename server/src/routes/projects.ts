@@ -332,8 +332,13 @@ projectsRoutes.post("/:id/files/create", async (c) => {
         const { path: filePath, content = "" } = await c.req.json<{ path: string; content?: string }>();
         if (!projectId || !filePath) return c.json({ error: "Missing projectId or path" }, 400);
 
+        const user = (c.get as any)("user");
+        const { data: project } = await supabase.from("projects").select("user_id").eq("id", projectId).maybeSingle();
+        if (!project) return c.json({ error: "Project not found" }, 404);
+        if (project.user_id !== user.sub) return c.json({ error: "Forbidden" }, 403);
+
         const { error } = await supabase.from("files").upsert(
-            { id: crypto.randomUUID(), project_id: projectId, path: filePath, content, updated_at: Math.floor(Date.now() / 1000) },
+            { id: crypto.randomUUID(), project_id: projectId, path: filePath, content, updated_at: new Date().toISOString() },
             { onConflict: "project_id,path" }
         );
         if (error) throw error;
@@ -349,6 +354,11 @@ projectsRoutes.delete("/:id/files", async (c) => {
         const projectId = c.req.param("id");
         const { path: filePath } = await c.req.json<{ path: string }>();
         if (!projectId || !filePath) return c.json({ error: "Missing projectId or path" }, 400);
+
+        const user = (c.get as any)("user");
+        const { data: project } = await supabase.from("projects").select("user_id").eq("id", projectId).maybeSingle();
+        if (!project) return c.json({ error: "Project not found" }, 404);
+        if (project.user_id !== user.sub) return c.json({ error: "Forbidden" }, 403);
 
         const { data: allFiles } = await supabase.from("files").select("id, path").eq("project_id", projectId);
         const toDelete = (allFiles ?? []).filter((f) => f.path === filePath || f.path.startsWith(filePath + "/"));
@@ -370,13 +380,18 @@ projectsRoutes.patch("/:id/files/rename", async (c) => {
         const { oldPath, newPath } = await c.req.json<{ oldPath: string; newPath: string }>();
         if (!projectId || !oldPath || !newPath) return c.json({ error: "Missing fields" }, 400);
 
+        const user = (c.get as any)("user");
+        const { data: project } = await supabase.from("projects").select("user_id").eq("id", projectId).maybeSingle();
+        if (!project) return c.json({ error: "Project not found" }, 404);
+        if (project.user_id !== user.sub) return c.json({ error: "Forbidden" }, 403);
+
         const { data: allFiles } = await supabase.from("files").select("*").eq("project_id", projectId);
         const toRename = (allFiles ?? []).filter((f) => f.path === oldPath || f.path.startsWith(oldPath + "/"));
 
         for (const f of toRename) {
             const renamedPath = newPath + f.path.slice(oldPath.length);
             await supabase.from("files").upsert(
-                { id: crypto.randomUUID(), project_id: projectId, path: renamedPath, content: f.content, updated_at: Math.floor(Date.now() / 1000) },
+                { id: crypto.randomUUID(), project_id: projectId, path: renamedPath, content: f.content, updated_at: new Date().toISOString() },
                 { onConflict: "project_id,path" }
             );
             await supabase.from("files").delete().eq("id", f.id);

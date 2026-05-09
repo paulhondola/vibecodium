@@ -393,10 +393,18 @@ export default {
         // Collaboration
         if (url.pathname.startsWith("/ws/collab/")) {
             const projectId = url.pathname.split("/").pop();
+            if (!projectId) return new Response("Bad Request", { status: 400 });
+
+            // Reject connections to non-existent projects before promoting to WS
+            const { data: proj } = await supabase
+                .from("projects")
+                .select("id")
+                .eq("id", projectId)
+                .maybeSingle();
+            if (!proj) return new Response("Project not found", { status: 404 });
+
             const clientId = url.searchParams.get("userId") || "anon";
             const userName = url.searchParams.get("userName") || "Anonymous";
-
-            if (!projectId) return new Response("Bad Request", { status: 400 });
 
             if (server.upgrade(req, {
                 data: { type: "collab", projectId, clientId, userName, isHost: false, color: "" }
@@ -691,7 +699,7 @@ export default {
                                             project_id: data.projectId,
                                             path: payload.filePath,
                                             content: payload.content,
-                                            updated_at: Math.floor(Date.now() / 1000),
+                                            updated_at: new Date().toISOString(),
                                         }, { onConflict: "project_id,path" });
 
                                     await supabase
@@ -700,7 +708,7 @@ export default {
                                             project_id: data.projectId,
                                             path: payload.filePath,
                                             content: payload.content,
-                                            timestamp: Date.now(),
+                                            timestamp: new Date().toISOString(),
                                         });
 
                                     // Log rich event to Supabase for timeline feature
@@ -760,7 +768,7 @@ export default {
                                             project_id: data.projectId,
                                             path: payload.filePath,
                                             content: payload.content,
-                                            timestamp: Date.now(),
+                                            timestamp: new Date().toISOString(),
                                         });
 
                                     // Log rich event to Supabase for timeline feature
