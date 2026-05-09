@@ -38,14 +38,13 @@ function getAllFilesRecursive(dir: string, baseDir: string): { path: string; con
 
 async function upsertFiles(projectId: string, allFiles: { path: string; content: string }[]) {
     const BATCH_SIZE = 100;
-    const now = Math.floor(Date.now() / 1000);
     for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
         const batch = allFiles.slice(i, i + BATCH_SIZE).map((f) => ({
             id: crypto.randomUUID(),
             project_id: projectId,
             path: f.path,
             content: f.content,
-            updated_at: now,
+            updated_at: new Date().toISOString(),
         }));
         const { error } = await supabase
             .from("files")
@@ -466,12 +465,16 @@ projectsRoutes.get("/:id/commits", async (c) => {
         const [owner, repo] = urlParams[1].split("/");
         if (!owner || !repo) return c.json({ error: "Could not extract owner/repo from URL" }, 400);
 
+        const user = (c.get as any)("user");
+        const tokens = await getUserTokens(user?.sub);
+        const githubToken = tokens.githubToken || process.env.GITHUB_TOKEN;
+
         const headers: Record<string, string> = {
             Accept: "application/vnd.github.v3+json",
             "User-Agent": "VibeCodium-App",
         };
-        if (process.env.GITHUB_TOKEN && process.env.GITHUB_TOKEN !== "undefined") {
-            headers["Authorization"] = `Bearer ${process.env.GITHUB_TOKEN}`;
+        if (githubToken && githubToken !== "undefined") {
+            headers["Authorization"] = `Bearer ${githubToken}`;
         }
 
         const ghResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits`, { headers });
