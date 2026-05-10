@@ -15,9 +15,9 @@ async function ghHeaders(auth0Id?: string): Promise<Record<string, string>> {
         Accept: "application/vnd.github.v3+json",
         "User-Agent": "VibeCodium-App",
     };
-    
+
     let token = process.env.GITHUB_TOKEN;
-    
+
     if (auth0Id) {
         const userTokens = await getUserTokens(auth0Id);
         if (userTokens.githubToken) {

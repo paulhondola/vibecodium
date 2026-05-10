@@ -290,9 +290,12 @@ interface TerminalRoom {
     sink: import("bun").FileSink; // typed stdin pipe
 }
 
-const termClients     = new Map<string, Set<import("bun").ServerWebSocket<WSData>>>();
-const termRooms       = new Map<string, TerminalRoom>();
-const termLineBuffers = new Map<string, string>(); // per-room line edit buffer
+const termClients       = new Map<string, Set<import("bun").ServerWebSocket<WSData>>>();
+const termRooms         = new Map<string, TerminalRoom>();
+const termLineBuffers   = new Map<string, string>(); // per-room line edit buffer
+const termCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const termBootstrapping = new Set<string>(); // rooms whose container is being created (race-condition lock)
+const termStopped       = new Set<string>(); // rooms manually stopped by the user
 
 // Per project+file event counter for checkpoint marking.
 // NOTE: resets on server restart — checkpoints are cosmetic anchors, not exact.
@@ -304,6 +307,8 @@ async function stopTerminal(roomId: string): Promise<void> {
     termRooms.delete(roomId);
     termClients.delete(roomId);
     termLineBuffers.delete(roomId);
+    const pending = termCleanupTimers.get(roomId);
+    if (pending) { clearTimeout(pending); termCleanupTimers.delete(roomId); }
 
     clients?.forEach(c => {
         try { c.send("\r\n\x1b[33m[Container stopped]\x1b[0m\r\n"); } catch (_) {}
@@ -314,6 +319,124 @@ async function stopTerminal(roomId: string): Promise<void> {
         try { await room.container.stop({ t: 5 }); } catch (_) {}
         try { await room.container.remove(); } catch (_) {}
         console.log(`[Terminal] Cleaned up container for room ${roomId}`);
+    }
+}
+
+async function bootstrapRoom(roomId: string): Promise<void> {
+    if (termBootstrapping.has(roomId)) return; // lock — prevent concurrent bootstraps for the same room
+    termBootstrapping.add(roomId);
+
+    const broadcastToRoom = (msg: string) =>
+        termClients.get(roomId)?.forEach(c => { try { c.send(msg); } catch (_) {} });
+
+    let container: Docker.Container | null = null;
+    try {
+        broadcastToRoom("\x1b[1;36m[VibeCodium]\x1b[0m Syncing project files...\r\n");
+        const hostDir = await syncProjectFilesToDisk(roomId);
+
+        const { data: projectFiles } = await supabase
+            .from("files")
+            .select("path, content")
+            .eq("project_id", roomId);
+
+        const scanResult = await scanCode(
+            (projectFiles ?? [])
+                .filter((f) => f.content)
+                .map((f) => ({ path: f.path, content: f.content! }))
+        );
+
+        if (!scanResult.safe) {
+            broadcastToRoom("\x1b[1;31m[🛡️ SECURITY BLOCK]\x1b[0m Critical vulnerabilities detected:\r\n\r\n");
+            scanResult.vulnerabilities
+                .filter((v) => v.severity === "critical" || v.severity === "high")
+                .forEach((v) => {
+                    broadcastToRoom(`  \x1b[31m● ${v.severity.toUpperCase()}\x1b[0m: ${v.description}\r\n`);
+                    broadcastToRoom(`    Code: ${v.code}\r\n`);
+                    broadcastToRoom(`    Fix: ${v.recommendation}\r\n\r\n`);
+                });
+            broadcastToRoom("\x1b[33mExecution refused for safety. Fix issues and try again.\x1b[0m\r\n");
+            termClients.get(roomId)?.forEach(c => c.close(1008, "Security policy violation"));
+            return;
+        }
+
+        broadcastToRoom(`\x1b[32m✓ Security scan passed\x1b[0m (${scanResult.scannedFiles} files, ${scanResult.scannedLines} lines, ${scanResult.scanDuration}ms)\r\n`);
+
+        const image = detectTerminalImage((projectFiles ?? []).map(f => f.path));
+        broadcastToRoom(`\x1b[90mImage: ${image}  |  ${hostDir} → /usr/src/app\x1b[0m\r\n`);
+
+        if (!image.startsWith("vibecodium-")) {
+            broadcastToRoom("\x1b[90mPulling image...\x1b[0m\r\n");
+            await new Promise<void>((res, rej) => {
+                docker.pull(image, (err: Error | null, pullStream: any) => {
+                    if (err) return rej(err);
+                    pullStream.on("data", () => {});
+                    pullStream.on("end", res);
+                    pullStream.on("error", rej);
+                });
+            });
+        }
+
+        container = await docker.createContainer({
+            Image: image,
+            Cmd: ["sleep", "infinity"],
+            Tty: false,
+            WorkingDir: "/usr/src/app",
+            HostConfig: {
+                Memory: 2048 * 1024 * 1024,
+                MemorySwap: 2048 * 1024 * 1024,
+                CpuQuota: 50000,
+                CpuPeriod: 100000,
+                PidsLimit: 50,
+                Binds: [`${hostDir}:/usr/src/app`],
+                AutoRemove: false,
+            },
+        });
+        await container.start();
+
+        const proc = Bun.spawn(
+            ["docker", "exec", "-i", container.id, "/bin/sh", "-i"],
+            { stdin: "pipe", stdout: "pipe", stderr: "pipe" }
+        );
+
+        const sink = proc.stdin as import("bun").FileSink;
+        termRooms.set(roomId, { container, proc, sink });
+
+        (async () => {
+            const reader = proc.stdout.getReader();
+            const dec = new TextDecoder();
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                broadcastToRoom(dec.decode(value).replace(/\r?\n/g, "\r\n"));
+            }
+            broadcastToRoom("\r\n\x1b[33m[Shell exited]\x1b[0m\r\n");
+            stopTerminal(roomId);
+        })();
+
+        (async () => {
+            const reader = proc.stderr.getReader();
+            const dec = new TextDecoder();
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                broadcastToRoom(dec.decode(value).replace(/\r?\n/g, "\r\n"));
+            }
+        })();
+
+        broadcastToRoom("\x1b[1;32m[Ready]\x1b[0m Sandbox started. Working dir: \x1b[33m/usr/src/app\x1b[0m\r\n\r\n");
+
+    } catch (e: any) {
+        if (container) {
+            try { await container.stop({ t: 0 }); } catch (_) {}
+            try { await container.remove(); } catch (_) {}
+        }
+        termClients.get(roomId)?.forEach(c => {
+            try { c.send(`\x1b[1;31m[Error]\x1b[0m ${e.message}\r\n`); } catch (_) {}
+            c.close(1011, e.message);
+        });
+        console.error("[Terminal] Container start failed:", e.message);
+    } finally {
+        termBootstrapping.delete(roomId); // always release the lock
     }
 }
 
@@ -430,136 +553,23 @@ export default {
                 if (!termClients.has(roomId)) termClients.set(roomId, new Set());
                 termClients.get(roomId)!.add(ws);
 
-                // If room already running, just attach to the broadcast stream
-                if (termRooms.has(roomId)) {
+                // Attach to running room
+                if (termRooms.has(roomId) || termBootstrapping.has(roomId)) {
+                    // Cancel any pending cleanup — client reconnected in time (e.g. page refresh)
+                    const pending = termCleanupTimers.get(roomId);
+                    if (pending) { clearTimeout(pending); termCleanupTimers.delete(roomId); }
                     ws.send("\x1b[90m[Joined existing terminal session]\x1b[0m\r\n");
                     return;
                 }
 
-                // ── First client: bootstrap Docker container ──
-                (async () => {
-                    const broadcastToRoom = (msg: string) =>
-                        termClients.get(roomId)?.forEach(c => { try { c.send(msg); } catch (_) {} });
+                // User previously stopped this container — notify and wait for explicit start
+                if (termStopped.has(roomId)) {
+                    ws.send(JSON.stringify({ type: "container_stopped" }));
+                    return;
+                }
 
-                    let container: Docker.Container | null = null;
-                    try {
-                        broadcastToRoom("\x1b[1;36m[VibeCodium]\x1b[0m Syncing project files...\r\n");
-                        const hostDir = await syncProjectFilesToDisk(roomId);
-
-                        // Load file list for language detection + security scan
-                        const { data: projectFiles } = await supabase
-                            .from("files")
-                            .select("path, content")
-                            .eq("project_id", roomId);
-
-                        // Security scan — block before any container starts
-						const scanResult = await scanCode(
-							(projectFiles ?? [])
-								.filter((f) => f.content)
-								.map((f) => ({ path: f.path, content: f.content! }))
-						);
-
-						if (!scanResult.safe) {
-							broadcastToRoom("\x1b[1;31m[🛡️ SECURITY BLOCK]\x1b[0m Critical vulnerabilities detected:\r\n\r\n");
-							scanResult.vulnerabilities
-								.filter((v) => v.severity === "critical" || v.severity === "high")
-								.forEach((v) => {
-									broadcastToRoom(`  \x1b[31m● ${v.severity.toUpperCase()}\x1b[0m: ${v.description}\r\n`);
-									broadcastToRoom(`    Code: ${v.code}\r\n`);
-									broadcastToRoom(`    Fix: ${v.recommendation}\r\n\r\n`);
-								});
-							broadcastToRoom("\x1b[33mExecution refused for safety. Fix issues and try again.\x1b[0m\r\n");
-							termClients.get(roomId)?.forEach(c => c.close(1008, "Security policy violation"));
-							return;
-						}
-
-						broadcastToRoom(`\x1b[32m✓ Security scan passed\x1b[0m (${scanResult.scannedFiles} files, ${scanResult.scannedLines} lines, ${scanResult.scanDuration}ms)\r\n`);
-
-                        // Pick image from file extensions
-                        const image = detectTerminalImage((projectFiles ?? []).map(f => f.path));
-                        broadcastToRoom(`\x1b[90mImage: ${image}  |  ${hostDir} → /usr/src/app\x1b[0m\r\n`);
-
-                        // Pull image (instant if already cached)
-                        // NOTE: docker.modem.followProgress hangs in Bun — drain raw stream events instead
-                        if (!image.startsWith("vibecodium-")) {
-                            broadcastToRoom("\x1b[90mPulling image...\x1b[0m\r\n");
-                            await new Promise<void>((res, rej) => {
-                                docker.pull(image, (err: Error | null, pullStream: any) => {
-                                    if (err) return rej(err);
-                                    pullStream.on("data", () => {}); // drain
-                                    pullStream.on("end", res);
-                                    pullStream.on("error", rej);
-                                });
-                            });
-                        }
-
-                        // Create container — sleep infinity as PID 1 (keeps it alive for docker exec)
-                        // NOTE: container.attach({hijack:true}) hangs in Bun — use Bun.spawn docker exec instead
-                        container = await docker.createContainer({
-                            Image: image,
-                            Cmd: ["sleep", "infinity"],
-                            Tty: false,
-                            WorkingDir: "/usr/src/app",
-                            HostConfig: {
-                                Memory: 2048 * 1024 * 1024,
-                                MemorySwap: 2048 * 1024 * 1024,
-                                CpuQuota: 50000,
-                                CpuPeriod: 100000,
-                                PidsLimit: 50,
-                                Binds: [`${hostDir}:/usr/src/app`],
-                                AutoRemove: false,
-                            },
-                        });
-                        await container.start();
-
-                        // Spawn interactive shell via docker exec (Bun-compatible approach)
-                        const proc = Bun.spawn(
-                            ["docker", "exec", "-i", container.id, "/bin/sh", "-i"],
-                            { stdin: "pipe", stdout: "pipe", stderr: "pipe" }
-                        );
-
-                        const sink = proc.stdin as import("bun").FileSink;
-                        termRooms.set(roomId, { container, proc, sink });
-
-                        // Pipe stdout → clients (normalize bare LF → CRLF for xterm)
-                        (async () => {
-                            const reader = proc.stdout.getReader();
-                            const dec = new TextDecoder();
-                            while (true) {
-                                const { done, value } = await reader.read();
-                                if (done) break;
-                                broadcastToRoom(dec.decode(value).replace(/\r?\n/g, "\r\n"));
-                            }
-                            broadcastToRoom("\r\n\x1b[33m[Shell exited]\x1b[0m\r\n");
-                            stopTerminal(roomId);
-                        })();
-
-                        // Pipe stderr → clients
-                        (async () => {
-                            const reader = proc.stderr.getReader();
-                            const dec = new TextDecoder();
-                            while (true) {
-                                const { done, value } = await reader.read();
-                                if (done) break;
-                                broadcastToRoom(dec.decode(value).replace(/\r?\n/g, "\r\n"));
-                            }
-                        })();
-
-                        broadcastToRoom("\x1b[1;32m[Ready]\x1b[0m Sandbox started. Working dir: \x1b[33m/usr/src/app\x1b[0m\r\n\r\n");
-
-                    } catch (e: any) {
-                        // Cleanup partially-created container on error
-                        if (container) {
-                            try { await container.stop({ t: 0 }); } catch (_) {}
-                            try { await container.remove(); } catch (_) {}
-                        }
-                        termClients.get(roomId)?.forEach(c => {
-                            try { c.send(`\x1b[1;31m[Error]\x1b[0m ${e.message}\r\n`); } catch (_) {}
-                            c.close(1011, e.message);
-                        });
-                        console.error("[Terminal] Container start failed:", e.message);
-                    }
-                })();
+                // First client for this room — bootstrap container
+                bootstrapRoom(roomId);
                 return;
             }
 
@@ -599,27 +609,35 @@ export default {
 
         message(ws: import("bun").ServerWebSocket<WSData>, message: string) {
             if (ws.data.type === "terminal") {
-                const room = termRooms.get(ws.data.projectId);
-                if (!room) return;
-                // JSON control messages
+                const roomId = ws.data.projectId;
+
+                // JSON control messages — handled before the room guard so stop/start work in any state
                 try {
                     const msg = JSON.parse(message);
                     if (msg.type === "resize") {
-                        // No PTY — resize is a no-op; ignore silently
-                        return;
+                        return; // no PTY — no-op
                     }
                     if (msg.type === "stop") {
-                        stopTerminal(ws.data.projectId);
+                        termStopped.add(roomId); // persist stopped intent across reconnects
+                        stopTerminal(roomId);
+                        return;
+                    }
+                    if (msg.type === "start") {
+                        termStopped.delete(roomId);
+                        if (!termRooms.has(roomId) && !termBootstrapping.has(roomId)) {
+                            bootstrapRoom(roomId);
+                        }
                         return;
                     }
                 } catch { /* not JSON — treat as raw stdin */ }
 
+                const room = termRooms.get(ws.data.projectId);
+                if (!room) return;
+
                 // Server-side line buffering (no PTY = no kernel line discipline)
                 // We echo characters locally and only flush the line to the shell on Enter.
                 const broadcastAll = (msg: string) =>
-                    termClients.get(ws.data.projectId)?.forEach(c => { try { c.send(msg); } catch (_) {} });
-
-                const roomId = ws.data.projectId;
+                    termClients.get(roomId)?.forEach(c => { try { c.send(msg); } catch (_) {} });
 
                 if (message === "\r" || message === "\n") {
                     // Enter — flush buffered line to shell
@@ -796,8 +814,15 @@ export default {
                 const clients = termClients.get(roomId);
                 if (clients) {
                     clients.delete(ws);
-                    // Stop container when the last client disconnects
-                    if (clients.size === 0) stopTerminal(roomId);
+                    // Defer cleanup — give the client 30s to reconnect (handles page refreshes)
+                    if (clients.size === 0 && !termCleanupTimers.has(roomId)) {
+                        const timer = setTimeout(() => {
+                            const current = termClients.get(roomId);
+                            if (!current || current.size === 0) stopTerminal(roomId);
+                            termCleanupTimers.delete(roomId);
+                        }, 30_000);
+                        termCleanupTimers.set(roomId, timer);
+                    }
                 }
                 return;
             }

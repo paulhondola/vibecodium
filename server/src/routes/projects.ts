@@ -117,6 +117,13 @@ projectsRoutes.post("/import", async (c) => {
         const user = (c.get as any)("user");
         const userId = user?.sub ?? "anonymous";
 
+        // Build authenticated clone URL if user has a GitHub token (required for private repos)
+        const tokens = await getUserTokens(userId);
+        const githubToken = tokens.githubToken || process.env.GITHUB_TOKEN_REPO || process.env.GITHUB_TOKEN;
+        const cloneUrl = githubToken && githubToken !== "undefined" && repoUrl.startsWith("https://github.com/")
+            ? repoUrl.replace("https://github.com/", `https://${githubToken}@github.com/`)
+            : repoUrl;
+
         // Check if already imported
         const { data: existing } = await supabase
             .from("projects")
@@ -146,7 +153,7 @@ projectsRoutes.post("/import", async (c) => {
                     console.log(`Re-cloning project ${projectId}...`);
                     await supabase.from("projects").update({ status: "cloning" }).eq("id", projectId);
                     fs.mkdirSync("/tmp/vibecodium", { recursive: true });
-                    const cloneProc = Bun.spawn(["git", "clone", repoUrl, targetDir], { stdout: "pipe", stderr: "pipe" });
+                    const cloneProc = Bun.spawn(["git", "clone", cloneUrl, targetDir], { stdout: "pipe", stderr: "pipe" });
                     if (await cloneProc.exited !== 0) {
                         const errText = await new Response(cloneProc.stderr).text();
                         await supabase.from("projects").update({ status: "error" }).eq("id", projectId);
@@ -177,7 +184,7 @@ projectsRoutes.post("/import", async (c) => {
         if (insertErr) throw insertErr;
 
         fs.mkdirSync("/tmp/vibecodium", { recursive: true });
-        const proc = Bun.spawn(["git", "clone", repoUrl, targetDir], { stdout: "pipe", stderr: "pipe" });
+        const proc = Bun.spawn(["git", "clone", cloneUrl, targetDir], { stdout: "pipe", stderr: "pipe" });
         const exitCode = await proc.exited;
 
         if (exitCode !== 0) {

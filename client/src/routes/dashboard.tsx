@@ -4,6 +4,7 @@ import { Loader2, X, ExternalLink } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import CoderMatchModal from "../components/CoderMatchModal";
 import GamePIP from "../components/GamePIP";
+import ImportModal from "../components/ImportModal";
 import { API_BASE } from "@/lib/config";
 
 export const Route = createFileRoute("/dashboard")({
@@ -56,6 +57,7 @@ function DashboardPage() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'recent'>('all');
   const [deployedApps, setDeployedApps] = useState<DeployedApp[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const reposRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
@@ -134,6 +136,10 @@ function DashboardPage() {
       setError(err.message);
       setImportingRepoId(null);
     }
+  };
+
+  const handleImportSuccess = (projectId: string) => {
+    navigate({ to: "/", search: { w: projectId } });
   };
 
   const handleCreateRepo = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -330,7 +336,7 @@ function DashboardPage() {
             <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Recent</span>
           </div>
           <div
-            onClick={() => scrollToSection(reposRef)}
+            onClick={() => setShowImportModal(true)}
             className="flex items-center gap-5 px-6 py-3.5 rounded text-slate-500 hover:bg-white/5 hover:text-[#f8fafc] transition-all cursor-pointer"
           >
             <span className="material-symbols-outlined text-xl">upload_file</span>
@@ -457,7 +463,7 @@ function DashboardPage() {
                 })}
                 {/* Import Card */}
                 <div
-                  onClick={() => scrollToSection(reposRef)}
+                  onClick={() => setShowImportModal(true)}
                   className="bg-transparent border-2 border-dashed border-[rgba(168,85,247,0.2)] group p-10 rounded-xl flex flex-col items-center justify-center text-center hover:bg-white/5 transition-all relative overflow-hidden cursor-pointer"
                 >
                   <div className="w-16 h-16 rounded-xl bg-[rgba(10,12,20,0.4)] flex items-center justify-center mb-8 text-slate-600 group-hover:text-[#A855F7] transition-colors border border-[rgba(168,85,247,0.1)]">
@@ -631,6 +637,13 @@ function DashboardPage() {
       {showCoderMatch && (
         <CoderMatchModal onClose={() => setShowCoderMatch(false)} />
       )}
+
+      {/* Import Repository Modal */}
+      <ImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onSuccess={handleImportSuccess}
+      />
 
       {/* Game PIP */}
       {showGame && (

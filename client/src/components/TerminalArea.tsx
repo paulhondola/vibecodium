@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
-import { Terminal as TerminalIcon, StopCircle, X, Globe, Lock, RefreshCw } from "lucide-react";
+import { Terminal as TerminalIcon, StopCircle, Play, X, Globe, Lock, RefreshCw } from "lucide-react";
 import { WS_BASE, API_BASE } from "@/lib/config";
 
 interface TerminalTab {
@@ -17,6 +17,7 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
     ]);
     const [activeTabId, setActiveTabId] = useState("term-1");
     const [isConnected, setIsConnected] = useState(false);
+    const [isStopped, setIsStopped] = useState(false);
     const [previewUrl, setPreviewUrl] = useState(() => API_BASE.replace(/^https?:\/\//, ""));
 
     const termInstances = useRef<Record<string, Terminal>>({});
@@ -30,6 +31,7 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
 
             ws.onopen = () => {
                 setIsConnected(true);
+                setIsStopped(false);
                 const activeTab = tabs.find(t => t.id === activeTabId);
                 if (activeTab?.type === "terminal") {
                     const term = termInstances.current[activeTabId];
@@ -39,6 +41,19 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
 
             ws.onmessage = (event) => {
                 const data = event.data;
+                // Check for JSON control messages from the server
+                if (typeof data === "string" && data.startsWith('{"type":')) {
+                    try {
+                        const msg = JSON.parse(data);
+                        if (msg.type === "container_stopped") {
+                            setIsStopped(true);
+                            Object.values(termInstances.current).forEach(term =>
+                                term.writeln("\r\n\x1b[33m[Container stopped — click Start to resume]\x1b[0m")
+                            );
+                            return;
+                        }
+                    } catch (_) {}
+                }
                 Object.values(termInstances.current).forEach(term => {
                     if (typeof data === "string") {
                         term.write(data);
@@ -162,6 +177,13 @@ useEffect(() => {
         }
     };
 
+    const handleStart = () => {
+        setIsStopped(false);
+        if (wsInstance.current?.readyState === WebSocket.OPEN) {
+            wsInstance.current.send(JSON.stringify({ type: "start" }));
+        }
+    };
+
 	return (
 		<div className="flex flex-col h-full bg-[#09090b] text-white">
 			<div className="flex items-center justify-between px-2 bg-[#18181b] border-b border-[#27272a] shrink-0">
@@ -202,15 +224,22 @@ useEffect(() => {
 				</div>
 
                 <div className="flex items-center gap-2 pr-2 shrink-0">
-                    <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.6)]" : "bg-gray-600"}`} />
-                    {isConnected && (
+                    <span className={`w-1.5 h-1.5 rounded-full ${isConnected && !isStopped ? "bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.6)]" : isStopped ? "bg-yellow-500" : "bg-gray-600"}`} />
+                    {isStopped ? (
+                        <button
+                            onClick={handleStart}
+                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded transition-colors border border-transparent hover:border-green-500/20"
+                        >
+                            <Play size={11} /> Start
+                        </button>
+                    ) : isConnected ? (
                         <button
                             onClick={handleStop}
                             className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors border border-transparent hover:border-red-500/20"
                         >
                             <StopCircle size={11} /> Stop
                         </button>
-                    )}
+                    ) : null}
                 </div>
 			</div>
 
