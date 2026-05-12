@@ -92,6 +92,7 @@ export const app = new Hono()
 	.use("/vibecodium_icon.svg", serveStatic({ path: "../client/dist/vibecodium_icon.svg" }))
 	.use("/vite.svg", serveStatic({ path: "../client/dist/vite.svg" }))
 	.get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
+	.get("/health", (c) => c.json({ ok: true, ts: new Date().toISOString() }, 200))
 
 	// Security Scanning Endpoint
 	.post("/api/scan", async (c) => {

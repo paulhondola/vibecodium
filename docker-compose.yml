@@ -1,0 +1,51 @@
+# VibeCodium production stack.
+# Run on a host that has Docker installed (Oracle Cloud Ampere A1, Hetzner CX22, etc.).
+# Usage:
+#   1. cp .env.production.example .env  &&  fill in values
+#   2. bash scripts/setup_docker.sh   (one-time: builds the 6 sandbox images on the host)
+#   3. docker compose up -d --build
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vibecodium-server
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      # The server uses dockerode + `docker exec` to spawn sandbox containers
+      # and stream terminals. It needs the host's Docker daemon socket.
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      # Allow LOCAL_BASE_URL=http://host.docker.internal:1234/v1 to reach
+      # an LM Studio instance running on the host, if configured.
+      - "host.docker.internal:host-gateway"
+    networks:
+      - vibecodium
+
+  # Optional Cloudflare Tunnel sidecar.
+  # To use:
+  #   1. cloudflared tunnel create vibecodium
+  #   2. cloudflared tunnel route dns vibecodium api.your-domain.com
+  #   3. Copy the tunnel token into .env as CLOUDFLARE_TUNNEL_TOKEN
+  #   4. Uncomment the block below
+  #
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: vibecodium-tunnel
+  #   restart: always
+  #   command: tunnel --no-autoupdate run
+  #   environment:
+  #     - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+  #   depends_on:
+  #     - server
+  #   networks:
+  #     - vibecodium
+
+networks:
+  vibecodium:
+    driver: bridge

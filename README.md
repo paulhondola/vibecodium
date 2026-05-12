@@ -388,12 +388,66 @@ cloudflared tunnel --url http://localhost:3000
 
 ## Deployment
 
-| Part     | Platform              | Notes                                                                                                                                                           |
-| -------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend | **Vercel**            | Root dir: `client` · Install: `cd .. && bun install --frozen-lockfile --ignore-scripts && cd shared && bun run build` · Build: `bun run build` · Output: `dist` |
-| Backend  | **Cloudflare Tunnel** | `cloudflared tunnel --url http://localhost:3000` — exposes local server via HTTPS, no port forwarding needed                                                    |
-| Database | **Supabase**          | Cloud PostgreSQL — apply `supabase/migrations/supabase-migration.sql` via the Supabase dashboard or CLI                                                         |
-| Sandbox  | **Docker Desktop**    | Must run on the same machine as the backend                                                                                                                     |
+The backend needs Docker daemon access (for sandbox execution and `docker exec` terminals), which rules out serverless platforms. The supported production layout is a single VPS running both the Bun server and Docker, fronted by a Cloudflare Tunnel.
+
+| Part     | Platform                              | Cost              |
+| -------- | ------------------------------------- | ----------------- |
+| Frontend | **Vercel** (free tier) — Root dir `client` · Install: `cd .. && bun install --frozen-lockfile --ignore-scripts` · Build: `bun run build` · Output: `dist` | $0                |
+| Backend  | **Single VPS** with Docker installed  | $0 or €4–8/mo     |
+| Database | **Supabase** (free tier)              | $0                |
+| Sandbox  | **Docker daemon on the same VPS**     | included          |
+| TLS / DNS| **Cloudflare Tunnel** (named tunnel)  | $0                |
+
+Recommended hosts (cheapest first):
+
+| Host                                | Specs              | Cost     | Notes                                                                  |
+| ----------------------------------- | ------------------ | -------- | ---------------------------------------------------------------------- |
+| **Oracle Cloud — Always Free Ampere A1** | 4 vCPU ARM, 24 GB RAM | $0  | ARM64; all six sandbox base images publish arm64 variants              |
+| **Hetzner CX22 / CPX21**            | 2–3 vCPU, 4 GB RAM | €4.51–7.55/mo | x86_64; fastest to provision                                       |
+
+### Files in this repo that drive deployment
+
+- `Dockerfile` — server image (Bun + Hono + docker CLI)
+- `.dockerignore` — keeps the build context small
+- `docker-compose.yml` — server service with the Docker socket bind-mounted; optional `cloudflared` sidecar
+- `scripts/deploy.sh` — idempotent host-side deploy (pull → ensure sandbox images → `docker compose up -d --build`)
+- `scripts/setup_docker.sh` — builds the six sandbox images locally on the host
+- `.env.production.example` — every env var the server reads, with annotations
+
+### Deployment workflow
+
+```bash
+# --- on the VPS, one-time setup ---
+sudo apt-get update && sudo apt-get install -y docker.io docker-compose-plugin git
+git clone https://github.com/Alex110506/vibecodium
+cd vibecodium
+cp .env.production.example .env
+# fill in SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET, LLM_KEY
+
+# --- every deploy ---
+bash scripts/deploy.sh
+```
+
+### Cloudflare Tunnel (named tunnel, stable URL)
+
+```bash
+# on the VPS
+cloudflared tunnel login
+cloudflared tunnel create vibecodium
+cloudflared tunnel route dns vibecodium api.your-domain.com
+# capture the token, paste into .env as CLOUDFLARE_TUNNEL_TOKEN,
+# then uncomment the cloudflared service in docker-compose.yml
+docker compose up -d
+```
+
+Finally, set `VITE_BACKEND_URL=https://api.your-domain.com` in the Vercel project and redeploy the frontend.
+
+### Smoke test
+
+```bash
+curl https://api.your-domain.com/health
+# → { "ok": true, "ts": "..." }
+```
 
 ---
 
