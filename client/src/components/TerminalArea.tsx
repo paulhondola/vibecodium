@@ -25,8 +25,10 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
     const wsInstance = useRef<WebSocket | null>(null);
 
     useEffect(() => {
+        if (!projectId) return;
+
         try {
-            const ws = new WebSocket(`${WS_BASE}/ws/terminal?roomId=${projectId || "default"}`);
+            const ws = new WebSocket(`${WS_BASE}/ws/terminal?roomId=${projectId}`);
             wsInstance.current = ws;
 
             ws.onopen = () => {

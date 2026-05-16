@@ -3,6 +3,11 @@ import * as path from "node:path";
 import { supabase } from "../db/supabase";
 
 export async function syncProjectFilesToDisk(projectId: string): Promise<string> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId);
+    if (!isUuid) {
+        throw new Error(`syncProjectFilesToDisk: invalid project id (not a UUID): "${projectId}"`);
+    }
+
     const targetDir = `/tmp/vibecodium/${projectId}`;
 
     if (!fs.existsSync(targetDir)) {

@@ -507,7 +507,17 @@ export default {
 
         // Terminals — Docker-backed collaborative sandbox
         if (url.pathname === "/ws/terminal") {
-            const roomId = url.searchParams.get("roomId") || "default";
+            const roomId = url.searchParams.get("roomId");
+            if (!roomId) return new Response("Missing roomId", { status: 400 });
+
+            // Reject connections to non-existent projects
+            const { data: proj } = await supabase
+                .from("projects")
+                .select("id")
+                .eq("id", roomId)
+                .maybeSingle();
+            if (!proj) return new Response("Project not found", { status: 404 });
+
             if (server.upgrade(req, {
                 data: { type: "terminal", projectId: roomId, clientId: crypto.randomUUID(), userName: "terminal", color: "", isHost: false }
             })) return;
