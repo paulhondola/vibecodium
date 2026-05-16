@@ -51,24 +51,35 @@ async function readVaultSecret(id: string): Promise<string | null> {
 }
 
 /**
- * Returns the stored GitHub / Vercel tokens for a user, decrypted from Vault.
+ * Returns the stored GitHub / Vercel / LLM tokens for a user, decrypted from Vault.
  */
-export async function getUserTokens(
-  userId: string
-): Promise<{ githubToken: string | null; vercelToken: string | null }> {
+export async function getUserTokens(userId: string): Promise<{
+  githubToken: string | null;
+  vercelToken: string | null;
+  llmApiKey:   string | null;
+  llmBaseUrl:  string | null;
+  llmModel:    string | null;
+}> {
   const { data, error } = await supabase
     .from("user_tokens")
-    .select("github_secret_id, vercel_secret_id")
+    .select("github_secret_id, vercel_secret_id, llm_secret_id, llm_base_url, llm_model")
     .eq("user_id", userId)
     .maybeSingle();
 
   if (error) console.error("[getUserTokens]", error.message);
-  if (!data) return { githubToken: null, vercelToken: null };
+  if (!data) return { githubToken: null, vercelToken: null, llmApiKey: null, llmBaseUrl: null, llmModel: null };
 
-  const [githubToken, vercelToken] = await Promise.all([
+  const [githubToken, vercelToken, llmApiKey] = await Promise.all([
     data.github_secret_id ? readVaultSecret(data.github_secret_id) : Promise.resolve(null),
     data.vercel_secret_id ? readVaultSecret(data.vercel_secret_id) : Promise.resolve(null),
+    data.llm_secret_id    ? readVaultSecret(data.llm_secret_id)    : Promise.resolve(null),
   ]);
 
-  return { githubToken, vercelToken };
+  return {
+    githubToken,
+    vercelToken,
+    llmApiKey,
+    llmBaseUrl: (data.llm_base_url as string | null) ?? null,
+    llmModel:   (data.llm_model   as string | null) ?? null,
+  };
 }

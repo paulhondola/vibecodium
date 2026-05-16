@@ -1,16 +1,18 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../middleware/authMiddleware";
+import { getUserTokens } from "../utils/tokens";
 
-const agentRoutes = new Hono();
+type Variables = { user: { sub: string; [key: string]: any } };
+const agentRoutes = new Hono<{ Variables: Variables }>();
 
 agentRoutes.use("/*", async (c, next) => {
     if (c.req.method === "OPTIONS") return next();
     return authMiddleware(c, next);
 });
 
-const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
-const LLM_KEY = process.env.LLM_KEY ?? "";
-const LLM_MODEL = process.env.LLM_MODEL ?? "deepseek-chat";
+const SERVER_LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
+const SERVER_LLM_KEY      = process.env.LLM_KEY ?? "";
+const SERVER_LLM_MODEL    = process.env.LLM_MODEL ?? "deepseek-chat";
 
 const SYSTEM_PROMPT = `You are a surgical coding agent inside VibeCodium, a collaborative IDE.
 The user will share a file and an instruction. Your task: suggest the MINIMAL change needed.
@@ -61,8 +63,15 @@ agentRoutes.post("/suggest", async (c) => {
             return c.json({ error: "Missing instruction or filePath" }, 400);
         }
 
+        const userId = c.get("user").sub;
+        const userTokens = await getUserTokens(userId);
+
+        const LLM_BASE_URL = userTokens.llmBaseUrl ?? SERVER_LLM_BASE_URL;
+        const LLM_KEY      = userTokens.llmApiKey  ?? SERVER_LLM_KEY;
+        const LLM_MODEL    = userTokens.llmModel   ?? SERVER_LLM_MODEL;
+
         if (!LLM_KEY) {
-            return c.json({ error: "LLM_KEY not configured" }, 500);
+            return c.json({ error: "No LLM API key configured. Add yours in Profile → Integrations." }, 500);
         }
 
         const userMessage = `File: \`${body.filePath}\`
@@ -93,7 +102,7 @@ Instruction: ${body.instruction}`;
 
         if (!groqRes.ok) {
             const err = await groqRes.text();
-            return c.json({ error: `Groq API error: ${err}` }, 502);
+            return c.json({ error: `LLM API error: ${err}` }, 502);
         }
 
         // Stream the SSE response directly to the client
