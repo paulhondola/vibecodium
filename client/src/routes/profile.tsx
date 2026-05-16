@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../contexts/AuthProvider";
-import { ArrowLeft, LogOut, Activity, FolderGit2, Zap, Github, Key, Save, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, LogOut, Activity, FolderGit2, Zap, Github, Key, Save, Loader2, ShieldCheck, Bot } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { API_BASE } from "@/lib/config";
@@ -9,6 +9,14 @@ import { API_BASE } from "@/lib/config";
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
 });
+
+const LLM_PROVIDERS = [
+  { id: "openrouter", label: "OpenRouter",     baseUrl: "https://openrouter.ai/api/v1",  placeholder: "sk-or-v1-..."  },
+  { id: "openai",     label: "OpenAI",         baseUrl: "https://api.openai.com/v1",     placeholder: "sk-proj-..."   },
+  { id: "groq",       label: "Groq",           baseUrl: "https://api.groq.com/openai/v1",placeholder: "gsk_..."       },
+  { id: "deepseek",   label: "DeepSeek",       baseUrl: "https://api.deepseek.com/v1",   placeholder: "sk-..."        },
+  { id: "custom",     label: "Local / Custom", baseUrl: "",                              placeholder: "Enter API key" },
+] as const;
 
 function ProfilePage() {
   const { user, isAuthenticated, isLoading, logout, getAccessTokenSilently } = useAuth();
@@ -24,6 +32,12 @@ function ProfilePage() {
   const [isSavingTokens, setIsSavingTokens] = useState(false);
   const [isFetchingTokens, setIsFetchingTokens] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // LLM config
+  const [llmApiKey,   setLlmApiKey]   = useState("");
+  const [llmBaseUrl,  setLlmBaseUrl]  = useState("https://openrouter.ai/api/v1");
+  const [llmModel,    setLlmModel]    = useState("anthropic/claude-opus-4");
+  const [llmProvider, setLlmProvider] = useState("openrouter");
 
   useEffect(() => {
     if (user?.nickname) {
@@ -59,6 +73,9 @@ function ProfilePage() {
         if (data.success) {
           if (data.githubToken) setGithubToken(data.githubToken);
           if (data.vercelToken) setVercelToken(data.vercelToken);
+          if (data.llmApiKey)   setLlmApiKey(data.llmApiKey);
+          if (data.llmBaseUrl)  setLlmBaseUrl(data.llmBaseUrl);
+          if (data.llmModel)    setLlmModel(data.llmModel);
         }
       })
       .catch(err => console.error("Failed to fetch tokens", err))
@@ -77,9 +94,12 @@ function ProfilePage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` 
         },
-        body: JSON.stringify({ 
-          githubToken: githubToken.includes('****') ? undefined : githubToken, 
-          vercelToken: vercelToken.includes('****') ? undefined : vercelToken 
+        body: JSON.stringify({
+          githubToken: githubToken.includes('****') ? undefined : githubToken,
+          vercelToken: vercelToken.includes('****') ? undefined : vercelToken,
+          llmApiKey:   llmApiKey.includes('****')   ? undefined : llmApiKey   || undefined,
+          llmBaseUrl:  llmBaseUrl  || undefined,
+          llmModel:    llmModel    || undefined,
         })
       });
       const data = await res.json();
@@ -91,6 +111,9 @@ function ProfilePage() {
         }).then(r => r.json());
         if (updatedTokens.githubToken) setGithubToken(updatedTokens.githubToken);
         if (updatedTokens.vercelToken) setVercelToken(updatedTokens.vercelToken);
+        if (updatedTokens.llmApiKey)   setLlmApiKey(updatedTokens.llmApiKey);
+        if (updatedTokens.llmBaseUrl)  setLlmBaseUrl(updatedTokens.llmBaseUrl);
+        if (updatedTokens.llmModel)    setLlmModel(updatedTokens.llmModel);
       } else {
         setSaveMessage({ text: data.error || "Failed to update tokens", type: 'error' });
       }
@@ -99,6 +122,12 @@ function ProfilePage() {
     }
     setIsSavingTokens(false);
     setTimeout(() => setSaveMessage(null), 3000);
+  };
+
+  const handleProviderChange = (providerId: string) => {
+    setLlmProvider(providerId);
+    const preset = LLM_PROVIDERS.find(p => p.id === providerId);
+    if (preset && preset.baseUrl) setLlmBaseUrl(preset.baseUrl);
   };
 
   if (isLoading) {
@@ -251,6 +280,63 @@ function ProfilePage() {
                     placeholder="vercel_xxxxxxxxxxxx"
                     className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#3B82F6]/50 focus:ring-1 focus:ring-[#3B82F6]/50 outline-none transition-all"
                   />
+                </div>
+              </div>
+
+              {/* LLM / AI Provider */}
+              <div className="pt-4 border-t border-white/5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2 mb-4">
+                  <Bot size={12} className="text-[#A855F7]" /> AI Model Provider
+                </p>
+
+                <div className="grid md:grid-cols-2 gap-6 mb-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Provider</label>
+                    <select
+                      value={llmProvider}
+                      onChange={(e) => handleProviderChange(e.target.value)}
+                      className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#A855F7]/50 focus:ring-1 focus:ring-[#A855F7]/50 outline-none transition-all"
+                    >
+                      {LLM_PROVIDERS.map(p => (
+                        <option key={p.id} value={p.id}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Model</label>
+                    <input
+                      type="text"
+                      value={llmModel}
+                      onChange={(e) => setLlmModel(e.target.value)}
+                      placeholder="e.g. anthropic/claude-opus-4"
+                      className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#A855F7]/50 focus:ring-1 focus:ring-[#A855F7]/50 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">API Key</label>
+                    <input
+                      type="password"
+                      value={llmApiKey}
+                      onChange={(e) => setLlmApiKey(e.target.value)}
+                      placeholder={LLM_PROVIDERS.find(p => p.id === llmProvider)?.placeholder ?? "Enter API key"}
+                      className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#A855F7]/50 focus:ring-1 focus:ring-[#A855F7]/50 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Base URL</label>
+                    <input
+                      type="text"
+                      value={llmBaseUrl}
+                      onChange={(e) => setLlmBaseUrl(e.target.value)}
+                      placeholder="https://openrouter.ai/api/v1"
+                      className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#A855F7]/50 focus:ring-1 focus:ring-[#A855F7]/50 outline-none transition-all"
+                    />
+                  </div>
                 </div>
               </div>
 
