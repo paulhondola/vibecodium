@@ -1,12 +1,14 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../middleware/authMiddleware";
 import { supabase } from "../db/supabase";
+import { getUserTokens } from "../utils/tokens";
 
-const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
-const LLM_KEY      = process.env.LLM_KEY ?? "";
-const LLM_MODEL    = process.env.LLM_MODEL ?? "deepseek-chat";
+const SERVER_LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
+const SERVER_LLM_KEY      = process.env.LLM_KEY ?? "";
+const SERVER_LLM_MODEL    = process.env.LLM_MODEL ?? "deepseek-chat";
 
-const timelineRoutes = new Hono();
+type Variables = { user: { sub: string; [key: string]: any } };
+const timelineRoutes = new Hono<{ Variables: Variables }>();
 
 // GET /api/timeline/:projectId
 timelineRoutes.get("/:projectId", authMiddleware, async (c) => {
@@ -46,11 +48,18 @@ timelineRoutes.get("/:projectId", authMiddleware, async (c) => {
 
 // POST /api/timeline/:projectId/analyze — LLM diff analysis
 timelineRoutes.post("/:projectId/analyze", authMiddleware, async (c) => {
-    if (!LLM_KEY) {
-        return c.json({ success: false, error: "LLM_KEY not configured" }, 500);
-    }
-
     try {
+        const userId = c.get("user")?.sub;
+        const userTokens = userId ? await getUserTokens(userId) : null;
+
+        const LLM_BASE_URL = userTokens?.llmBaseUrl ?? SERVER_LLM_BASE_URL;
+        const LLM_KEY      = userTokens?.llmApiKey  ?? SERVER_LLM_KEY;
+        const LLM_MODEL    = userTokens?.llmModel   ?? SERVER_LLM_MODEL;
+
+        if (!LLM_KEY) {
+            return c.json({ success: false, error: "No LLM API key configured. Add yours in Profile → Integrations." });
+        }
+
         const projectId = c.req.param("projectId");
         const body = await c.req.json<{
             filePath: string;
