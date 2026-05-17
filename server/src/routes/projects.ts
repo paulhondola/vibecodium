@@ -385,16 +385,20 @@ projectsRoutes.patch("/:id/files/rename", async (c) => {
         if (!project) return c.json({ error: "Project not found" }, 404);
         if (project.user_id !== user.sub) return c.json({ error: "Forbidden" }, 403);
 
-        const { data: allFiles } = await supabase.from("files").select("*").eq("project_id", projectId);
+        const { data: allFiles } = await supabase.from("files").select("id, path").eq("project_id", projectId);
         const toRename = (allFiles ?? []).filter((f) => f.path === oldPath || f.path.startsWith(oldPath + "/"));
 
-        for (const f of toRename) {
+        const updatePromises = toRename.map((f) => {
             const renamedPath = newPath + f.path.slice(oldPath.length);
-            await supabase.from("files").upsert(
-                { id: crypto.randomUUID(), project_id: projectId, path: renamedPath, content: f.content, updated_at: new Date().toISOString() },
-                { onConflict: "project_id,path" }
-            );
-            await supabase.from("files").delete().eq("id", f.id);
+            return supabase
+                .from("files")
+                .update({ path: renamedPath, updated_at: new Date().toISOString() })
+                .eq("id", f.id);
+        });
+
+        const results = await Promise.all(updatePromises);
+        for (const res of results) {
+            if (res.error) throw res.error;
         }
 
         return c.json({ success: true, renamed: toRename.length });

@@ -324,19 +324,20 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 
     const handleCloseFile = (file: ProjectFile, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
-        setOpenFiles(prev => {
-            const next = prev.filter(f => f.path !== file.path);
-            if (activeFile?.path === file.path) {
-                if (next.length === 0) {
-                    setActiveFile(null);
-                } else {
-                    const closedIndex = prev.findIndex(f => f.path === file.path);
-                    const defaultIndex = Math.max(0, closedIndex - 1);
-                    setActiveFile(next[defaultIndex]);
-                }
+        
+        if (activeFile?.path === file.path) {
+            const closedIndex = openFiles.findIndex(f => f.path === file.path);
+            const nextOpenFiles = openFiles.filter(f => f.path !== file.path);
+            
+            if (nextOpenFiles.length === 0) {
+                setActiveFile(null);
+            } else {
+                const defaultIndex = Math.max(0, closedIndex - 1);
+                setActiveFile(nextOpenFiles[defaultIndex]);
             }
-            return next;
-        });
+        }
+        
+        setOpenFiles(prev => prev.filter(f => f.path !== file.path));
     };
 
     if (isLoading) {
