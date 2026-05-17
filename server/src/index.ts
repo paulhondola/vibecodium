@@ -294,6 +294,10 @@ const termClients     = new Map<string, Set<import("bun").ServerWebSocket<WSData
 const termRooms       = new Map<string, TerminalRoom>();
 const termLineBuffers = new Map<string, string>(); // per-room line edit buffer
 
+export function broadcastToTerminal(roomId: string, message: string) {
+    termClients.get(roomId)?.forEach(c => { try { c.send(message); } catch (_) {} });
+}
+
 // Per project+file event counter for checkpoint marking.
 // NOTE: resets on server restart — checkpoints are cosmetic anchors, not exact.
 const timelineEventCounters = new Map<string, number>(); // key: `${projectId}::${filePath}`

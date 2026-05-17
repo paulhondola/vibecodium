@@ -1,7 +1,7 @@
 // Security Scanner for iTEC 2026 - Live Vulnerability Detection
 // Blocks dangerous code before container execution
 
-export interface VulnerabilityMatch {
+interface VulnerabilityMatch {
 	pattern: string;
 	severity: "critical" | "high" | "medium" | "low";
 	description: string;
@@ -252,59 +252,6 @@ export async function scanCode(
 	};
 }
 
-// LLM-based advanced scanning (optional fallback)
-export async function scanWithLLM(
-	code: string,
-	llmBaseUrl: string,
-	llmKey: string,
-	llmModel: string
-): Promise<{ safe: boolean; analysis: string }> {
-	try {
-		const response = await fetch(`${llmBaseUrl}/chat/completions`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${llmKey}`,
-			},
-			body: JSON.stringify({
-				model: llmModel,
-				messages: [
-					{
-						role: "system",
-						content:
-							"You are a security expert. Analyze code for vulnerabilities. Reply with JSON: {safe: boolean, issues: string[]}",
-					},
-					{
-						role: "user",
-						content: `Analyze this code for security issues:\n\n${code.slice(0, 2000)}`,
-					},
-				],
-				temperature: 0.1,
-				max_tokens: 500,
-			}),
-			signal: AbortSignal.timeout(10_000),
-		});
-
-		if (!response.ok) {
-			throw new Error("LLM API failed");
-		}
-
-		const data = (await response.json()) as {
-			choices: { message: { content: string } }[];
-		};
-		const analysis = data.choices[0]?.message?.content || "{}";
-
-		try {
-			const parsed = JSON.parse(analysis);
-			return { safe: parsed.safe ?? true, analysis: analysis };
-		} catch {
-			return { safe: true, analysis: "Unable to parse LLM response" };
-		}
-	} catch (error) {
-		console.error("LLM scanning failed:", error);
-		return { safe: true, analysis: "LLM scan unavailable" };
-	}
-}
 
 // Quick check for critical patterns only (fast)
 export function hasCriticalVulnerability(content: string): boolean {

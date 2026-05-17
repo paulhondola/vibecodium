@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { supabase } from "../db/supabase";
 import { scanCode } from "../security/scanner";
-import { rooms, broadcast } from "../ws/collaboration";
+import { broadcastToTerminal } from "../index";
 import { getUserTokens } from "../utils/tokens";
 import { authMiddleware } from "../middleware/authMiddleware";
 
@@ -33,15 +33,12 @@ deployRoutes.post("/:projectId", async (c) => {
         }, 403);
     }
 
-    const room = rooms.get(projectId);
     const sendLog = (message: string, type: "info" | "error" | "success" = "info") => {
         console.log(`[Deploy] ${message}`);
-        if (room) {
-            broadcast(room, {
-                type: "terminal_output",
-                data: `\r\n\x1b[36m[ShipToCloud]\x1b[0m ${type === "error" ? "\x1b[31m" : type === "success" ? "\x1b[32m" : ""}${message}\x1b[0m\r\n`,
-            });
-        }
+        broadcastToTerminal(
+            projectId,
+            `\r\n\x1b[36m[ShipToCloud]\x1b[0m ${type === "error" ? "\x1b[31m" : type === "success" ? "\x1b[32m" : ""}${message}\x1b[0m\r\n`
+        );
     };
 
     try {
