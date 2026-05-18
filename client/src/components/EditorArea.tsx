@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import MonacoEditor, { useMonaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import { Bot, Check, X } from "lucide-react";
+import { Bot, Check, X, GitBranch } from "lucide-react";
 import type { ProjectFile } from "./Workspace";
 import { useSocket } from "../contexts/SocketProvider";
 import type { PendingUpdate } from "../hooks/useAgentStream";
@@ -33,6 +33,8 @@ interface EditorAreaProps {
     onTimeTravelChange?: (open: boolean) => void;
     gameOpen?: boolean;
     onGameChange?: (open: boolean) => void;
+    branchName?: string;
+    onCloseOthers?: (file: ProjectFile) => void;
 }
 
 export default function EditorArea({
@@ -40,6 +42,7 @@ export default function EditorArea({
     activeFile, userId, remoteCodeUpdate, remoteCursorUpdate,
     pendingUpdate, onPendingResolved, projectId, agentToken, powerModeEnabled = false,
     timeTravelOpen = false, onTimeTravelChange, gameOpen = false, onGameChange,
+    branchName = 'main', onCloseOthers,
 }: EditorAreaProps) {
     const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
     const monaco = useMonaco();
@@ -52,6 +55,9 @@ export default function EditorArea({
     const [sparks, setSparks] = useState<{ id: string; x: number; y: number; color: string }[]>([]);
     const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const editorContainerRef = useRef<HTMLDivElement>(null);
+
+    const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
+    const [contextMenu, setContextMenu] = useState<{ file: ProjectFile; x: number; y: number } | null>(null);
 
     // Time-Travel Debugging state (open/close controlled by parent)
     const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
@@ -270,6 +276,7 @@ export default function EditorArea({
         decorationsRef.current = ed.createDecorationsCollection([]);
 
         ed.onDidChangeCursorPosition((e) => {
+            setCursorPos({ line: e.position.lineNumber, col: e.position.column });
             if (activeFileRef.current) {
                 sendRef.current({
                     type: "cursor_move",
@@ -418,6 +425,14 @@ export default function EditorArea({
         return () => window.removeEventListener("keydown", onKey);
     }, [hasPending, handleReject]);
 
+    // Close context menu on outside click
+    useEffect(() => {
+        if (!contextMenu) return;
+        const handler = () => setContextMenu(null);
+        window.addEventListener("mousedown", handler);
+        return () => window.removeEventListener("mousedown", handler);
+    }, [contextMenu]);
+
     return (
         <div className="flex flex-col h-full bg-[#09090b] text-[#c9d1d9] relative">
             {/* Tab bar */}
@@ -431,6 +446,7 @@ export default function EditorArea({
                         <div
                             key={file.path}
                             onClick={() => onSelectFile(file)}
+                            onContextMenu={(e) => { e.preventDefault(); setContextMenu({ file, x: e.clientX, y: e.clientY }); }}
                             className={`flex items-center gap-2 px-3 py-1.5 border-r border-[#27272a] cursor-pointer max-w-[200px] min-w-[120px] group transition-colors ${
                                 isActive
                                     ? "bg-[#09090b] border-t-2 border-t-[#A855F7] text-zinc-100"
@@ -471,7 +487,7 @@ export default function EditorArea({
 
             <div
                 ref={editorContainerRef}
-                className="flex-1 relative"
+                className="flex-1 relative overflow-hidden"
                 style={powerModeEnabled && isPowerMode ? {
                     animation: 'shake 0.08s ease-in-out infinite alternate',
                 } : undefined}
@@ -540,6 +556,8 @@ export default function EditorArea({
                             <h2 className="text-2xl font-semibold text-zinc-200 mb-2 tracking-[-0.48px]">VibeCodium Editor</h2>
                             <p className="text-zinc-500 text-sm mb-10">Select a file from the explorer to begin coding.</p>
                             <div className="flex flex-col items-start text-xs text-zinc-500 gap-3 font-mono border-t border-[#27272a] pt-6">
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Go to File</span> <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">⌘ P</span></div>
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Search in Files</span> <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">⌘ ⇧ F</span></div>
                                 <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Show Explorer</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-zinc-400">⌘ E</span></div>
                                 <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Toggle Terminal</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-zinc-400">⌘ J</span></div>
                                 <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Toggle Agent Chat</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-zinc-400">⌘ B</span></div>
@@ -605,6 +623,50 @@ export default function EditorArea({
                     </div>
                 )}
             </div>
+
+            {/* ── Status Bar ── */}
+            <div className="shrink-0 h-6 bg-[#111113] border-t border-[#1f1f24] flex items-center px-3 gap-4 text-[10px] font-mono text-zinc-500 select-none">
+                <span className="flex items-center gap-1">
+                    <GitBranch size={10} className="text-[#A855F7]" />
+                    {branchName}
+                </span>
+                {activeFile && (
+                    <>
+                        <span className="text-zinc-600">Ln {cursorPos.line}, Col {cursorPos.col}</span>
+                        <span className="text-zinc-600">{language}</span>
+                        <span className="truncate text-zinc-700 ml-auto">{activeFile.path.split("/").pop()}</span>
+                    </>
+                )}
+            </div>
+
+            {/* ── Tab context menu ── */}
+            {contextMenu && (
+                <div
+                    className="fixed z-[200] bg-[#18181b] border border-[#27272a] rounded-[8px] shadow-xl py-1 min-w-[160px]"
+                    style={{ top: contextMenu.y, left: contextMenu.x }}
+                    onMouseDown={e => e.stopPropagation()}
+                >
+                    <button
+                        className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-[#27272a] transition-colors"
+                        onClick={() => { onCloseFile(contextMenu.file); setContextMenu(null); }}
+                    >
+                        Close
+                    </button>
+                    <button
+                        className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-[#27272a] transition-colors"
+                        onClick={() => { onCloseOthers?.(contextMenu.file); setContextMenu(null); }}
+                    >
+                        Close Others
+                    </button>
+                    <div className="my-1 border-t border-[#27272a]" />
+                    <button
+                        className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-[#27272a] transition-colors"
+                        onClick={() => { navigator.clipboard.writeText(contextMenu.file.path); setContextMenu(null); }}
+                    >
+                        Copy Path
+                    </button>
+                </div>
+            )}
 
             <style>{`
                 @keyframes shake {

@@ -79,6 +79,8 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [fileSearchQuery, setFileSearchQuery] = useState("");
     const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
     const [showEditorGame, setShowEditorGame] = useState(false);
+    const [showQuickOpen, setShowQuickOpen] = useState(false);
+    const [quickOpenQuery, setQuickOpenQuery] = useState("");
 
     // Deployment State
     const [isDeploying, setIsDeploying] = useState(false);
@@ -183,7 +185,15 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
             if (e.metaKey || e.ctrlKey) {
-                if (e.key.toLowerCase() === 'e') {
+                if (e.key.toLowerCase() === 'p' && !e.shiftKey) {
+                    e.preventDefault();
+                    setShowQuickOpen(true);
+                    setQuickOpenQuery("");
+                } else if (e.key.toLowerCase() === 'f' && e.shiftKey) {
+                    e.preventDefault();
+                    setActiveSidebarTab('search');
+                    setShowSidebar(true);
+                } else if (e.key.toLowerCase() === 'e') {
                     e.preventDefault();
                     setShowSidebar(prev => !prev);
                 } else if (e.key.toLowerCase() === 'j') {
@@ -200,6 +210,9 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                     setShowTerminal(isZen);
                     setShowChat(isZen);
                 }
+            }
+            if (e.key === 'Escape') {
+                setShowQuickOpen(false);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -352,6 +365,8 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         setIsDeploying(false);
     };
 
+    const branchName = 'main';
+
     const handleSelectFile = (file: ProjectFile) => {
         setOpenFiles(prev => {
             if (!prev.find(f => f.path === file.path)) {
@@ -377,6 +392,11 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
             }
             return next;
         });
+    };
+
+    const handleCloseOthers = (file: ProjectFile) => {
+        setOpenFiles([file]);
+        setActiveFile(file);
     };
 
     if (isLoading) {
@@ -720,6 +740,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                         activeFile={activeFile}
                                         onSelectFile={handleSelectFile}
                                         onCloseFile={handleCloseFile}
+                                        onCloseOthers={handleCloseOthers}
                                         userId={user?._raw.id ? `${user._raw.id}_local` : "anon_local"}
                                         remoteCodeUpdate={remoteCodeUpdate}
                                         remoteCursorUpdate={remoteCursorUpdate}
@@ -732,6 +753,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                         onTimeTravelChange={setIsTimeTravelOpen}
                                         gameOpen={showEditorGame}
                                         onGameChange={setShowEditorGame}
+                                        branchName={branchName}
                                     />
                                 )}
                             </Panel>
@@ -918,6 +940,65 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                 onClose={() => setShowCommunityHelp(false)}
                 repoUrl={projectRepoUrl ?? `${window.location.origin}/?w=${projectId}`}
             />
+
+            {/* ── Quick Open (Ctrl+P) ── */}
+            <AnimatePresence>
+                {showQuickOpen && (
+                    <motion.div
+                        key="quick-open-backdrop"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[150] bg-black/60 flex items-start justify-center pt-[20vh]"
+                        onMouseDown={() => setShowQuickOpen(false)}
+                    >
+                        <motion.div
+                            key="quick-open-panel"
+                            initial={{ y: -12, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            exit={{ y: -12, opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="w-full max-w-[520px] bg-[#18181b] border border-[#3f3f46] rounded-[10px] overflow-hidden shadow-2xl"
+                            onMouseDown={e => e.stopPropagation()}
+                        >
+                            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#27272a]">
+                                <Search size={14} className="text-zinc-500 shrink-0" />
+                                <input
+                                    autoFocus
+                                    value={quickOpenQuery}
+                                    onChange={e => setQuickOpenQuery(e.target.value)}
+                                    placeholder="Go to file…"
+                                    className="flex-1 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 outline-none"
+                                />
+                                <kbd className="text-[10px] text-zinc-600 bg-[#111113] border border-[#27272a] rounded px-1 py-0.5">Esc</kbd>
+                            </div>
+                            <div className="max-h-64 overflow-y-auto py-1">
+                                {files
+                                    .filter(f => !quickOpenQuery.trim() || f.path.toLowerCase().includes(quickOpenQuery.toLowerCase()))
+                                    .slice(0, 20)
+                                    .map(file => (
+                                        <button
+                                            key={file.path}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[#27272a] transition-colors group"
+                                            onClick={() => { handleSelectFile(file); setShowQuickOpen(false); }}
+                                        >
+                                            <span className="text-[10px] font-bold text-zinc-600 group-hover:text-zinc-400 w-6 text-right shrink-0">
+                                                {file.path.split('.').pop()?.toUpperCase()?.substring(0, 3) || ''}
+                                            </span>
+                                            <span className="text-xs text-zinc-300 truncate flex-1">{file.path.split('/').pop()}</span>
+                                            <span className="text-[10px] text-zinc-600 truncate max-w-[160px] hidden group-hover:block">
+                                                {file.path.split('/').slice(0, -1).join('/')}
+                                            </span>
+                                        </button>
+                                    ))}
+                                {files.filter(f => !quickOpenQuery.trim() || f.path.toLowerCase().includes(quickOpenQuery.toLowerCase())).length === 0 && (
+                                    <div className="px-3 py-4 text-xs text-zinc-600 text-center">No files match</div>
+                                )}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 		</div>
 	);
 }
