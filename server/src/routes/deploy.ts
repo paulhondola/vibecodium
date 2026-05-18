@@ -116,9 +116,41 @@ deployRoutes.post("/:projectId", async (c) => {
         }
 
         const liveUrl = `https://${deployData.url}`;
-        sendLog(`✨ Deployment successful! Live at: ${liveUrl}`, "success");
+        const deploymentId = deployData.id as string;
+        const inspectorUrl = (deployData.inspectorUrl as string | undefined) ?? `https://vercel.com/deployments/${deploymentId}`;
+        sendLog(`⏳ Build queued (id: ${deploymentId}). Waiting for Vercel to build...`);
 
-        // Persist deployment record
+        // Poll until the build reaches a terminal state.
+        const POLL_INTERVAL_MS = 5_000;
+        const POLL_MAX_MS = 3 * 60 * 1_000; // 3 minutes
+        const pollStart = Date.now();
+        let readyState = deployData.readyState as string | undefined;
+
+        while (readyState !== "READY" && readyState !== "ERROR" && readyState !== "CANCELED") {
+            if (Date.now() - pollStart > POLL_MAX_MS) {
+                sendLog("❌ Build timed out after 3 minutes.", "error");
+                return c.json({ success: false, error: "Build timed out after 3 minutes.", inspectorUrl }, 500);
+            }
+            await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+            const pollRes = await fetch(`${VERCEL_API}/v13/deployments/${deploymentId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!pollRes.ok) break; // network hiccup — loop again next iteration
+            const pollData = await pollRes.json() as any;
+            readyState = pollData.readyState;
+            sendLog(`Build status: ${readyState ?? "unknown"}`);
+        }
+
+        if (readyState !== "READY") {
+            const reason = readyState === "CANCELED" ? "canceled" : "failed";
+            const errMsg = `Vercel build ${reason}. Check your project configuration.`;
+            sendLog(`❌ ${errMsg}`, "error");
+            return c.json({ success: false, error: errMsg, inspectorUrl }, 500);
+        }
+
+        sendLog(`✨ Build complete! Live at: ${liveUrl}`, "success");
+
+        // Only persist after a confirmed successful build.
         await supabase.from("deployed_apps").insert({
             user_id: userId,
             title: projectName,
@@ -129,7 +161,7 @@ deployRoutes.post("/:projectId", async (c) => {
         return c.json({
             success: true,
             url: liveUrl,
-            deploymentId: deployData.id,
+            deploymentId,
             message: "Project deployed to Vercel!",
         });
 

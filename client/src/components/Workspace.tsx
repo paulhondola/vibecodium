@@ -13,7 +13,7 @@ import MatrixRain from "./MatrixRain";
 import ReactionOverlay from "./ReactionOverlay";
 import CodeRoastModal from "./CodeRoastModal";
 import { API_BASE } from "@/lib/config";
-import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, ChevronDown, Wrench, Key, Rocket, ExternalLink, X } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, ChevronDown, Wrench, Key, Rocket, ExternalLink, X, AlertTriangle } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -50,6 +50,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     // Deployment State
     const [isDeploying, setIsDeploying] = useState(false);
     const [deploySuccess, setDeploySuccess] = useState<{ url: string } | null>(null);
+    const [deployError, setDeployError] = useState<{ message: string; inspectorUrl?: string } | null>(null);
     const [showConfetti, setShowConfetti] = useState(false);
     const [tokenPrompt, setTokenPrompt] = useState<{ type: 'GITHUB' | 'VERCEL'; message: string } | null>(null);
 
@@ -303,11 +304,11 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                 if (data.error === "VERCEL_TOKEN_REQUIRED") {
                     setTokenPrompt({ type: 'VERCEL', message: data.message });
                 } else {
-                    console.error("Deploy failed:", data.error);
+                    setDeployError({ message: data.error || "Deployment failed.", inspectorUrl: data.inspectorUrl });
                 }
             }
-        } catch (e) {
-            console.error("Deploy error:", e);
+        } catch (e: any) {
+            setDeployError({ message: e?.message || "Deployment failed. Check your connection and try again." });
         }
         setIsDeploying(false);
     };
@@ -695,6 +696,55 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 
                             <button 
                                 onClick={() => setDeploySuccess(null)}
+                                className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Deployment Error Modal */}
+            <AnimatePresence>
+                {deployError && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="bg-[#18181b] border border-red-500/30 rounded-2xl p-8 max-w-md w-full shadow-[0_0_50px_rgba(239,68,68,0.2)] text-center relative overflow-hidden"
+                        >
+                            <div className="absolute top-0 left-0 w-full h-1 bg-red-500" />
+                            <div className="flex justify-center mb-6">
+                                <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                                    <AlertTriangle size={40} className="text-red-500" />
+                                </div>
+                            </div>
+                            <h2 className="text-2xl font-bold text-white mb-2">Deployment Failed</h2>
+                            <p className="text-gray-400 text-sm mb-6 leading-relaxed">{deployError.message}</p>
+                            {deployError.inspectorUrl && (
+                                <a
+                                    href={deployError.inspectorUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between bg-[#09090b] border border-red-500/20 rounded-xl p-4 mb-6 group hover:border-red-500/40 transition-colors"
+                                >
+                                    <div className="flex flex-col items-start overflow-hidden">
+                                        <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">Build Logs</span>
+                                        <span className="text-sm text-red-400 font-mono truncate w-full">{deployError.inspectorUrl}</span>
+                                    </div>
+                                    <ExternalLink size={18} className="text-gray-400 group-hover:text-red-400 transition-colors ml-4 shrink-0" />
+                                </a>
+                            )}
+                            <button
+                                onClick={() => setDeployError(null)}
+                                className="w-full py-3 rounded-xl bg-[#27272a] hover:bg-[#3f3f46] text-white font-semibold transition-all"
+                            >
+                                Dismiss
+                            </button>
+                            <button
+                                onClick={() => setDeployError(null)}
                                 className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
                             >
                                 <X size={20} />
