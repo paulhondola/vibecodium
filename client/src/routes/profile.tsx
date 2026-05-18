@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../contexts/AuthProvider";
-import { ArrowLeft, LogOut, Activity, FolderGit2, Zap, Github, Key, Save, Loader2, ShieldCheck, Bot } from "lucide-react";
+import { ArrowLeft, LogOut, Activity, FolderGit2, Zap, Github, Key, Save, Loader2, ShieldCheck, Bot, MapPin, Code2, User } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { API_BASE } from "@/lib/config";
@@ -16,6 +16,12 @@ const LLM_PROVIDERS = [
   { id: "groq",       label: "Groq",           baseUrl: "https://api.groq.com/openai/v1",placeholder: "gsk_..."       },
   { id: "deepseek",   label: "DeepSeek",       baseUrl: "https://api.deepseek.com/v1",   placeholder: "sk-..."        },
   { id: "custom",     label: "Local / Custom", baseUrl: "",                              placeholder: "Enter API key" },
+] as const;
+
+const PROFILE_LANGUAGES = [
+  "TypeScript", "JavaScript", "Python", "Go", "Rust", "C++",
+  "Java", "C#", "Kotlin", "Swift", "PHP", "Ruby", "Scala",
+  "Elixir", "Haskell", "Dart", "Zig", "C", "R", "Lua",
 ] as const;
 
 function ProfilePage() {
@@ -38,6 +44,14 @@ function ProfilePage() {
   const [llmBaseUrl,  setLlmBaseUrl]  = useState("https://openrouter.ai/api/v1");
   const [llmModel,    setLlmModel]    = useState("anthropic/claude-opus-4");
   const [llmProvider, setLlmProvider] = useState("openrouter");
+
+  // Public profile fields
+  const [profileBio,        setProfileBio]        = useState("");
+  const [profileLanguage,   setProfileLanguage]   = useState("");
+  const [profileLocation,   setProfileLocation]   = useState("");
+  const [isSavingProfile,   setIsSavingProfile]   = useState(false);
+  const [isFetchingProfile, setIsFetchingProfile] = useState(false);
+  const [profileSaveMsg,    setProfileSaveMsg]    = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     if (user?.nickname) {
@@ -81,6 +95,24 @@ function ProfilePage() {
       .catch(err => console.error("Failed to fetch tokens", err))
       .finally(() => setIsFetchingTokens(false));
     }
+  }, [isAuthenticated, getAccessTokenSilently]);
+
+  // Fetch public profile fields on mount
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    setIsFetchingProfile(true);
+    getAccessTokenSilently()
+      .then(token => fetch(`${API_BASE}/api/users/profile`, { headers: { Authorization: `Bearer ${token}` } }))
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          if (data.bio)      setProfileBio(data.bio);
+          if (data.language) setProfileLanguage(data.language);
+          if (data.location) setProfileLocation(data.location);
+        }
+      })
+      .catch(err => console.error("Failed to fetch profile", err))
+      .finally(() => setIsFetchingProfile(false));
   }, [isAuthenticated, getAccessTokenSilently]);
 
   const handleSaveTokens = async () => {
@@ -128,6 +160,25 @@ function ProfilePage() {
     setLlmProvider(providerId);
     const preset = LLM_PROVIDERS.find(p => p.id === providerId);
     if (preset && preset.baseUrl) setLlmBaseUrl(preset.baseUrl);
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSavingProfile(true);
+    setProfileSaveMsg(null);
+    try {
+      const token = await getAccessTokenSilently();
+      const res = await fetch(`${API_BASE}/api/users/profile`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bio: profileBio, language: profileLanguage, location: profileLocation }),
+      });
+      const data = await res.json();
+      setProfileSaveMsg({ text: data.success ? "Profile updated!" : (data.error || "Failed"), type: data.success ? "success" : "error" });
+    } catch {
+      setProfileSaveMsg({ text: "Connection error", type: "error" });
+    }
+    setIsSavingProfile(false);
+    setTimeout(() => setProfileSaveMsg(null), 3000);
   };
 
   if (isLoading) {
@@ -200,6 +251,7 @@ function ProfilePage() {
 
             <div className="space-y-3 pt-6 border-t border-white/5">
               <button
+                onClick={() => document.getElementById("public-profile")?.scrollIntoView({ behavior: "smooth" })}
                 className="w-full py-3 bg-[rgba(26,31,46,0.4)] hover:bg-[rgba(168,85,247,0.1)] border border-transparent hover:border-[rgba(168,85,247,0.3)] text-white rounded-xl transition-all font-['Space_Grotesk'] tracking-widest uppercase text-xs font-bold"
               >
                 Edit Profile
@@ -244,6 +296,73 @@ function ProfilePage() {
                 {githubCommitCount !== null ? githubCommitCount.toLocaleString() : (isLoadingStats ? (
                   <span className="animate-pulse text-[#10B981]">...</span>
                 ) : '0')}
+              </div>
+            </div>
+          </div>
+
+          {/* Public Profile: bio, language, location */}
+          <div id="public-profile" className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-white/5 rounded-2xl p-6 shadow-lg">
+            <h3 className="text-md font-['Space_Grotesk'] font-bold text-white tracking-tight flex items-center gap-2 mb-6">
+              <User size={18} className="text-[#A855F7]" />
+              Public Profile
+            </h3>
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Bio</label>
+                <textarea
+                  value={profileBio}
+                  onChange={(e) => setProfileBio(e.target.value.slice(0, 200))}
+                  placeholder="Tell other coders about yourself..."
+                  rows={3}
+                  className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#A855F7]/50 focus:ring-1 focus:ring-[#A855F7]/50 outline-none transition-all resize-none"
+                />
+                <p className="text-[10px] text-slate-600 text-right">{profileBio.length}/200</p>
+              </div>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                    <Code2 size={12} /> Primary Language
+                  </label>
+                  <select
+                    value={profileLanguage}
+                    onChange={(e) => setProfileLanguage(e.target.value)}
+                    className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#A855F7]/50 focus:ring-1 focus:ring-[#A855F7]/50 outline-none transition-all"
+                  >
+                    <option value="">Select a language</option>
+                    {PROFILE_LANGUAGES.map(lang => <option key={lang} value={lang}>{lang}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                    <MapPin size={12} /> Location
+                  </label>
+                  <input
+                    type="text"
+                    value={profileLocation}
+                    onChange={(e) => setProfileLocation(e.target.value.slice(0, 100))}
+                    placeholder="City, Country"
+                    className="w-full bg-[#02040a] border border-white/10 rounded-lg px-3 py-2 text-xs text-cyan-50 focus:border-[#A855F7]/50 focus:ring-1 focus:ring-[#A855F7]/50 outline-none transition-all"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col items-center gap-3 pt-2">
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={isSavingProfile || isFetchingProfile}
+                  className="w-full md:w-auto px-10 py-2.5 bg-[#A855F7]/10 hover:bg-[#A855F7]/20 border border-[#A855F7]/30 text-[#A855F7] rounded-lg transition-all font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
+                >
+                  {isSavingProfile ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  {isSavingProfile ? "Saving..." : "Save Profile"}
+                </button>
+                {profileSaveMsg && (
+                  <motion.p
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`text-center text-[10px] font-bold ${profileSaveMsg.type === "success" ? "text-green-400" : "text-red-400"}`}
+                  >
+                    {profileSaveMsg.text}
+                  </motion.p>
+                )}
               </div>
             </div>
           </div>

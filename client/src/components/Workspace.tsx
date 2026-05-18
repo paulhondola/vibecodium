@@ -3,17 +3,17 @@ import ActivityFeed from "./ActivityFeed";
 import EditorArea from "./EditorArea";
 import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
-import ReelsWidget from "./ReelsWidget";
 import SecurityScanModal from "./SecurityScanModal";
 import CommunityHelpModal from "./CommunityHelpModal";
 import RubberDuck from "./RubberDuck";
 import WhiteboardArea from "./WhiteboardArea";
-import SpotifyPlayer from "./SpotifyPlayer";
 import MatrixRain from "./MatrixRain";
+import SpotifySidebarPanel from "./SpotifySidebarPanel";
+import YouTubeSidebarPanel from "./YouTubeSidebarPanel";
 import ReactionOverlay from "./ReactionOverlay";
 import CodeRoastModal from "./CodeRoastModal";
 import { API_BASE } from "@/lib/config";
-import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, Wrench, Key, Rocket, ExternalLink, X, FolderOpen, GitBranch, HelpCircle, Sparkles } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, Wrench, Key, Rocket, ExternalLink, X, FolderOpen, GitBranch, HelpCircle, Sparkles, Music, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
@@ -29,17 +29,18 @@ export interface ProjectFile {
     content: string | null;
 }
 
-function SidebarTabBtn({ icon, label, active, onClick }: {
-    icon: ReactNode; label: string; active: boolean; onClick: () => void;
+function SidebarTabBtn({ icon, label, active, onClick, activeColor = '#A855F7' }: {
+    icon: ReactNode; label: string; active: boolean; onClick: () => void; activeColor?: string;
 }) {
     return (
         <button
             onClick={onClick}
             title={label}
-            className={`w-full h-10 flex items-center justify-center transition-colors ${
+            style={active ? { borderLeftColor: activeColor, color: activeColor } : undefined}
+            className={`w-full h-10 flex items-center justify-center transition-colors border-l-2 ${
                 active
-                    ? 'text-[#fafafa] border-l-2 border-l-[#A855F7]'
-                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-[#1e1e24] border-l-2 border-l-transparent'
+                    ? 'text-[#fafafa]'
+                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-[#1e1e24] border-l-transparent'
             }`}
         >
             {icon}
@@ -57,13 +58,12 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [projectRepoUrl, setProjectRepoUrl] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const [showCommunityHelp, setShowCommunityHelp] = useState(false);
-    const [showReels, setShowReels] = useState(false);
     const [showMatrix, setShowMatrix] = useState(false);
     const [showRoast, setShowRoast] = useState(false);
     const [showPowerMode, setShowPowerMode] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showSecurityScan, setShowSecurityScan] = useState(false);
-    const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'git' | 'tools' | 'fun' | 'help'>('explorer');
+    const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'git' | 'tools' | 'fun' | 'help' | 'spotify' | 'youtube'>('explorer');
     const [commitMessage, setCommitMessage] = useState("");
     const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
     const [showEditorGame, setShowEditorGame] = useState(false);
@@ -464,6 +464,9 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                     <SidebarTabBtn icon={<Sparkles size={17} />} label="Fun" active={activeSidebarTab === 'fun'} onClick={() => setActiveSidebarTab('fun')} />
                                     <SidebarTabBtn icon={<HelpCircle size={17} />} label="Help" active={activeSidebarTab === 'help'} onClick={() => setActiveSidebarTab('help')} />
                                     <div className="flex-1" />
+                                    <div className="border-t border-[#27272a] my-1" />
+                                    <SidebarTabBtn icon={<Music size={17} />} label="Spotify" active={activeSidebarTab === 'spotify'} activeColor="#1db954" onClick={() => setActiveSidebarTab('spotify')} />
+                                    <SidebarTabBtn icon={<Youtube size={17} />} label="YouTube" active={activeSidebarTab === 'youtube'} activeColor="#FF0000" onClick={() => setActiveSidebarTab('youtube')} />
                                 </div>
                                 {/* Tab Content */}
                                 <div className="flex-1 overflow-hidden flex flex-col">
@@ -589,7 +592,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                                         </div>
                                                     </button>
                                                 )}
-                                                <button onClick={() => setShowReels(true)} className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-[5px] text-left hover:bg-[#1e1e24] transition-colors">
+                                                <button onClick={() => setActiveSidebarTab('youtube')} className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-[5px] text-left hover:bg-[#1e1e24] transition-colors">
                                                     <Flame size={13} className="text-pink-400 shrink-0 mt-0.5" />
                                                     <div>
                                                         <div className="text-xs font-medium text-pink-400">Vibe Reels</div>
@@ -613,6 +616,8 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                             </div>
                                         </div>
                                     )}
+                                    {activeSidebarTab === 'spotify' && <SpotifySidebarPanel />}
+                                    {activeSidebarTab === 'youtube' && <YouTubeSidebarPanel />}
                                 </div>
                             </Panel>
                             <PanelResizeHandle className="w-1 hover:bg-purple-500/30 transition-colors z-50 cursor-col-resize" />
@@ -806,15 +811,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                 </div>
             )}
 
-			{/* Reels Widget Overlay */}
-			{showReels && (
-				<ReelsWidget
-					onClose={() => setShowReels(false)}
-					onMinimize={() => setShowReels(false)}
-					isAgentLoading={isLoading}
-				/>
-			)}
-
 			{/* Security Scan Modal */}
 			{showSecurityScan && (
 				<SecurityScanModal
@@ -835,9 +831,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 
 			{/* Hacker Easter Egg */}
 			{showMatrix && <MatrixRain />}
-
-			{/* Spotify Easter Egg */}
-			<SpotifyPlayer />
 
             {/* Community Help Modal */}
             <CommunityHelpModal
