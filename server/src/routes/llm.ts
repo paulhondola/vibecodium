@@ -31,7 +31,7 @@ async function pingProvider(baseURL: string, apiKey: string, model: string) {
 }
 
 // Roast My Code Endpoint
-aiRoutes.post("/roast", async (c) => {
+llmRoutes.post("/roast", async (c) => {
     try {
         const body = await c.req.json<{ code: string; fileName?: string }>();
         if (!body.code) return c.json({ success: false, error: "No code to roast" }, 400);
