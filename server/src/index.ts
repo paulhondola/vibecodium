@@ -52,9 +52,10 @@ const docker = new Docker();
 
 const LANGUAGE_IMAGES: Record<string, string> = {
 	python: "vibecodium-python:latest",
-	node: "vibecodium-node:latest",
-	"c++": "vibecodium-cpp:latest",
-	rust: "vibecodium-rust:latest"
+	node:   "vibecodium-node:latest",
+	bun:    "vibecodium-bun:latest",
+	"c++":  "vibecodium-cpp:latest",
+	rust:   "vibecodium-rust:latest"
 };
 
 const EXEC_COMMANDS: Record<string, () => string[]> = {
@@ -277,11 +278,17 @@ const EXT_TO_IMAGE: Record<string, string> = {
 };
 
 function detectTerminalImage(filePaths: string[]): string {
+    const hasBunLock = filePaths.some(fp => {
+        const name = nodePath.basename(fp).toLowerCase();
+        return name === "bun.lockb" || name === "bun.lock";
+    });
+    if (hasBunLock) return "vibecodium-bun:latest";
+
     for (const fp of filePaths) {
         const ext = nodePath.extname(fp).toLowerCase();
         if (EXT_TO_IMAGE[ext]) return EXT_TO_IMAGE[ext]!;
     }
-    return "vibecodium-node:latest"; // default for JS/TS projects
+    return "vibecodium-node:latest";
 }
 
 // Per-room state for the collaborative Docker terminal
