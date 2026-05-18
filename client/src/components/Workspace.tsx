@@ -13,9 +13,10 @@ import MatrixRain from "./MatrixRain";
 import ReactionOverlay from "./ReactionOverlay";
 import CodeRoastModal from "./CodeRoastModal";
 import { API_BASE } from "@/lib/config";
-import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, ChevronDown, Wrench, Key, Rocket, ExternalLink, X } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, Wrench, Key, Rocket, ExternalLink, X, FolderOpen, GitBranch, HelpCircle, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useNavigate } from "@tanstack/react-router";
 import { SocketProvider, useSocket } from "../contexts/SocketProvider";
@@ -26,6 +27,24 @@ export interface ProjectFile {
     id: string;
     path: string;
     content: string | null;
+}
+
+function SidebarTabBtn({ icon, label, active, onClick }: {
+    icon: ReactNode; label: string; active: boolean; onClick: () => void;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            title={label}
+            className={`w-full h-10 flex items-center justify-center transition-colors ${
+                active
+                    ? 'text-[#fafafa] border-l-2 border-l-[#A855F7]'
+                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-[#1e1e24] border-l-2 border-l-transparent'
+            }`}
+        >
+            {icon}
+        </button>
+    );
 }
 
 function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: string | null }) {
@@ -44,8 +63,10 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [showPowerMode, setShowPowerMode] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showSecurityScan, setShowSecurityScan] = useState(false);
-    const [showToolsMenu, setShowToolsMenu] = useState(false);
-    const toolsMenuRef = useRef<HTMLDivElement>(null);
+    const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'git' | 'tools' | 'fun' | 'help'>('explorer');
+    const [commitMessage, setCommitMessage] = useState("");
+    const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
+    const [showEditorGame, setShowEditorGame] = useState(false);
 
     // Deployment State
     const [isDeploying, setIsDeploying] = useState(false);
@@ -76,18 +97,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const { user, getAccessTokenSilently, isAuthenticated, loginWithRedirect } = useAuth();
     const getTokenRef = useRef(getAccessTokenSilently);
     useEffect(() => { getTokenRef.current = getAccessTokenSilently; }, [getAccessTokenSilently]);
-
-    // Close tools menu on outside click
-    useEffect(() => {
-        if (!showToolsMenu) return;
-        function handleClickOutside(e: MouseEvent) {
-            if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target as Node)) {
-                setShowToolsMenu(false);
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [showToolsMenu]);
 
     // 1. Fetch project files from API + store token for agent
     useEffect(() => {
@@ -259,17 +268,21 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const handleSave = async () => {
+    const handleSave = async (message?: string) => {
         if (!projectId || !isAuthenticated) return;
         setIsSaving(true);
         try {
             const token = await getAccessTokenSilently();
+            const body = message?.trim() ? JSON.stringify({ message: message.trim() }) : undefined;
             const res = await fetch(`${API_BASE}/api/projects/${projectId}/push`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+                ...(body ? { body } : {}),
             });
             const data = await res.json();
-            if (!data.success) {
+            if (data.success) {
+                setCommitMessage("");
+            } else {
                 if (data.error === "GITHUB_TOKEN_REQUIRED") {
                     setTokenPrompt({ type: 'GITHUB', message: data.message });
                 } else {
@@ -341,9 +354,9 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 
     if (isLoading) {
         return (
-            <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center text-cyan-400 gap-4">
+            <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center gap-4">
                 <Loader2 size={32} className="animate-spin text-[#A855F7]" />
-                <span className="text-sm font-['Space_Grotesk'] tracking-[0.2em] uppercase">Parsing Repository Data...</span>
+                <span className="text-sm text-[#71717a] tracking-[0.15em] uppercase font-medium">Parsing Repository Data...</span>
             </div>
         );
     }
@@ -351,9 +364,9 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 	return (
 		<div className="h-screen w-full bg-[#09090b] text-[#c9d1d9] font-sans flex flex-col overflow-hidden selection:bg-cyan-500/30">
 			{/* Top Bar */}
-			<div className="h-12 bg-[#18181b] border-b border-[#27272a] shadow-sm flex items-center justify-between px-4 shrink-0 relative z-20">
+			<div className="h-12 bg-[#111113] border-b border-[#27272a] flex items-center justify-between px-4 shrink-0 relative z-20">
 				<div className="flex items-center gap-4">
-					<button onClick={onBack} className="text-gray-400 hover:text-cyan-400 transition-colors flex items-center gap-1.5 text-sm">
+					<button onClick={onBack} className="text-zinc-500 hover:text-zinc-200 transition-colors flex items-center gap-1.5 text-sm">
 						<ArrowLeft size={16} /> <span className="hidden sm:block">Back to Home</span>
 					</button>
 					<div className="w-[1px] h-4 bg-[#27272a]"></div>
@@ -361,16 +374,16 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 						<span className="font-semibold text-sm text-gray-200">{projectName ?? (projectId ? `Project ${projectId.slice(0, 8)}` : "itec-project")}</span>
                         
                         <div className="ml-6 flex items-center bg-[#09090b] rounded-lg p-0.5 border border-[#27272a]">
-                            <button 
+                            <button
                                 onClick={() => setShowWhiteboard(false)}
-                                className={`px-3 py-1 flex items-center gap-2 rounded-md text-xs font-semibold transition-all ${!showWhiteboard ? "bg-[#27272a] text-cyan-400" : "text-gray-500 hover:text-gray-300"}`}
+                                className={`px-3 py-1 flex items-center gap-2 rounded-md text-xs font-semibold transition-all ${!showWhiteboard ? "bg-[#27272a] text-[#A855F7]" : "text-zinc-500 hover:text-zinc-300"}`}
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
                                 Code
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setShowWhiteboard(true)}
-                                className={`px-3 py-1 flex items-center gap-2 rounded-md text-xs font-semibold transition-all ${showWhiteboard ? "bg-[#27272a] text-yellow-400" : "text-gray-500 hover:text-gray-300"}`}
+                                className={`px-3 py-1 flex items-center gap-2 rounded-md text-xs font-semibold transition-all ${showWhiteboard ? "bg-[#27272a] text-yellow-400" : "text-zinc-500 hover:text-zinc-300"}`}
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
                                 Whiteboard
@@ -378,14 +391,14 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                         </div>
 					</div>
                         {/* Panel Toggles */}
-                        <div className="flex items-center gap-1 ml-4 bg-[#18181b] p-0.5 rounded border border-[#27272a]">
-                            <button onClick={() => setShowSidebar(!showSidebar)} className={`p-1 rounded hover:bg-[#27272a] ${showSidebar ? "text-cyan-400" : "text-gray-500"} transition-colors`} title="Toggle Sidebar">
+                        <div className="flex items-center gap-0.5 ml-4 bg-[#09090b] p-0.5 rounded-[5px] border border-[#27272a]">
+                            <button onClick={() => setShowSidebar(!showSidebar)} className={`p-1 rounded hover:bg-[#1e1e24] ${showSidebar ? "text-[#A855F7]" : "text-zinc-500"} transition-colors`} title="Toggle Sidebar (⌘E)">
                                 <PanelLeft size={14} />
                             </button>
-                            <button onClick={() => setShowTerminal(!showTerminal)} className={`p-1 rounded hover:bg-[#27272a] ${showTerminal ? "text-cyan-400" : "text-gray-500"} transition-colors`} title="Toggle Terminal">
+                            <button onClick={() => setShowTerminal(!showTerminal)} className={`p-1 rounded hover:bg-[#1e1e24] ${showTerminal ? "text-[#A855F7]" : "text-zinc-500"} transition-colors`} title="Toggle Terminal (⌘J)">
                                 <TerminalSquare size={14} />
                             </button>
-                            <button onClick={() => setShowChat(!showChat)} className={`p-1 rounded hover:bg-[#27272a] ${showChat ? "text-cyan-400" : "text-gray-500"} transition-colors`} title="Toggle Chat">
+                            <button onClick={() => setShowChat(!showChat)} className={`p-1 rounded hover:bg-[#1e1e24] ${showChat ? "text-[#A855F7]" : "text-zinc-500"} transition-colors`} title="Toggle Chat (⌘B)">
                                 <PanelRight size={14} />
                             </button>
                         </div>
@@ -401,130 +414,39 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                         )}
 					</div>
 
-				<div className="flex items-center gap-4">
-                    {/* Ship to Cloud Button */}
-                    <button
+				<div className="flex items-center gap-2">
+                    {/* Ship to Cloud */}
+                    <Button
+                        variant="primary"
+                        size="sm"
                         onClick={handleDeploy}
-                        disabled={isDeploying}
-                        className={`text-xs px-4 py-1.5 rounded-full flex items-center gap-2 transition-all font-bold shadow-[0_0_15px_rgba(34,197,94,0.3)] border border-green-500/30 ${isDeploying ? "bg-green-600/50 cursor-not-allowed" : "bg-green-600 hover:bg-green-500 text-white hover:scale-105 active:scale-95"}`}
+                        loading={isDeploying}
                     >
-                        {isDeploying ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
-                        {isDeploying ? "Shipping..." : "Ship to Cloud"}
-                    </button>
+                        <Rocket />
+                        Ship to Cloud
+                    </Button>
 
-                    {/* Commit Button */}
-                    <button
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        className={`text-xs px-4 py-1.5 rounded-full flex items-center gap-2 transition-all font-bold border border-[#27272a] bg-[#18181b] hover:bg-[#27272a] text-gray-200 hover:scale-105 active:scale-95 disabled:opacity-50`}
-                    >
-                        {isSaving ? <Loader2 size={14} className="animate-spin" /> : <GitCommit size={14} />}
-                        Commit
-                    </button>
-
-                    {/* Collaborate Button */}
-                    <button
+                    {/* Collaborate */}
+                    <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={copyCollabLink}
-                        className={`text-xs px-4 py-1.5 rounded-full flex items-center gap-2 transition-all font-bold border border-[#A855F7]/30 bg-[#A855F7]/10 hover:bg-[#A855F7]/20 text-[#A855F7] hover:scale-105 active:scale-95 ${copied ? "text-green-400 border-green-500/30 bg-green-500/10" : ""}`}
+                        className={copied ? "border-emerald-500/40 text-emerald-400 hover:border-emerald-500/60 hover:text-emerald-300" : ""}
                     >
-                        {copied ? <Check size={14} /> : <Users size={14} />}
-                        {copied ? "Link Copied!" : "Collaborate"}
-                    </button>
-
-                    {/* Request Help Button */}
-                    <button
-                        onClick={() => setShowCommunityHelp(true)}
-                        className="text-xs px-4 py-1.5 rounded-full flex items-center gap-2 transition-all font-bold border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 hover:scale-105 active:scale-95"
-                        title="Post your issue to the community"
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                        Request Help
-                    </button>
+                        {copied ? <Check /> : <Users />}
+                        {copied ? "Copied!" : "Collaborate"}
+                    </Button>
 
                     {/* Connected users */}
                     {collabUsers.length > 0 && (
-                        <div className="flex -space-x-2 mr-2">
+                        <div className="flex -space-x-2">
                             {collabUsers.map(u => (
-                                <div key={u.id} title={`${u.name}${u.isHost ? ' (Host)' : ''}`} className={`w-6 h-6 rounded-full border flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${u.isHost ? 'border-yellow-400 z-10' : 'border-[#18181b]'}`} style={{ backgroundColor: u.color }}>
+                                <div key={u.id} title={`${u.name}${u.isHost ? ' (Host)' : ''}`} className={`w-6 h-6 rounded-full border flex items-center justify-center text-[10px] font-bold text-white ${u.isHost ? 'border-yellow-400 z-10' : 'border-[#18181b]'}`} style={{ backgroundColor: u.color }}>
                                     {u.name.substring(0, 2).toUpperCase()}
                                 </div>
                             ))}
                         </div>
                     )}
-
-
-                    {/* Tools Dropdown */}
-                    <div className="relative" ref={toolsMenuRef}>
-                        <button
-                            onClick={() => setShowToolsMenu(prev => !prev)}
-                            className={`text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-[#27272a] hover:bg-[#3f3f46] text-gray-200 ${showToolsMenu ? "ring-1 ring-cyan-500/50" : ""}`}
-                        >
-                            <Wrench size={14} />
-                            Tools
-                            <ChevronDown size={12} className={`transition-transform ${showToolsMenu ? "rotate-180" : ""}`} />
-                        </button>
-
-                        {showToolsMenu && (
-                            <div className="absolute right-0 top-full mt-1.5 w-52 bg-[#18181b] border border-[#27272a] rounded-lg shadow-xl z-50 overflow-hidden py-1">
-                                {/* Emoji Reactions */}
-                                <div className="border-t border-[#27272a]">
-                                    <ReactionOverlay
-                                        lastMessage={lastMessage}
-                                        onSendReaction={(emoji) => { send({ type: "emoji_reaction", emoji, sender: user?.name || "Someone" }); setShowToolsMenu(false); }}
-                                        buttonClassName="w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 text-purple-400 hover:bg-[#27272a] hover:text-purple-300 transition-colors"
-                                        pickerPosition="below"
-                                    />
-                                </div>
-
-                                {/* Roast My Code */}
-                                {activeFile && (
-                                    <button
-                                        onClick={() => { setShowRoast(true); setShowToolsMenu(false); }}
-                                        className="w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 text-orange-400 hover:bg-[#27272a] hover:text-orange-300 transition-colors border-t border-[#27272a]"
-                                    >
-                                        <span>🔥</span>
-                                        Roast My Code
-                                    </button>
-                                )}
-
-                                {/* Power Mode */}
-                                <button
-                                    onClick={() => { setShowPowerMode(prev => !prev); setShowToolsMenu(false); }}
-                                    className={`w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 transition-colors border-t border-[#27272a] ${showPowerMode ? "text-orange-400 bg-orange-500/10 hover:bg-orange-500/20" : "text-orange-500 hover:bg-[#27272a] hover:text-orange-400"}`}
-                                >
-                                    <span className="text-sm leading-none">⚡</span>
-                                    Power Mode {showPowerMode && <span className="ml-auto text-[10px] font-bold text-orange-400">ON</span>}
-                                </button>
-
-                                {/* Hacker Mode */}
-                                <button
-                                    onClick={() => { setShowMatrix(prev => !prev); setShowToolsMenu(false); }}
-                                    className={`w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 transition-colors border-t border-[#27272a] ${showMatrix ? "text-green-400 bg-green-500/10 hover:bg-green-500/20" : "text-green-500 hover:bg-[#27272a] hover:text-green-400"}`}
-                                >
-                                    <Terminal size={14} />
-                                    Hacker Mode {showMatrix && <span className="ml-auto text-[10px] font-bold text-green-400">ON</span>}
-                                </button>
-
-                                {/* Security Scan */}
-                                <button
-                                    onClick={() => { setShowSecurityScan(true); setShowToolsMenu(false); }}
-                                    className="w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 text-cyan-400 hover:bg-[#27272a] hover:text-cyan-300 transition-colors border-t border-[#27272a]"
-                                >
-                                    <Shield size={14} />
-                                    Security Scan
-                                </button>
-
-                                {/* Vibe Reels */}
-                                <button
-                                    onClick={() => { setShowReels(true); setShowToolsMenu(false); }}
-                                    className="w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 text-pink-400 hover:bg-[#27272a] hover:text-pink-300 transition-colors border-t border-[#27272a]"
-                                >
-                                    <Flame size={14} />
-                                    Vibe Reels
-                                </button>
-                            </div>
-                        )}
-                    </div>
 				</div>
 			</div>
 
@@ -533,25 +455,167 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                     {/* Left Sidebar */}
                     {showSidebar && (
                         <>
-                            <Panel defaultSize={20} minSize={15} className="flex flex-col bg-[#09090b] relative z-10 border-r border-[#27272a]">
-                                <PanelGroup orientation="vertical" className="h-full">
-                                    <Panel defaultSize={70} minSize={20} className="overflow-y-auto">
-                                        <FileExplorer
-                                            files={files}
-                                            activeFile={activeFile}
-                                            onSelect={handleSelectFile}
-                                            projectId={projectId}
-                                            token={agentToken}
-                                            onFilesChange={setFiles}
-                                        />
-                                    </Panel>
-                                    <PanelResizeHandle className="h-1 bg-[#27272a] hover:bg-cyan-500/50 transition-colors cursor-row-resize" />
-                                    <Panel defaultSize={30} minSize={10} className="overflow-y-auto border-t border-[#27272a] shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
-                                        <ActivityFeed projectId={projectId} />
-                                    </Panel>
-                                </PanelGroup>
+                            <Panel defaultSize={22} minSize={16} className="flex bg-[#09090b] relative z-10 border-r border-[#27272a]">
+                                {/* Activity Bar — VS Code-style icon strip */}
+                                <div className="w-10 flex flex-col shrink-0 border-r border-[#27272a] select-none py-1">
+                                    <SidebarTabBtn icon={<FolderOpen size={17} />} label="Explorer" active={activeSidebarTab === 'explorer'} onClick={() => setActiveSidebarTab('explorer')} />
+                                    <SidebarTabBtn icon={<GitBranch size={17} />} label="Git" active={activeSidebarTab === 'git'} onClick={() => setActiveSidebarTab('git')} />
+                                    <SidebarTabBtn icon={<Wrench size={17} />} label="Tools" active={activeSidebarTab === 'tools'} onClick={() => setActiveSidebarTab('tools')} />
+                                    <SidebarTabBtn icon={<Sparkles size={17} />} label="Fun" active={activeSidebarTab === 'fun'} onClick={() => setActiveSidebarTab('fun')} />
+                                    <SidebarTabBtn icon={<HelpCircle size={17} />} label="Help" active={activeSidebarTab === 'help'} onClick={() => setActiveSidebarTab('help')} />
+                                    <div className="flex-1" />
+                                </div>
+                                {/* Tab Content */}
+                                <div className="flex-1 overflow-hidden flex flex-col">
+                                    {activeSidebarTab === 'explorer' && (
+                                        <FileExplorer files={files} activeFile={activeFile} onSelect={handleSelectFile} projectId={projectId} token={agentToken} onFilesChange={setFiles} />
+                                    )}
+                                    {activeSidebarTab === 'git' && (
+                                        <div className="flex flex-col h-full overflow-hidden">
+                                            {/* Commit section */}
+                                            <div className="px-3 pt-3 pb-3 border-b border-[#27272a] shrink-0 space-y-2">
+                                                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Source Control</p>
+                                                <textarea
+                                                    value={commitMessage}
+                                                    onChange={e => setCommitMessage(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                                            e.preventDefault();
+                                                            handleSave(commitMessage);
+                                                        }
+                                                    }}
+                                                    placeholder="Message (⌘Enter to commit)..."
+                                                    rows={2}
+                                                    className="w-full bg-[#111113] border border-[#27272a] focus:border-purple-500/40 rounded-[5px] px-2.5 py-2 text-xs text-zinc-300 placeholder:text-zinc-600 resize-none focus:outline-none transition-colors"
+                                                />
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    className="w-full"
+                                                    onClick={() => handleSave(commitMessage)}
+                                                    loading={isSaving}
+                                                >
+                                                    <GitCommit />
+                                                    Commit &amp; Push
+                                                </Button>
+                                            </div>
+                                            {/* Commit history */}
+                                            <div className="flex-1 overflow-hidden">
+                                                <ActivityFeed projectId={projectId} />
+                                            </div>
+                                        </div>
+                                    )}
+                                    {activeSidebarTab === 'tools' && (
+                                        <div className="flex flex-col h-full">
+                                            <div className="px-3 py-2 border-b border-[#27272a] shrink-0">
+                                                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Developer Tools</p>
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto p-2 space-y-px">
+                                                <button
+                                                    onClick={() => setIsTimeTravelOpen(p => !p)}
+                                                    className={`w-full flex items-start gap-2.5 px-3 py-2.5 rounded-[5px] text-left hover:bg-[#1e1e24] transition-colors group ${isTimeTravelOpen ? 'bg-purple-500/10' : ''}`}
+                                                >
+                                                    <svg className={`shrink-0 mt-0.5 ${isTimeTravelOpen ? 'text-purple-400' : 'text-zinc-500 group-hover:text-zinc-300'}`} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                                    <div>
+                                                        <div className={`text-xs font-medium ${isTimeTravelOpen ? 'text-purple-400' : 'text-zinc-300'}`}>Time Travel</div>
+                                                        <div className="text-[10px] text-zinc-600 mt-0.5">Scrub file edit history</div>
+                                                    </div>
+                                                </button>
+                                                <button onClick={() => setShowSecurityScan(true)} className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-[5px] text-left hover:bg-[#1e1e24] transition-colors group">
+                                                    <Shield size={13} className="text-zinc-500 shrink-0 mt-0.5 group-hover:text-zinc-300" />
+                                                    <div>
+                                                        <div className="text-xs font-medium text-zinc-300">Security Scan</div>
+                                                        <div className="text-[10px] text-zinc-600 mt-0.5">Analyze for vulnerabilities</div>
+                                                    </div>
+                                                </button>
+                                                <div className="pt-3 px-1 pb-1">
+                                                    <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-2 px-2">Reactions</p>
+                                                    <ReactionOverlay
+                                                        lastMessage={lastMessage}
+                                                        onSendReaction={(emoji) => send({ type: "emoji_reaction", emoji, sender: user?.name || "Someone" })}
+                                                        buttonClassName="w-full text-left text-xs py-2 px-3 flex items-center gap-2 text-purple-400 hover:bg-[#1e1e24] hover:text-purple-300 transition-colors rounded-[5px]"
+                                                        pickerPosition="below"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {activeSidebarTab === 'fun' && (
+                                        <div className="flex flex-col h-full">
+                                            <div className="px-3 py-2 border-b border-[#27272a] shrink-0">
+                                                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Fun &amp; Easter Eggs</p>
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                                                <div className="flex items-center justify-between px-3 py-2.5 rounded-[5px] hover:bg-[#1e1e24] transition-colors cursor-pointer" onClick={() => setShowPowerMode(p => !p)}>
+                                                    <div className="flex items-center gap-2.5">
+                                                        <span className="text-sm leading-none">⚡</span>
+                                                        <div>
+                                                            <div className="text-xs font-medium text-zinc-300">Power Mode</div>
+                                                            <div className="text-[10px] text-zinc-600">Keystroke sparks</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-150 ${showPowerMode ? 'bg-orange-500' : 'bg-[#3f3f46]'}`}>
+                                                        <span className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow-sm transition-transform duration-150 ${showPowerMode ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center justify-between px-3 py-2.5 rounded-[5px] hover:bg-[#1e1e24] transition-colors cursor-pointer" onClick={() => setShowMatrix(p => !p)}>
+                                                    <div className="flex items-center gap-2.5">
+                                                        <Terminal size={13} className="text-green-500 shrink-0" />
+                                                        <div>
+                                                            <div className="text-xs font-medium text-zinc-300">Hacker Mode</div>
+                                                            <div className="text-[10px] text-zinc-600">Matrix rain overlay</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-150 ${showMatrix ? 'bg-green-500' : 'bg-[#3f3f46]'}`}>
+                                                        <span className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow-sm transition-transform duration-150 ${showMatrix ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setShowEditorGame(p => !p)}
+                                                    className={`w-full flex items-start gap-2.5 px-3 py-2.5 rounded-[5px] text-left hover:bg-[#1e1e24] transition-colors ${showEditorGame ? 'bg-orange-500/10' : ''}`}
+                                                >
+                                                    <span className="text-sm leading-none shrink-0">🎮</span>
+                                                    <div>
+                                                        <div className={`text-xs font-medium ${showEditorGame ? 'text-orange-400' : 'text-zinc-300'}`}>Code Runner Game</div>
+                                                        <div className="text-[10px] text-zinc-600 mt-0.5">Play in a PIP window</div>
+                                                    </div>
+                                                </button>
+                                                {activeFile && (
+                                                    <button onClick={() => setShowRoast(true)} className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-[5px] text-left hover:bg-[#1e1e24] transition-colors">
+                                                        <span className="text-sm leading-none shrink-0">🔥</span>
+                                                        <div>
+                                                            <div className="text-xs font-medium text-orange-400">Roast My Code</div>
+                                                            <div className="text-[10px] text-zinc-600 mt-0.5">Brutal AI code review</div>
+                                                        </div>
+                                                    </button>
+                                                )}
+                                                <button onClick={() => setShowReels(true)} className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-[5px] text-left hover:bg-[#1e1e24] transition-colors">
+                                                    <Flame size={13} className="text-pink-400 shrink-0 mt-0.5" />
+                                                    <div>
+                                                        <div className="text-xs font-medium text-pink-400">Vibe Reels</div>
+                                                        <div className="text-[10px] text-zinc-600 mt-0.5">Watch dev content</div>
+                                                    </div>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {activeSidebarTab === 'help' && (
+                                        <div className="flex flex-col h-full">
+                                            <div className="px-3 py-2 border-b border-[#27272a] shrink-0">
+                                                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Community Help</p>
+                                            </div>
+                                            <div className="p-3 space-y-3">
+                                                <p className="text-[11px] text-zinc-500 leading-relaxed">Post your issue to the community and get help from other developers.</p>
+                                                <Button variant="primary" className="w-full" onClick={() => setShowCommunityHelp(true)}>
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                                    Request Help
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </Panel>
-                            <PanelResizeHandle className="w-1 hover:bg-cyan-500/50 transition-colors z-50 cursor-col-resize" />
+                            <PanelResizeHandle className="w-1 hover:bg-purple-500/30 transition-colors z-50 cursor-col-resize" />
                         </>
                     )}
 
@@ -577,13 +641,17 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                         projectId={projectId}
                                         agentToken={agentToken}
                                         powerModeEnabled={showPowerMode}
+                                        timeTravelOpen={isTimeTravelOpen}
+                                        onTimeTravelChange={setIsTimeTravelOpen}
+                                        gameOpen={showEditorGame}
+                                        onGameChange={setShowEditorGame}
                                     />
                                 )}
                             </Panel>
                             
                             {showTerminal && (
                                 <>
-                                    <PanelResizeHandle className="h-1 bg-[#27272a] hover:bg-cyan-500/50 transition-colors z-50 cursor-row-resize" />
+                                    <PanelResizeHandle className="h-1 bg-[#27272a] hover:bg-purple-500/30 transition-colors z-50 cursor-row-resize" />
                                     <Panel defaultSize={30} minSize={15} className="relative bg-[#09090b] overflow-hidden">
                                         <TerminalArea projectId={projectId} />
                                     </Panel>
@@ -595,7 +663,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                     {/* Right Sidebar */}
                     {showChat && (
                         <>
-                            <PanelResizeHandle className="w-1 hover:bg-cyan-500/50 transition-colors z-50 cursor-col-resize border-l border-[#27272a]" />
+                            <PanelResizeHandle className="w-1 hover:bg-purple-500/30 transition-colors z-50 cursor-col-resize border-l border-[#27272a]" />
                             <Panel defaultSize={25} minSize={20} className="flex flex-col bg-[#18181b] relative z-10 shadow-[-5px_0_15px_rgba(0,0,0,0.5)]">
                                 <VibeChat
                                     activeFile={activeFile}
@@ -615,12 +683,12 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
             {/* Token Requirement Prompt */}
             <AnimatePresence>
                 {tokenPrompt && (
-                    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
+                    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 px-4">
                         <motion.div
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.9, opacity: 0 }}
-                            className="bg-[#18181b] border border-[#A855F7]/30 rounded-2xl p-8 max-w-md w-full shadow-[0_0_50px_rgba(168,85,247,0.2)] text-center relative"
+                            className="bg-[#18181b] border border-[#3f3f46] rounded-[14px] p-8 max-w-md w-full text-center relative"
                         >
                             <div className="flex justify-center mb-6">
                                 <div className="w-16 h-16 rounded-full bg-[#A855F7]/10 flex items-center justify-center border border-[#A855F7]/20">
@@ -633,18 +701,20 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                             </p>
 
                             <div className="flex flex-col gap-3">
-                                <button
+                                <Button
+                                    variant="primary"
+                                    className="w-full"
                                     onClick={() => navigate({ to: "/profile" })}
-                                    className="w-full py-3 rounded-xl bg-[#A855F7] hover:bg-[#9333ea] text-white font-bold transition-all shadow-[0_0_20px_rgba(168,85,247,0.4)]"
                                 >
                                     Go to Profile to Register
-                                </button>
-                                <button
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    className="w-full"
                                     onClick={() => setTokenPrompt(null)}
-                                    className="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 font-semibold transition-all"
                                 >
                                     Maybe Later
-                                </button>
+                                </Button>
                             </div>
                         </motion.div>
                     </div>
@@ -655,12 +725,12 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 
             <AnimatePresence>
                 {deploySuccess && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-4">
                         <motion.div
                             initial={{ scale: 0.9, opacity: 0, y: 20 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            className="bg-[#18181b] border border-green-500/30 rounded-2xl p-8 max-w-md w-full shadow-[0_0_50px_rgba(34,197,94,0.2)] text-center relative overflow-hidden"
+                            className="bg-[#18181b] border border-[#3f3f46] rounded-[14px] p-8 max-w-md w-full text-center relative overflow-hidden"
                         >
                             <div className="absolute top-0 left-0 w-full h-1 bg-green-500" />
                             <div className="flex justify-center mb-6">
@@ -686,12 +756,13 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                 </a>
                             </div>
 
-                            <button
+                            <Button
+                                variant="secondary"
+                                className="w-full"
                                 onClick={() => setDeploySuccess(null)}
-                                className="w-full py-3 rounded-xl bg-[#27272a] hover:bg-[#3f3f46] text-white font-semibold transition-all"
                             >
                                 Back to Editor
-                            </button>
+                            </Button>
 
                             <button 
                                 onClick={() => setDeploySuccess(null)}

@@ -241,10 +241,10 @@ export default function VibeChat({ activeFile, projectId, token, onPendingUpdate
                             className={`flex flex-col gap-2 relative ${msg.role === "user" ? "items-end" : "items-start"}`}
                         >
                             <div className={`flex items-start gap-2 max-w-[90%] ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                                <div className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center border shadow-sm ${msg.role === "user" ? "bg-blue-600/20 text-blue-400 border-blue-500/30" : "bg-gradient-to-br from-purple-500/20 to-indigo-500/20 text-purple-400 border-purple-500/30"}`}>
+                                <div className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center border ${msg.role === "user" ? "bg-[#1e1e24] text-zinc-400 border-[#3f3f46]" : "bg-gradient-to-br from-purple-500/20 to-indigo-500/20 text-purple-400 border-purple-500/30"}`}>
                                     {msg.role === "user" ? <User size={14} /> : <Bot size={14} />}
                                 </div>
-                                <div className={`text-sm py-1.5 px-3 rounded-lg leading-relaxed shadow-sm whitespace-pre-wrap ${msg.role === "user" ? "bg-blue-500/10 text-blue-100 border border-blue-500/20" : "text-gray-300"}`}>
+                                <div className={`text-sm py-1.5 px-3 rounded-lg leading-relaxed whitespace-pre-wrap ${msg.role === "user" ? "bg-[#1e1e24] text-zinc-100 border border-[#3f3f46]" : "text-zinc-300"}`}>
                                     {renderMessageContent(msg.content)}
                                     {msg.id === "__streaming__" && (
                                         <span className="inline-block w-1.5 h-3.5 bg-purple-400 ml-0.5 animate-pulse rounded-sm" />

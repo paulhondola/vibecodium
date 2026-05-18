@@ -62,7 +62,7 @@ export default function ActivityFeed({ projectId }: { projectId: string | null }
     return (
         <div className="flex flex-col h-full bg-[#09090b] text-[#c9d1d9] text-sm font-sans relative">
             {/* Header */}
-            <div className="flex items-center justify-between p-3 border-b border-[#27272a] shrink-0 sticky top-0 bg-[#09090b]/95 backdrop-blur z-20">
+            <div className="flex items-center justify-between p-3 border-b border-[#27272a] shrink-0 sticky top-0 bg-[#09090b] z-20">
                 <div className="flex items-center gap-2">
                     <History size={15} className="text-purple-400" />
                     <h2 className="font-semibold text-xs tracking-widest uppercase text-gray-300">Activity Timeline</h2>

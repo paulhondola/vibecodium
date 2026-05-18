@@ -15,9 +15,10 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "npx concurrently \"npx tsx watch src/index.ts\" \"tsc --watch\""
+    "dev": "npx concurrently \"bun run --preload ./src/preload.ts --watch src/index.ts\" \"tsc --watch\""
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.106.0",
     "@types/mongoose": "^5.11.97",
     "dockerode": "^4.0.10",
     "drizzle-orm": "^0.45.2",

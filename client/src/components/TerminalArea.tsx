@@ -88,8 +88,8 @@ export default function TerminalArea({ projectId }: { projectId: string | null }
             theme: {
                 background: "#09090b",
                 foreground: "#d4d4d4",
-                cursor: "#22d3ee",
-                selectionBackground: "#0891b2",
+                cursor: "#A855F7",
+                selectionBackground: "#3f3f46",
             },
             fontFamily: "Menlo, Monaco, 'Courier New', monospace",
             fontSize: 13,
@@ -192,7 +192,7 @@ useEffect(() => {
                         <button
                             key={tab.id}
                             onClick={() => setActiveTabId(tab.id)}
-                            className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors text-xs font-medium uppercase tracking-wider whitespace-nowrap group ${activeTabId === tab.id ? "border-cyan-400 text-cyan-400 bg-cyan-400/5" : "border-transparent text-gray-500 hover:text-gray-300"}`}
+                            className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors text-xs font-medium uppercase tracking-wider whitespace-nowrap group ${activeTabId === tab.id ? "border-[#A855F7] text-zinc-200 bg-[#A855F7]/5" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}
                         >
                             {tab.type === "terminal" ? <TerminalIcon size={12} /> : <Globe size={12} />}
                             {tab.name}
@@ -208,14 +208,14 @@ useEffect(() => {
                     <div className="flex items-center gap-1 ml-2">
                         <button 
                             onClick={addTerminal}
-                            className="p-1.5 text-gray-500 hover:text-cyan-400 transition-colors"
+                            className="p-1.5 text-gray-500 hover:text-zinc-300 transition-colors"
                             title="New Terminal"
                         >
                             <TerminalIcon size={14} />
                         </button>
                         <button 
                             onClick={addPreview}
-                            className="p-1.5 text-gray-500 hover:text-cyan-400 transition-colors"
+                            className="p-1.5 text-gray-500 hover:text-zinc-300 transition-colors"
                             title="New Preview"
                         >
                             <Globe size={14} />
@@ -224,7 +224,7 @@ useEffect(() => {
 				</div>
 
                 <div className="flex items-center gap-2 pr-2 shrink-0">
-                    <span className={`w-1.5 h-1.5 rounded-full ${isConnected && !isStopped ? "bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.6)]" : isStopped ? "bg-yellow-500" : "bg-gray-600"}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full ${isConnected && !isStopped ? "bg-green-400" : isStopped ? "bg-yellow-500" : "bg-zinc-600"}`} />
                     {isStopped ? (
                         <button
                             onClick={handleStart}
@@ -277,7 +277,7 @@ useEffect(() => {
                                 </div>
                                 <div className="flex-1 bg-white p-8 overflow-y-auto w-full flex items-center justify-center">
                                     <div className="text-center">
-                                        <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500 mb-4">Preview Engine</h2>
+                                        <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-purple-400 mb-4">Preview Engine</h2>
                                         <p className="text-gray-500 text-sm">Status: <strong>ready</strong></p>
                                         <p className="text-gray-400 text-xs mt-2 font-mono">Service: {projectId}</p>
                                     </div>

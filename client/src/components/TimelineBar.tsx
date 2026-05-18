@@ -82,7 +82,7 @@ export default function TimelineBar({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 30 }}
-            className="absolute inset-x-0 bottom-0 z-30 bg-[#0d0d10] border-t border-[#27272a] shadow-[0_-8px_30px_rgba(0,0,0,0.6)] select-none"
+            className="absolute inset-x-0 bottom-0 z-30 bg-[#111113] border-t border-[#27272a] select-none"
         >
             {/* ── Header ── */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-[#1f1f24]">
@@ -198,7 +198,7 @@ export default function TimelineBar({
                                 />
                                 {/* Custom thumb rendered at the right position */}
                                 <div
-                                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-white border-2 border-[#A855F7] shadow-[0_0_10px_rgba(168,85,247,0.7)] z-20 pointer-events-none transition-all duration-75"
+                                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-[#fafafa] border-2 border-[#A855F7] z-20 pointer-events-none transition-all duration-75"
                                     style={{ left: `${pct}%` }}
                                 />
                             </div>
@@ -217,7 +217,7 @@ export default function TimelineBar({
                                 AI Agent
                             </span>
                             <span className="flex items-center gap-1">
-                                <span className="w-2.5 h-2.5 rounded-sm inline-block bg-cyan-400" />
+                                <span className="w-2.5 h-2.5 rounded-sm inline-block bg-zinc-400" />
                                 Human edit
                             </span>
                         </div>
@@ -230,7 +230,7 @@ export default function TimelineBar({
                 <div className="flex items-center justify-between px-4 pb-3 pt-1 gap-3">
                     <button
                         onClick={onRestore}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 hover:border-cyan-500/40 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-[11px] font-medium bg-[#1e1e24] hover:bg-[#27272a] text-zinc-300 hover:text-zinc-100 border border-[#27272a] hover:border-[#3f3f46] transition-colors"
                     >
                         <RotateCcw size={12} />
                         Restore This Version
