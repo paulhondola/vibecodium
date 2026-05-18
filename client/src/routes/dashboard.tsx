@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../contexts/AuthProvider";
-import { Loader2, X, ExternalLink } from "lucide-react";
+import { Loader2, X, ExternalLink, Search } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import CoderMatchModal from "../components/CoderMatchModal";
 import GamePIP from "../components/GamePIP";
@@ -54,7 +54,7 @@ function DashboardPage() {
   const [showCoderMatch, setShowCoderMatch] = useState(false);
   const [showGame, setShowGame] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'recent'>('all');
+  const [repoSearch, setRepoSearch] = useState('');
   const [deployedApps, setDeployedApps] = useState<DeployedApp[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -237,14 +237,15 @@ function DashboardPage() {
     return colors[language || ''] || '#8b949e';
   };
 
-  const getFilteredProjects = () => {
-    if (activeFilter === 'recent') {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      return savedProjects.filter(p => new Date(p.createdAt) > thirtyDaysAgo);
-    }
-    return savedProjects;
-  };
+  const recentProjects = [...savedProjects]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 3);
+
+  const filteredRepos = repos.filter(r =>
+    !repoSearch ||
+    r.name.toLowerCase().includes(repoSearch.toLowerCase()) ||
+    (r.description ?? '').toLowerCase().includes(repoSearch.toLowerCase())
+  );
 
   if (isLoading) {
     return (
@@ -404,6 +405,91 @@ function DashboardPage() {
           </div>
         )}
 
+        {/* Repository Search */}
+        <div className="relative mb-4">
+          <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+          <input
+            type="text"
+            value={repoSearch}
+            onChange={e => setRepoSearch(e.target.value)}
+            placeholder="Search repositories by name or description..."
+            className="w-full bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-[rgba(168,85,247,0.15)] rounded-xl pl-11 pr-4 py-3 text-sm text-[#f8fafc] placeholder:text-slate-600 focus:outline-none focus:border-[rgba(168,85,247,0.5)] transition-colors font-['JetBrains_Mono']"
+          />
+        </div>
+
+        {/* Inline Search Results */}
+        {repoSearch.trim() && (
+          <div className="mb-16">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/5">
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                {filteredRepos.length} result{filteredRepos.length !== 1 ? 's' : ''} for &ldquo;{repoSearch}&rdquo;
+              </span>
+              <button
+                onClick={() => setRepoSearch('')}
+                className="text-[9px] font-black text-slate-600 hover:text-slate-300 uppercase tracking-widest transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+            {filteredRepos.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-slate-600">
+                <span className="material-symbols-outlined text-3xl mb-2 opacity-30">search_off</span>
+                <p className="font-['Space_Grotesk'] text-xs uppercase tracking-widest">No repositories match</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                {filteredRepos.map(repo => {
+                  const isImporting = importingRepoId === repo.id;
+                  const languageColor = getLanguageColor(repo.language);
+                  return (
+                    <div
+                      key={repo.id}
+                      className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-[rgba(168,85,247,0.1)] shadow-[0_4px_16px_0_rgba(0,0,0,0.3)] flex items-center px-5 py-4 rounded-xl group transition-all duration-300 relative overflow-hidden hover:border-[rgba(168,85,247,0.5)] hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-[rgba(16,185,129,0.05)] flex items-center justify-center border border-[rgba(16,185,129,0.2)] mr-4 shrink-0">
+                        <span className="material-symbols-outlined text-[#10B981] text-lg">code</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-['Space_Grotesk'] font-bold text-sm text-[#f8fafc] tracking-tight truncate group-hover:text-[#10B981] transition-colors">
+                          {repo.full_name}
+                        </h4>
+                        <div className="flex items-center gap-4 mt-1 font-['JetBrains_Mono'] text-[9px] text-slate-500 uppercase tracking-widest">
+                          {repo.language && (
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: languageColor }} />
+                              {repo.language}
+                            </span>
+                          )}
+                          <span>Updated {getTimeDiff(repo.updated_at)}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleImport(repo)}
+                        disabled={isImporting || importingRepoId !== null}
+                        className={`ml-4 px-5 py-2 font-black text-[10px] uppercase tracking-[0.2em] rounded-lg transition-all shrink-0 ${
+                          isImporting
+                            ? "bg-[#A855F7]/20 text-[#A855F7] border border-[#A855F7]/30 cursor-wait"
+                            : importingRepoId !== null
+                              ? "bg-white/5 text-slate-600 border border-transparent cursor-not-allowed"
+                              : "bg-[#A855F7] text-[#02040a] hover:scale-105 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+                        }`}
+                      >
+                        {isImporting ? (
+                          <span className="flex items-center gap-1.5">
+                            <Loader2 size={12} className="animate-spin" /> Loading...
+                          </span>
+                        ) : 'Import'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!repoSearch.trim() && <div className="mb-16" />}
+
         {/* Recently Opened Section */}
         {(isFetchingExternal || savedProjects.length > 0) && (
           <section className="mb-24" ref={recentRef}>
@@ -413,17 +499,9 @@ function DashboardPage() {
                   <span className="material-symbols-outlined text-[#3B82F6]" style={{ fontVariationSettings: "'FILL' 1" }}>folder_open</span>
                 </div>
                 <h2 className="text-xs font-['Space_Grotesk'] font-black uppercase tracking-[0.5em] text-[rgba(248,250,252,0.8)]">
-                  {activeFilter === 'recent' ? 'Recently Opened (Last 30 Days)' : 'Your Workspaces'}
+                  Recent Workspaces
                 </h2>
               </div>
-              {activeFilter === 'recent' && (
-                <button
-                  onClick={() => setActiveFilter('all')}
-                  className="text-[9px] font-black uppercase tracking-[0.4em] text-[#3B82F6] hover:text-white transition-all border-b border-transparent hover:border-[#3B82F6] cursor-pointer"
-                >
-                  Show All
-                </button>
-              )}
             </div>
             {isFetchingExternal ? (
               <div className="flex flex-col items-center justify-center py-12">
@@ -432,7 +510,7 @@ function DashboardPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {getFilteredProjects().slice(0, 5).map(project => {
+                {recentProjects.map(project => {
                   return (
                     <div
                       key={project._id}
@@ -544,12 +622,14 @@ function DashboardPage() {
 
         {/* GitHub Repositories Section */}
         <section ref={reposRef}>
-          <div className="flex items-center justify-between mb-10">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-5">
               <div className="w-10 h-10 rounded bg-[rgba(16,185,129,0.1)] flex items-center justify-center border border-[rgba(16,185,129,0.2)]">
                 <span className="material-symbols-outlined text-[#10B981]" style={{ fontVariationSettings: "'FILL' 1" }}>cloud_sync</span>
               </div>
-              <h2 className="text-xs font-['Space_Grotesk'] font-black uppercase tracking-[0.5em] text-[rgba(248,250,252,0.8)]">GitHub Repositories</h2>
+              <h2 className="text-xs font-['Space_Grotesk'] font-black uppercase tracking-[0.5em] text-[rgba(248,250,252,0.8)]">
+                GitHub Repositories
+              </h2>
             </div>
             <button
               onClick={() => setShowCreateModal(true)}
@@ -559,6 +639,7 @@ function DashboardPage() {
               Create New
             </button>
           </div>
+
           {isFetchingRepos ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Loader2 size={40} className="animate-spin text-[#10B981] mb-6" />

@@ -5,7 +5,6 @@ import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
 import SecurityScanModal from "./SecurityScanModal";
 import CommunityHelpModal from "./CommunityHelpModal";
-import RubberDuck from "./RubberDuck";
 import WhiteboardArea from "./WhiteboardArea";
 import MatrixRain from "./MatrixRain";
 import SpotifySidebarPanel from "./SpotifySidebarPanel";
@@ -13,10 +12,10 @@ import YouTubeSidebarPanel from "./YouTubeSidebarPanel";
 import ReactionOverlay from "./ReactionOverlay";
 import CodeRoastModal from "./CodeRoastModal";
 import { API_BASE } from "@/lib/config";
-import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, Wrench, Key, Rocket, ExternalLink, X, FolderOpen, GitBranch, HelpCircle, Sparkles, Music, Youtube } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, Wrench, Key, Rocket, ExternalLink, X, FolderOpen, GitBranch, HelpCircle, Sparkles, Music, Youtube, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
-import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useNavigate } from "@tanstack/react-router";
 import { SocketProvider, useSocket } from "../contexts/SocketProvider";
@@ -27,6 +26,18 @@ export interface ProjectFile {
     id: string;
     path: string;
     content: string | null;
+}
+
+function highlightMatch(text: string, query: string) {
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) return <>{text}</>;
+    return (
+        <>
+            {text.slice(0, idx)}
+            <mark className="bg-yellow-400/25 text-yellow-200 not-italic rounded-[2px] px-px">{text.slice(idx, idx + query.length)}</mark>
+            {text.slice(idx + query.length)}
+        </>
+    );
 }
 
 function SidebarTabBtn({ icon, label, active, onClick, activeColor = '#A855F7' }: {
@@ -63,8 +74,9 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [showPowerMode, setShowPowerMode] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showSecurityScan, setShowSecurityScan] = useState(false);
-    const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'git' | 'tools' | 'fun' | 'help' | 'spotify' | 'youtube'>('explorer');
+    const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'search' | 'git' | 'tools' | 'fun' | 'help' | 'spotify' | 'youtube'>('explorer');
     const [commitMessage, setCommitMessage] = useState("");
+    const [fileSearchQuery, setFileSearchQuery] = useState("");
     const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
     const [showEditorGame, setShowEditorGame] = useState(false);
 
@@ -268,6 +280,21 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const fileSearchResults = useMemo(() => {
+        const q = fileSearchQuery.trim().toLowerCase();
+        if (q.length < 2) return [];
+        return files
+            .filter(f => f.content && f.content.toLowerCase().includes(q))
+            .map(f => {
+                const lines = (f.content || '').split('\n');
+                const matches = lines
+                    .map((text, i) => ({ lineNumber: i + 1, text: text.trim() }))
+                    .filter(({ text }) => text.toLowerCase().includes(q))
+                    .slice(0, 4);
+                return { file: f, matches };
+            });
+    }, [files, fileSearchQuery]);
+
     const handleSave = async (message?: string) => {
         if (!projectId || !isAuthenticated) return;
         setIsSaving(true);
@@ -459,6 +486,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                 {/* Activity Bar — VS Code-style icon strip */}
                                 <div className="w-10 flex flex-col shrink-0 border-r border-[#27272a] select-none py-1">
                                     <SidebarTabBtn icon={<FolderOpen size={17} />} label="Explorer" active={activeSidebarTab === 'explorer'} onClick={() => setActiveSidebarTab('explorer')} />
+                                    <SidebarTabBtn icon={<Search size={17} />} label="Search" active={activeSidebarTab === 'search'} onClick={() => setActiveSidebarTab('search')} />
                                     <SidebarTabBtn icon={<GitBranch size={17} />} label="Git" active={activeSidebarTab === 'git'} onClick={() => setActiveSidebarTab('git')} />
                                     <SidebarTabBtn icon={<Wrench size={17} />} label="Tools" active={activeSidebarTab === 'tools'} onClick={() => setActiveSidebarTab('tools')} />
                                     <SidebarTabBtn icon={<Sparkles size={17} />} label="Fun" active={activeSidebarTab === 'fun'} onClick={() => setActiveSidebarTab('fun')} />
@@ -472,6 +500,60 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                 <div className="flex-1 overflow-hidden flex flex-col">
                                     {activeSidebarTab === 'explorer' && (
                                         <FileExplorer files={files} activeFile={activeFile} onSelect={handleSelectFile} projectId={projectId} token={agentToken} onFilesChange={setFiles} />
+                                    )}
+                                    {activeSidebarTab === 'search' && (
+                                        <div className="flex flex-col h-full overflow-hidden">
+                                            <div className="px-3 pt-3 pb-2 border-b border-[#27272a] shrink-0 space-y-2">
+                                                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Search in Files</p>
+                                                <div className="relative">
+                                                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600 pointer-events-none" />
+                                                    <input
+                                                        autoFocus
+                                                        value={fileSearchQuery}
+                                                        onChange={e => setFileSearchQuery(e.target.value)}
+                                                        placeholder="Search text..."
+                                                        className="w-full bg-[#111113] border border-[#27272a] focus:border-purple-500/40 rounded-[5px] pl-7 pr-2.5 py-1.5 text-xs text-zinc-300 placeholder:text-zinc-600 focus:outline-none transition-colors"
+                                                    />
+                                                </div>
+                                                {fileSearchQuery.trim().length >= 2 && (
+                                                    <p className="text-[10px] text-zinc-600">
+                                                        {fileSearchResults.length === 0 ? 'No results' : `${fileSearchResults.length} file${fileSearchResults.length !== 1 ? 's' : ''}`}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto">
+                                                {fileSearchResults.length === 0 && fileSearchQuery.trim().length >= 2 && (
+                                                    <div className="flex flex-col items-center justify-center h-32 text-zinc-600">
+                                                        <Search size={20} className="mb-2 opacity-30" />
+                                                        <p className="text-[10px]">No files match</p>
+                                                    </div>
+                                                )}
+                                                {fileSearchResults.map(({ file, matches }) => (
+                                                    <div key={file.id} className="border-b border-[#27272a] last:border-b-0">
+                                                        <button
+                                                            onClick={() => handleSelectFile(file)}
+                                                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[#1e1e24] transition-colors text-left group"
+                                                        >
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-[#A855F7] shrink-0" />
+                                                            <span className="text-[11px] font-medium text-zinc-300 truncate group-hover:text-zinc-100">
+                                                                {file.path.split('/').pop()}
+                                                            </span>
+                                                            <span className="text-[10px] text-zinc-600 truncate shrink-0 ml-auto">{matches.length} match{matches.length !== 1 ? 'es' : ''}</span>
+                                                        </button>
+                                                        {matches.map(({ lineNumber, text }) => (
+                                                            <button
+                                                                key={lineNumber}
+                                                                onClick={() => handleSelectFile(file)}
+                                                                className="w-full flex items-baseline gap-2 px-3 py-1 hover:bg-[#1e1e24] transition-colors text-left"
+                                                            >
+                                                                <span className="text-[9px] text-zinc-600 font-mono w-6 shrink-0 text-right">{lineNumber}</span>
+                                                                <span className="text-[10px] text-zinc-500 font-mono truncate">{highlightMatch(text, fileSearchQuery)}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     )}
                                     {activeSidebarTab === 'git' && (
                                         <div className="flex flex-col h-full overflow-hidden">
@@ -683,8 +765,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                 </PanelGroup>
 			</div>
             
-            <RubberDuck />
-
             {/* Token Requirement Prompt */}
             <AnimatePresence>
                 {tokenPrompt && (
