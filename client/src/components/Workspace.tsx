@@ -10,10 +10,11 @@ import WhiteboardArea from "./WhiteboardArea";
 import MatrixRain from "./MatrixRain";
 import SpotifySidebarPanel from "./SpotifySidebarPanel";
 import YouTubeSidebarPanel from "./YouTubeSidebarPanel";
+import InstagramSidebarPanel from "./InstagramSidebarPanel";
 import ReactionOverlay from "./ReactionOverlay";
 import CodeRoastModal from "./CodeRoastModal";
 import { API_BASE } from "@/lib/config";
-import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, Wrench, Key, Rocket, ExternalLink, X, FolderOpen, GitBranch, HelpCircle, Sparkles, Music, Youtube } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, Wrench, Key, Rocket, ExternalLink, X, FolderOpen, GitBranch, HelpCircle, Sparkles, Music, Youtube, Instagram } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
@@ -63,7 +64,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [showPowerMode, setShowPowerMode] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showSecurityScan, setShowSecurityScan] = useState(false);
-    const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'git' | 'tools' | 'fun' | 'help' | 'spotify' | 'youtube'>('explorer');
+    const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'git' | 'tools' | 'fun' | 'help' | 'spotify' | 'youtube' | 'instagram'>('explorer');
     const [commitMessage, setCommitMessage] = useState("");
     const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
     const [showEditorGame, setShowEditorGame] = useState(false);
@@ -467,6 +468,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                     <div className="border-t border-[#27272a] my-1" />
                                     <SidebarTabBtn icon={<Music size={17} />} label="Spotify" active={activeSidebarTab === 'spotify'} activeColor="#1db954" onClick={() => setActiveSidebarTab('spotify')} />
                                     <SidebarTabBtn icon={<Youtube size={17} />} label="YouTube" active={activeSidebarTab === 'youtube'} activeColor="#FF0000" onClick={() => setActiveSidebarTab('youtube')} />
+                                    <SidebarTabBtn icon={<Instagram size={17} />} label="Instagram" active={activeSidebarTab === 'instagram'} activeColor="#E1306C" onClick={() => setActiveSidebarTab('instagram')} />
                                 </div>
                                 {/* Tab Content */}
                                 <div className="flex-1 overflow-hidden flex flex-col">
@@ -618,6 +620,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                     )}
                                     {activeSidebarTab === 'spotify' && <SpotifySidebarPanel />}
                                     {activeSidebarTab === 'youtube' && <YouTubeSidebarPanel />}
+                                    {activeSidebarTab === 'instagram' && <InstagramSidebarPanel />}
                                 </div>
                             </Panel>
                             <PanelResizeHandle className="w-1 hover:bg-purple-500/30 transition-colors z-50 cursor-col-resize" />
