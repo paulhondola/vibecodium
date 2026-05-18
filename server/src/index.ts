@@ -3,8 +3,9 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { serveStatic } from "hono/bun";
 import Docker from "dockerode";
-import { Writable } from "stream";
-import type { ExecuteRequest, ExecuteResponse } from "shared";
+
+const docker = new Docker();
+
 import gitRoutes from "./routes/git";
 import projectsRoutes from "./routes/projects";
 import sessionsRoutes from "./routes/sessions";
@@ -18,247 +19,43 @@ import timelineRoutes from "./routes/timeline";
 import { syncProjectFilesToDisk } from "./utils/sync";
 import { supabase } from "./db/supabase";
 import * as nodePath from "node:path";
-import { scanCode, hasCriticalVulnerability } from "./security/scanner";
+import llmRoutes from "./routes/llm";
+import executeRoutes from "./routes/execute";
 
-const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
-const LLM_KEY = process.env.LLM_KEY ?? "";
-const LLM_MODEL = process.env.LLM_MODEL ?? "deepseek-chat";
 
-const LOCAL_BASE_URL = "http://localhost:1234/v1";
-const LOCAL_MODEL = process.env.LOCAL_MODEL ?? "qwen2.5-coder-32b-instruct";
-
-async function pingProvider(baseURL: string, apiKey: string, model: string) {
-	const res = await fetch(`${baseURL}/chat/completions`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${apiKey}`,
-		},
-		body: JSON.stringify({
-			model,
-			messages: [{ role: "user", content: "Reply with exactly: pong" }],
-			max_tokens: 10,
-		}),
-		signal: AbortSignal.timeout(8_000),
-	});
-
-	if (!res.ok) throw new Error(await res.text());
-
-	const data = await res.json() as { choices: { message: { content: string } }[] };
-	return data.choices[0]?.message?.content?.trim();
-}
-
-const docker = new Docker();
-
-const LANGUAGE_IMAGES: Record<string, string> = {
-	python: "vibecodium-python:latest",
-	node: "vibecodium-node:latest",
-	"c++": "vibecodium-cpp:latest",
-	rust: "vibecodium-rust:latest"
-};
-
-const EXEC_COMMANDS: Record<string, () => string[]> = {
-	python: () => ["python", "-c", "import os\nexec(os.environ.get('USER_CODE', ''))"],
-	node: () => ["node", "-e", "eval(process.env.USER_CODE)"],
-	"c++": () => ["sh", "-c", "printenv USER_CODE > main.cpp && g++ main.cpp && ./a.out"],
-	rust: () => ["sh", "-c", "printenv USER_CODE > main.rs && rustc main.rs && ./main"] 
-};
 
 export const app = new Hono()
-	.onError((err, c) => {
-		console.error("Unhandled error:", err);
-		return c.json({ success: false, error: "Internal server error" }, 500);
-	})
-	.use(logger())
-	.use(cors({
-		origin: "*",
-		allowHeaders: ["*"],
-		allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-		credentials: false,
-	}))
-	.route("/api/git", gitRoutes)
-	.route("/api/projects", projectsRoutes)
-	.route("/api/sessions", sessionsRoutes)
-	.route("/api/reels", reelsRoutes)
-	.route("/api/agent", agentRoutes)
-	.route("/api/github", githubRoutes)
-	.route("/api/users", usersRouter)
-	.route("/api/deploy", deployRoutes)
+    .onError((err, c) => {
+        console.error("Unhandled error:", err);
+        return c.json({ success: false, error: "Internal server error" }, 500);
+    })
+    .use(logger())
+    .use(cors({
+        origin: "*",
+        allowHeaders: ["*"],
+        allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        credentials: false,
+    }))
+    .route("/api/git", gitRoutes)
+    .route("/api/projects", projectsRoutes)
+    .route("/api/sessions", sessionsRoutes)
+    .route("/api/reels", reelsRoutes)
+    .route("/api/agent", agentRoutes)
+    .route("/api/github", githubRoutes)
+    .route("/api/users", usersRouter)
+    .route("/api/deploy", deployRoutes)
     .route("/api/help", helpRoutes)
     .route("/api/timeline", timelineRoutes)
-	// Serve static assets from the client dist folder
-	.use("/assets/*", serveStatic({ root: "../client/dist" }))
-	.use("/favicon.ico", serveStatic({ path: "../client/dist/favicon.ico" }))
-	.use("/vibecodium_icon.svg", serveStatic({ path: "../client/dist/vibecodium_icon.svg" }))
-	.use("/vite.svg", serveStatic({ path: "../client/dist/vite.svg" }))
-	.get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
+    .route("/api", llmRoutes)
+    .route("/execute", executeRoutes)
+    // Serve static assets from the client dist folder
+    .use("/assets/*", serveStatic({ root: "../client/dist" }))
+    .use("/favicon.ico", serveStatic({ path: "../client/dist/favicon.ico" }))
+    .use("/vibecodium_icon.svg", serveStatic({ path: "../client/dist/vibecodium_icon.svg" }))
+    .use("/vite.svg", serveStatic({ path: "../client/dist/vite.svg" }))
+    .get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
 
-	// Security Scanning Endpoint
-	.post("/api/scan", async (c) => {
-		try {
-			const body = await c.req.json<{ projectId: string }>();
-			if (!body.projectId) {
-				return c.json({ success: false, error: "Missing projectId" }, 400);
-			}
 
-		const { data: projectFiles, error: fErr } = await supabase
-				.from("files")
-				.select("path, content")
-				.eq("project_id", body.projectId);
-
-			if (fErr) throw fErr;
-
-			const filesToScan = (projectFiles ?? [])
-				.filter((f) => f.content)
-				.map((f) => ({ path: f.path, content: f.content! }));
-
-			const scanResult = await scanCode(filesToScan);
-
-			return c.json({
-				success: true,
-				scan: scanResult,
-			});
-		} catch (error: any) {
-			console.error("Security scan error:", error);
-			return c.json({ success: false, error: error.message }, 500);
-		}
-	})
-	// Roast My Code Endpoint
-	.post("/api/roast", async (c) => {
-		try {
-			const body = await c.req.json<{ code: string; fileName?: string }>();
-			if (!body.code) return c.json({ success: false, error: "No code to roast" }, 400);
-
-			if (!LLM_KEY) {
-				// Fallback roast when no LLM key is configured
-				const fallbacks = [
-					"I've seen better code in COBOL tutorials from 1985. Your variable names are so cryptic, even you don't know what they mean anymore. The indentation looks like you coded this during an earthquake. Congrats on shipping it though, I guess.",
-					"This code has more nested callbacks than a Russian doll convention. Stack Overflow would close your question as 'unclear what you're asking'. Your future self will hate you for this, as they should.",
-					"Whoever wrote this comment — '// TODO: fix later' — that was 3 years ago, wasn't it? The cyclomatic complexity of this file is higher than your coffee intake, and that's saying something.",
-				];
-				return c.json({ success: true, roast: fallbacks[Math.floor(Math.random() * fallbacks.length)] });
-			}
-
-			const systemPrompt = `You are a savage but ultimately well-meaning senior software engineer with 20 years of experience and zero patience for bad code. You will roast the submitted code mercilessly but with humor and specificity. Point out real issues (bad naming, complexity, potential bugs, style violations, missing error handling, etc.) in an entertaining, exaggerated, comedic way. Keep it under 200 words. Don't be cruel about the person, only the code. End with one genuine small compliment buried in sarcasm.`;
-
-			const res = await fetch(`${LLM_BASE_URL}/chat/completions`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json", Authorization: `Bearer ${LLM_KEY}` },
-				body: JSON.stringify({
-					model: LLM_MODEL,
-					messages: [
-						{ role: "system", content: systemPrompt },
-						{ role: "user", content: `Roast this code from file "${body.fileName || "unknown"}":\n\n\`\`\`\n${body.code.slice(0, 3000)}\n\`\`\`` },
-					],
-					max_tokens: 350,
-					temperature: 0.9,
-				}),
-				signal: AbortSignal.timeout(20_000),
-			});
-
-			if (!res.ok) {
-				const err = await res.text();
-				return c.json({ success: false, error: err }, 500);
-			}
-
-			const data = await res.json() as { choices: { message: { content: string } }[] };
-			return c.json({ success: true, roast: data.choices[0]?.message?.content?.trim() });
-		} catch (error: any) {
-			console.error("Roast error:", error);
-			return c.json({ success: false, error: error.message }, 500);
-		}
-	})
-    .get("/api/ping-llm", async (c) => {
-        if (!LLM_KEY) return c.json({ success: false, error: "LLM_KEY is not set" }, 500);
-        const res = await fetch(`${LLM_BASE_URL}/chat/completions`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${LLM_KEY}` },
-            body: JSON.stringify({ model: LLM_MODEL, messages: [{ role: "user", content: "Reply with exactly: pong" }], max_tokens: 10 }),
-            signal: AbortSignal.timeout(15_000),
-        });
-        if (!res.ok) {
-            const error = await res.text();
-            return c.json({ success: false, error }, res.status as any);
-        }
-        const data = await res.json() as { choices: { message: { content: string } }[] };
-        return c.json({ success: true, model: LLM_MODEL, reply: data.choices[0]?.message?.content?.trim() });
-    })
-    .get("/api/ping-llm/auto", async (c) => {
-        try {
-            const reply = await pingProvider(LOCAL_BASE_URL, "lm-studio", LOCAL_MODEL);
-            return c.json({ success: true, provider: "local", model: LOCAL_MODEL, reply });
-        } catch (localErr) {
-            if (!LLM_KEY) return c.json({ success: false, error: "Local LM Studio unreachable and LLM_KEY is not set" }, 503);
-            try {
-                const reply = await pingProvider(LLM_BASE_URL, LLM_KEY, LLM_MODEL);
-                return c.json({ success: true, provider: "deepseek", model: LLM_MODEL, reply });
-            } catch (remoteErr) {
-                return c.json({ success: false, error: "Both providers failed", local: String(localErr), deepseek: String(remoteErr) }, 503);
-            }
-        }
-    })
-    .post("/execute", async (c) => {
-        try {
-            const body = await c.req.json<ExecuteRequest>();
-            if (!body.language || !body.version || !body.code) return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: "Missing language, version, or code." }, 400);
-
-			// Security scan before execution
-			if (hasCriticalVulnerability(body.code)) {
-				return c.json<ExecuteResponse>({
-					success: false,
-					stdout: "",
-					stderr: "🛡️ SECURITY BLOCK: Critical vulnerability detected in code.\nExecution refused for safety.\n\nRun a full scan for details.",
-					error: "Security policy violation"
-				}, 403);
-			}
-            
-            const imageName = LANGUAGE_IMAGES[body.language];
-            const getCmd = EXEC_COMMANDS[body.language];
-            if (!imageName || !getCmd) return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: `Unsupported language: ${body.language}` }, 400);
-
-            let cmd = getCmd();
-            let hostConfig: any = { Memory: 2048 * 1024 * 1024, NetworkMode: "none" };
-            const reqBody = body as any;
-            
-            if (reqBody.projectId && reqBody.entryFile) {
-                const targetDir = await syncProjectFilesToDisk(reqBody.projectId);
-                hostConfig.Binds = [`${targetDir}:/app`];
-                if (body.language === "node") cmd = ["node", `/app/${reqBody.entryFile}`];
-                if (body.language === "python") cmd = ["python", `/app/${reqBody.entryFile}`];
-                if (body.language === "c++") cmd = ["sh", "-c", `cd /app && g++ ${reqBody.entryFile} && ./a.out`];
-                if (body.language === "rust") cmd = ["sh", "-c", `cd /app && rustc ${reqBody.entryFile} && ./main`];
-            }
-
-            const container = await docker.createContainer({
-                Image: imageName, Cmd: cmd, Env: [`USER_CODE=${body.code}`],
-                HostConfig: hostConfig, Tty: false
-            });
-
-            try {
-                const stream = await container.attach({ stream: true, stdout: true, stderr: true });
-                let stdoutData = ""; let stderrData = "";
-                container.modem.demuxStream(stream, new Writable({ write(c, e, n) { stdoutData += c.toString(); n(); } }), new Writable({ write(c, e, n) { stderrData += c.toString(); n(); } }));
-                await container.start();
-
-                const waitPromise = container.wait();
-                let timeoutTrigged = false;
-                const timeoutPromise = new Promise<{ StatusCode: number }>((resolve) => setTimeout(() => { timeoutTrigged = true; resolve({ StatusCode: 137 }); }, 3000));
-                
-                const waitResult = await Promise.race([waitPromise, timeoutPromise]);
-                if (timeoutTrigged) {
-                    await container.kill().catch(() => {});
-                    return c.json<ExecuteResponse>({ success: false, stdout: stdoutData, stderr: stderrData, error: "Execution Timeout: Killed." });
-                }
-                return c.json<ExecuteResponse>({ success: waitResult.StatusCode === 0, stdout: stdoutData, stderr: stderrData, compileOutput: "" });
-            } finally {
-                await container.remove({ force: true }).catch(() => {});
-            }
-        } catch (err: any) {
-            console.error(err);
-            if (err.statusCode === 404) return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: "Docker image missing!" }, 500);
-            return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: "Internal Error executing code." }, 500);
-        }
-    })
     .get("*", serveStatic({ path: "../client/dist/index.html" }));
 
 // ──────────────────────────────────────────
@@ -267,12 +64,12 @@ export const app = new Hono()
 
 // Extension → Docker image mapping (uses local custom images)
 const EXT_TO_IMAGE: Record<string, string> = {
-    ".py":  "vibecodium-python:latest",
-    ".rs":  "vibecodium-rust:latest",
+    ".py": "vibecodium-python:latest",
+    ".rs": "vibecodium-rust:latest",
     ".cpp": "vibecodium-cpp:latest",
-    ".cc":  "vibecodium-cpp:latest",
-    ".c":   "vibecodium-cpp:latest",
-    ".go":  "vibecodium-go:latest",
+    ".cc": "vibecodium-cpp:latest",
+    ".c": "vibecodium-cpp:latest",
+    ".go": "vibecodium-go:latest",
 };
 
 function detectTerminalImage(filePaths: string[]): string {
@@ -290,12 +87,12 @@ interface TerminalRoom {
     sink: import("bun").FileSink; // typed stdin pipe
 }
 
-const termClients     = new Map<string, Set<import("bun").ServerWebSocket<WSData>>>();
-const termRooms       = new Map<string, TerminalRoom>();
+const termClients = new Map<string, Set<import("bun").ServerWebSocket<WSData>>>();
+const termRooms = new Map<string, TerminalRoom>();
 const termLineBuffers = new Map<string, string>(); // per-room line edit buffer
 
 export function broadcastToTerminal(roomId: string, message: string) {
-    termClients.get(roomId)?.forEach(c => { try { c.send(message); } catch (_) {} });
+    termClients.get(roomId)?.forEach(c => { try { c.send(message); } catch (_) { } });
 }
 
 // Per project+file event counter for checkpoint marking.
@@ -303,20 +100,20 @@ export function broadcastToTerminal(roomId: string, message: string) {
 const timelineEventCounters = new Map<string, number>(); // key: `${projectId}::${filePath}`
 
 async function stopTerminal(roomId: string): Promise<void> {
-    const room    = termRooms.get(roomId);
+    const room = termRooms.get(roomId);
     const clients = termClients.get(roomId);
     termRooms.delete(roomId);
     termClients.delete(roomId);
     termLineBuffers.delete(roomId);
 
     clients?.forEach(c => {
-        try { c.send("\r\n\x1b[33m[Container stopped]\x1b[0m\r\n"); } catch (_) {}
+        try { c.send("\r\n\x1b[33m[Container stopped]\x1b[0m\r\n"); } catch (_) { }
     });
 
     if (room) {
-        try { room.proc?.kill(); } catch (_) {}
-        try { await room.container.stop({ t: 5 }); } catch (_) {}
-        try { await room.container.remove(); } catch (_) {}
+        try { room.proc?.kill(); } catch (_) { }
+        try { await room.container.stop({ t: 5 }); } catch (_) { }
+        try { await room.container.remove(); } catch (_) { }
         console.log(`[Terminal] Cleaned up container for room ${roomId}`);
     }
 }
@@ -379,10 +176,10 @@ const roomHosts = new Map<string, string>(); // projectId -> hostClientId
 const activeClients = new Map<string, WSData>(); // clientId -> WSData
 
 export default {
-	port: process.env.PORT || 3000,
-	
+    port: process.env.PORT || 3000,
+
     // Manual routing wrapper around Hono to sniff WS connections instantly
-	async fetch(req: Request, server: import("bun").Server<WSData>) {
+    async fetch(req: Request, server: import("bun").Server<WSData>) {
         const url = new URL(req.url);
 
         // Terminals — Docker-backed collaborative sandbox
@@ -420,10 +217,10 @@ export default {
 
         // Standard Hono API
         return app.fetch(req, server);
-	},
+    },
 
     // Raw Bun WS Interface
-	websocket: {
+    websocket: {
         open(ws: import("bun").ServerWebSocket<WSData>) {
             const data = ws.data;
             if (data.type === "terminal") {
@@ -443,41 +240,19 @@ export default {
                 // ── First client: bootstrap Docker container ──
                 (async () => {
                     const broadcastToRoom = (msg: string) =>
-                        termClients.get(roomId)?.forEach(c => { try { c.send(msg); } catch (_) {} });
+                        termClients.get(roomId)?.forEach(c => { try { c.send(msg); } catch (_) { } });
 
                     let container: Docker.Container | null = null;
                     try {
                         broadcastToRoom("\x1b[1;36m[VibeCodium]\x1b[0m Syncing project files...\r\n");
                         const hostDir = await syncProjectFilesToDisk(roomId);
 
-                        // Load file list for language detection + security scan
+                        // Load file list for language detection
                         const { data: projectFiles } = await supabase
                             .from("files")
                             .select("path, content")
                             .eq("project_id", roomId);
 
-                        // Security scan — block before any container starts
-						const scanResult = await scanCode(
-							(projectFiles ?? [])
-								.filter((f) => f.content)
-								.map((f) => ({ path: f.path, content: f.content! }))
-						);
-
-						if (!scanResult.safe) {
-							broadcastToRoom("\x1b[1;31m[🛡️ SECURITY BLOCK]\x1b[0m Critical vulnerabilities detected:\r\n\r\n");
-							scanResult.vulnerabilities
-								.filter((v) => v.severity === "critical" || v.severity === "high")
-								.forEach((v) => {
-									broadcastToRoom(`  \x1b[31m● ${v.severity.toUpperCase()}\x1b[0m: ${v.description}\r\n`);
-									broadcastToRoom(`    Code: ${v.code}\r\n`);
-									broadcastToRoom(`    Fix: ${v.recommendation}\r\n\r\n`);
-								});
-							broadcastToRoom("\x1b[33mExecution refused for safety. Fix issues and try again.\x1b[0m\r\n");
-							termClients.get(roomId)?.forEach(c => c.close(1008, "Security policy violation"));
-							return;
-						}
-
-						broadcastToRoom(`\x1b[32m✓ Security scan passed\x1b[0m (${scanResult.scannedFiles} files, ${scanResult.scannedLines} lines, ${scanResult.scanDuration}ms)\r\n`);
 
                         // Pick image from file extensions
                         const image = detectTerminalImage((projectFiles ?? []).map(f => f.path));
@@ -490,7 +265,7 @@ export default {
                             await new Promise<void>((res, rej) => {
                                 docker.pull(image, (err: Error | null, pullStream: any) => {
                                     if (err) return rej(err);
-                                    pullStream.on("data", () => {}); // drain
+                                    pullStream.on("data", () => { }); // drain
                                     pullStream.on("end", res);
                                     pullStream.on("error", rej);
                                 });
@@ -554,11 +329,11 @@ export default {
                     } catch (e: any) {
                         // Cleanup partially-created container on error
                         if (container) {
-                            try { await container.stop({ t: 0 }); } catch (_) {}
-                            try { await container.remove(); } catch (_) {}
+                            try { await container.stop({ t: 0 }); } catch (_) { }
+                            try { await container.remove(); } catch (_) { }
                         }
                         termClients.get(roomId)?.forEach(c => {
-                            try { c.send(`\x1b[1;31m[Error]\x1b[0m ${e.message}\r\n`); } catch (_) {}
+                            try { c.send(`\x1b[1;31m[Error]\x1b[0m ${e.message}\r\n`); } catch (_) { }
                             c.close(1011, e.message);
                         });
                         console.error("[Terminal] Container start failed:", e.message);
@@ -597,7 +372,7 @@ export default {
                 type: "user_joined",
                 user: { id: data.clientId, name: data.userName, color: data.color, isHost: data.isHost }
             }));
-            
+
             console.log(`[WS] ${data.userName} joined ${data.projectId} (Host: ${data.isHost})`);
         },
 
@@ -621,7 +396,7 @@ export default {
                 // Server-side line buffering (no PTY = no kernel line discipline)
                 // We echo characters locally and only flush the line to the shell on Enter.
                 const broadcastAll = (msg: string) =>
-                    termClients.get(ws.data.projectId)?.forEach(c => { try { c.send(msg); } catch (_) {} });
+                    termClients.get(ws.data.projectId)?.forEach(c => { try { c.send(msg); } catch (_) { } });
 
                 const roomId = ws.data.projectId;
 
@@ -630,7 +405,7 @@ export default {
                     const line = (termLineBuffers.get(roomId) ?? "") + "\n";
                     termLineBuffers.set(roomId, "");
                     broadcastAll("\r\n");
-                    try { room.sink.write(line); } catch (_) {}
+                    try { room.sink.write(line); } catch (_) { }
                 } else if (message === "\x7f" || message === "\b") {
                     // Backspace — pop last char from buffer, erase on screen
                     const buf = termLineBuffers.get(roomId) ?? "";
@@ -640,10 +415,10 @@ export default {
                     }
                 } else if (message.startsWith("\x1b")) {
                     // Escape sequences (arrow keys, etc.) — forward directly, don't buffer
-                    try { room.sink.write(message); } catch (_) {}
+                    try { room.sink.write(message); } catch (_) { }
                 } else if (message.length === 1 && message.charCodeAt(0) < 32) {
                     // Other control chars (Ctrl+C, Ctrl+D, etc.) — forward directly
-                    try { room.sink.write(message); } catch (_) {}
+                    try { room.sink.write(message); } catch (_) { }
                 } else {
                     // Printable chars — append to buffer and echo
                     const buf = termLineBuffers.get(roomId) ?? "";
@@ -748,8 +523,8 @@ export default {
                         ...payload
                     };
                     delete outbound.type; // strip generic type
-                    outbound.type = outType; 
-                    
+                    outbound.type = outType;
+
                     ws.publish(data.projectId, JSON.stringify(outbound));
 
                     // Async auto-save to DB
