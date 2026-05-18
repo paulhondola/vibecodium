@@ -4,7 +4,7 @@ import EditorArea from "./EditorArea";
 import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
 import ReelsWidget from "./ReelsWidget";
-import SecurityScanModal from "./SecurityScanModal";
+
 import CommunityHelpModal from "./CommunityHelpModal";
 import RubberDuck from "./RubberDuck";
 import WhiteboardArea from "./WhiteboardArea";
@@ -43,7 +43,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [showRoast, setShowRoast] = useState(false);
     const [showPowerMode, setShowPowerMode] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [showSecurityScan, setShowSecurityScan] = useState(false);
+
     const [showToolsMenu, setShowToolsMenu] = useState(false);
     const toolsMenuRef = useRef<HTMLDivElement>(null);
 
@@ -506,15 +506,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                     Hacker Mode {showMatrix && <span className="ml-auto text-[10px] font-bold text-green-400">ON</span>}
                                 </button>
 
-                                {/* Security Scan */}
-                                <button
-                                    onClick={() => { setShowSecurityScan(true); setShowToolsMenu(false); }}
-                                    className="w-full text-left text-xs px-3 py-2 flex items-center gap-2.5 text-cyan-400 hover:bg-[#27272a] hover:text-cyan-300 transition-colors border-t border-[#27272a]"
-                                >
-                                    <Shield size={14} />
-                                    Security Scan
-                                </button>
-
                                 {/* Vibe Reels */}
                                 <button
                                     onClick={() => { setShowReels(true); setShowToolsMenu(false); }}
@@ -742,15 +733,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 					onClose={() => setShowReels(false)}
 					onMinimize={() => setShowReels(false)}
 					isAgentLoading={isLoading}
-				/>
-			)}
-
-			{/* Security Scan Modal */}
-			{showSecurityScan && (
-				<SecurityScanModal
-					onClose={() => setShowSecurityScan(false)}
-					projectId={projectId}
-					token={agentToken}
 				/>
 			)}
 

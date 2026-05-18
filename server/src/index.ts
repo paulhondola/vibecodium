@@ -4,7 +4,7 @@ import { logger } from "hono/logger";
 import { serveStatic } from "hono/bun";
 import Docker from "dockerode";
 import { Writable } from "stream";
-import type { ApiResponse, ExecuteRequest, ExecuteResponse } from "shared";
+import type { ExecuteRequest, ExecuteResponse } from "shared";
 import gitRoutes from "./routes/git";
 import projectsRoutes from "./routes/projects";
 import sessionsRoutes from "./routes/sessions";
@@ -18,7 +18,7 @@ import timelineRoutes from "./routes/timeline";
 import { syncProjectFilesToDisk } from "./utils/sync";
 import { supabase } from "./db/supabase";
 import * as nodePath from "node:path";
-import { scanCode, hasCriticalVulnerability, type ScanResult } from "./security/scanner";
+import { scanCode, hasCriticalVulnerability } from "./security/scanner";
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
 const LLM_KEY = process.env.LLM_KEY ?? "";

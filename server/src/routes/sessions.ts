@@ -4,8 +4,6 @@ import { supabase } from "../db/supabase";
 
 const sessionsRoutes = new Hono();
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-
 // POST /api/sessions — create a session token for a project (auth required)
 sessionsRoutes.post("/", authMiddleware, async (c) => {
     try {
@@ -119,7 +117,6 @@ sessionsRoutes.get("/", authMiddleware, async (c) => {
 
         if (!projectId) return c.json({ error: "Missing projectId query param" }, 400);
 
-        const now = Date.now();
         const { data, error } = await supabase
             .from("sessions")
             .select("*")
