@@ -82,6 +82,14 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [showQuickOpen, setShowQuickOpen] = useState(false);
     const [quickOpenQuery, setQuickOpenQuery] = useState("");
 
+    // Branch management
+    const [branches, setBranches] = useState<string[]>([]);
+    const [currentBranch, setCurrentBranch] = useState("main");
+    const [isLoadingBranches, setIsLoadingBranches] = useState(false);
+    const [newBranchName, setNewBranchName] = useState("");
+    const [showNewBranchForm, setShowNewBranchForm] = useState(false);
+    const [branchActionError, setBranchActionError] = useState<string | null>(null);
+
     // Deployment State
     const [isDeploying, setIsDeploying] = useState(false);
     const [deploySuccess, setDeploySuccess] = useState<{ url: string } | null>(null);
@@ -365,7 +373,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         setIsDeploying(false);
     };
 
-    const branchName = 'main';
+    const branchName = currentBranch;
 
     const handleSelectFile = (file: ProjectFile) => {
         setOpenFiles(prev => {
@@ -398,6 +406,83 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         setOpenFiles([file]);
         setActiveFile(file);
     };
+
+    const runGit = useCallback(async (command: string) => {
+        if (!projectId) return { success: false, output: "No project" };
+        const token = await getTokenRef.current();
+        const res = await fetch(`${API_BASE}/api/git`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ command, projectId }),
+        });
+        return res.json() as Promise<{ success: boolean; output: string }>;
+    }, [projectId]);
+
+    const fetchBranches = useCallback(async () => {
+        if (!projectId) return;
+        setIsLoadingBranches(true);
+        setBranchActionError(null);
+        try {
+            const [branchRes, currentRes] = await Promise.all([
+                runGit("git branch"),
+                runGit("git branch --show-current"),
+            ]);
+            if (branchRes.success) {
+                setBranches(
+                    branchRes.output
+                        .split("\n")
+                        .map(b => b.replace(/^\*?\s+/, "").trim())
+                        .filter(Boolean)
+                );
+            }
+            if (currentRes.success && currentRes.output) {
+                setCurrentBranch(currentRes.output.trim());
+            }
+        } catch { /* ignore */ }
+        setIsLoadingBranches(false);
+    }, [projectId, runGit]);
+
+    const handleCheckout = async (branch: string) => {
+        setBranchActionError(null);
+        const res = await runGit(`git checkout ${branch}`);
+        if (res.success) {
+            setCurrentBranch(branch);
+        } else {
+            setBranchActionError(res.output || "Checkout failed");
+        }
+    };
+
+    const handleCreateBranch = async () => {
+        const name = newBranchName.trim();
+        if (!name) return;
+        setBranchActionError(null);
+        const res = await runGit(`git checkout -b ${name}`);
+        if (res.success) {
+            setNewBranchName("");
+            setShowNewBranchForm(false);
+            await fetchBranches();
+        } else {
+            setBranchActionError(res.output || "Failed to create branch");
+        }
+    };
+
+    const handleDeleteBranch = async (branch: string) => {
+        if (branch === currentBranch) return;
+        setBranchActionError(null);
+        const res = await runGit(`git branch -d ${branch}`);
+        if (res.success) {
+            await fetchBranches();
+        } else {
+            setBranchActionError(res.output || "Delete failed");
+        }
+    };
+
+    // Fetch branches whenever the git tab becomes visible
+    useEffect(() => {
+        if (activeSidebarTab === 'git' && showSidebar) {
+            fetchBranches();
+        }
+    }, [activeSidebarTab, showSidebar, fetchBranches]);
 
     if (isLoading) {
         return (
@@ -498,26 +583,27 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 			</div>
 
 			<div className="flex-1 flex overflow-hidden">
+                {/* Activity Bar — always visible, VS Code-style */}
+                <div className="w-10 flex flex-col shrink-0 bg-[#09090b] border-r border-[#27272a] select-none py-1 z-20">
+                    <SidebarTabBtn icon={<FolderOpen size={17} />} label="Explorer" active={showSidebar && activeSidebarTab === 'explorer'} onClick={() => { if (showSidebar && activeSidebarTab === 'explorer') { setShowSidebar(false); } else { setActiveSidebarTab('explorer'); setShowSidebar(true); } }} />
+                    <SidebarTabBtn icon={<Search size={17} />} label="Search" active={showSidebar && activeSidebarTab === 'search'} onClick={() => { if (showSidebar && activeSidebarTab === 'search') { setShowSidebar(false); } else { setActiveSidebarTab('search'); setShowSidebar(true); } }} />
+                    <SidebarTabBtn icon={<GitBranch size={17} />} label="Git" active={showSidebar && activeSidebarTab === 'git'} onClick={() => { if (showSidebar && activeSidebarTab === 'git') { setShowSidebar(false); } else { setActiveSidebarTab('git'); setShowSidebar(true); } }} />
+                    <SidebarTabBtn icon={<Wrench size={17} />} label="Tools" active={showSidebar && activeSidebarTab === 'tools'} onClick={() => { if (showSidebar && activeSidebarTab === 'tools') { setShowSidebar(false); } else { setActiveSidebarTab('tools'); setShowSidebar(true); } }} />
+                    <SidebarTabBtn icon={<Sparkles size={17} />} label="Fun" active={showSidebar && activeSidebarTab === 'fun'} onClick={() => { if (showSidebar && activeSidebarTab === 'fun') { setShowSidebar(false); } else { setActiveSidebarTab('fun'); setShowSidebar(true); } }} />
+                    <SidebarTabBtn icon={<HelpCircle size={17} />} label="Help" active={showSidebar && activeSidebarTab === 'help'} onClick={() => { if (showSidebar && activeSidebarTab === 'help') { setShowSidebar(false); } else { setActiveSidebarTab('help'); setShowSidebar(true); } }} />
+                    <div className="flex-1" />
+                    <div className="border-t border-[#27272a] my-1" />
+                    <SidebarTabBtn icon={<Music size={17} />} label="Spotify" active={showSidebar && activeSidebarTab === 'spotify'} activeColor="#1db954" onClick={() => { if (showSidebar && activeSidebarTab === 'spotify') { setShowSidebar(false); } else { setActiveSidebarTab('spotify'); setShowSidebar(true); } }} />
+                    <SidebarTabBtn icon={<Youtube size={17} />} label="YouTube" active={showSidebar && activeSidebarTab === 'youtube'} activeColor="#FF0000" onClick={() => { if (showSidebar && activeSidebarTab === 'youtube') { setShowSidebar(false); } else { setActiveSidebarTab('youtube'); setShowSidebar(true); } }} />
+                </div>
+
                 <PanelGroup orientation="horizontal" className="w-full h-full">
-                    {/* Left Sidebar */}
+                    {/* Left Sidebar Panel Content */}
                     {showSidebar && (
                         <>
-                            <Panel defaultSize={22} minSize={16} className="flex bg-[#09090b] relative z-10 border-r border-[#27272a]">
-                                {/* Activity Bar — VS Code-style icon strip */}
-                                <div className="w-10 flex flex-col shrink-0 border-r border-[#27272a] select-none py-1">
-                                    <SidebarTabBtn icon={<FolderOpen size={17} />} label="Explorer" active={activeSidebarTab === 'explorer'} onClick={() => setActiveSidebarTab('explorer')} />
-                                    <SidebarTabBtn icon={<Search size={17} />} label="Search" active={activeSidebarTab === 'search'} onClick={() => setActiveSidebarTab('search')} />
-                                    <SidebarTabBtn icon={<GitBranch size={17} />} label="Git" active={activeSidebarTab === 'git'} onClick={() => setActiveSidebarTab('git')} />
-                                    <SidebarTabBtn icon={<Wrench size={17} />} label="Tools" active={activeSidebarTab === 'tools'} onClick={() => setActiveSidebarTab('tools')} />
-                                    <SidebarTabBtn icon={<Sparkles size={17} />} label="Fun" active={activeSidebarTab === 'fun'} onClick={() => setActiveSidebarTab('fun')} />
-                                    <SidebarTabBtn icon={<HelpCircle size={17} />} label="Help" active={activeSidebarTab === 'help'} onClick={() => setActiveSidebarTab('help')} />
-                                    <div className="flex-1" />
-                                    <div className="border-t border-[#27272a] my-1" />
-                                    <SidebarTabBtn icon={<Music size={17} />} label="Spotify" active={activeSidebarTab === 'spotify'} activeColor="#1db954" onClick={() => setActiveSidebarTab('spotify')} />
-                                    <SidebarTabBtn icon={<Youtube size={17} />} label="YouTube" active={activeSidebarTab === 'youtube'} activeColor="#FF0000" onClick={() => setActiveSidebarTab('youtube')} />
-                                </div>
+                            <Panel defaultSize={22} minSize={16} className="bg-[#09090b] relative z-10 border-r border-[#27272a]">
                                 {/* Tab Content */}
-                                <div className="flex-1 overflow-hidden flex flex-col">
+                                <div className="h-full overflow-hidden flex flex-col">
                                     {activeSidebarTab === 'explorer' && (
                                         <FileExplorer files={files} activeFile={activeFile} onSelect={handleSelectFile} projectId={projectId} token={agentToken} onFilesChange={setFiles} />
                                     )}
@@ -577,7 +663,99 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                     )}
                                     {activeSidebarTab === 'git' && (
                                         <div className="flex flex-col h-full overflow-hidden">
-                                            {/* Commit section */}
+                                            {/* ── Branch management ── */}
+                                            <div className="px-3 pt-3 pb-3 border-b border-[#27272a] shrink-0 space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Branches</p>
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={fetchBranches}
+                                                            disabled={isLoadingBranches}
+                                                            className="p-1 text-zinc-600 hover:text-zinc-300 transition-colors rounded"
+                                                            title="Refresh branches"
+                                                        >
+                                                            <ExternalLink size={11} className={isLoadingBranches ? "animate-spin" : ""} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => { setShowNewBranchForm(p => !p); setBranchActionError(null); setNewBranchName(""); }}
+                                                            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-zinc-400 hover:text-zinc-200 hover:bg-[#27272a] transition-colors"
+                                                            title="New branch"
+                                                        >
+                                                            <GitBranch size={11} />+
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Current branch badge */}
+                                                <div className="flex items-center gap-1.5 px-2 py-1.5 bg-[#A855F7]/10 border border-[#A855F7]/20 rounded-[5px]">
+                                                    <GitBranch size={11} className="text-[#A855F7] shrink-0" />
+                                                    <span className="text-xs font-mono text-[#A855F7] truncate">{currentBranch}</span>
+                                                    <span className="ml-auto text-[9px] text-zinc-600 uppercase tracking-wider shrink-0">current</span>
+                                                </div>
+
+                                                {/* New branch form */}
+                                                {showNewBranchForm && (
+                                                    <div className="space-y-1.5 pt-1">
+                                                        <input
+                                                            autoFocus
+                                                            value={newBranchName}
+                                                            onChange={e => setNewBranchName(e.target.value)}
+                                                            onKeyDown={e => { if (e.key === 'Enter') handleCreateBranch(); if (e.key === 'Escape') { setShowNewBranchForm(false); setNewBranchName(""); } }}
+                                                            placeholder="branch-name"
+                                                            className="w-full bg-[#111113] border border-[#27272a] focus:border-purple-500/40 rounded-[5px] px-2.5 py-1.5 text-xs text-zinc-300 placeholder:text-zinc-600 font-mono focus:outline-none transition-colors"
+                                                        />
+                                                        <div className="flex gap-1.5">
+                                                            <Button variant="primary" size="sm" className="flex-1 text-[10px]" onClick={handleCreateBranch} disabled={!newBranchName.trim()}>
+                                                                <GitBranch size={11} /> Create &amp; Checkout
+                                                            </Button>
+                                                            <button onClick={() => { setShowNewBranchForm(false); setNewBranchName(""); }} className="px-2 py-1 text-zinc-500 hover:text-zinc-300 hover:bg-[#27272a] rounded text-[10px] transition-colors">
+                                                                <X size={11} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Error */}
+                                                {branchActionError && (
+                                                    <p className="text-[10px] text-red-400 font-mono bg-red-500/10 border border-red-500/20 px-2 py-1.5 rounded-[5px] break-all">{branchActionError}</p>
+                                                )}
+
+                                                {/* Branch list */}
+                                                {isLoadingBranches ? (
+                                                    <div className="flex items-center gap-2 py-1 text-zinc-600 text-[10px]">
+                                                        <Loader2 size={11} className="animate-spin" /> Loading branches…
+                                                    </div>
+                                                ) : branches.length > 0 ? (
+                                                    <div className="space-y-px max-h-36 overflow-y-auto">
+                                                        {branches.map(branch => (
+                                                            <div key={branch} className="flex items-center gap-1.5 group px-1 py-1 rounded-[4px] hover:bg-[#1e1e24] transition-colors">
+                                                                <GitBranch size={10} className={`shrink-0 ${branch === currentBranch ? 'text-[#A855F7]' : 'text-zinc-600'}`} />
+                                                                <span className={`text-[11px] font-mono truncate flex-1 ${branch === currentBranch ? 'text-[#A855F7]' : 'text-zinc-400'}`}>{branch}</span>
+                                                                {branch !== currentBranch && (
+                                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                                        <button
+                                                                            onClick={() => handleCheckout(branch)}
+                                                                            className="text-[9px] px-1.5 py-0.5 rounded bg-[#27272a] hover:bg-[#3f3f46] text-zinc-300 transition-colors"
+                                                                            title="Checkout"
+                                                                        >
+                                                                            checkout
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleDeleteBranch(branch)}
+                                                                            className="text-[9px] px-1 py-0.5 rounded hover:bg-red-500/20 text-zinc-600 hover:text-red-400 transition-colors"
+                                                                            title="Delete branch"
+                                                                        >
+                                                                            <X size={9} />
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+
+                                            {/* ── Commit section ── */}
                                             <div className="px-3 pt-3 pb-3 border-b border-[#27272a] shrink-0 space-y-2">
                                                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Source Control</p>
                                                 <textarea
@@ -604,6 +782,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                                     Commit &amp; Push
                                                 </Button>
                                             </div>
+
                                             {/* Commit history */}
                                             <div className="flex-1 overflow-hidden">
                                                 <ActivityFeed projectId={projectId} />

@@ -327,10 +327,7 @@ function DashboardPage() {
             <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Dashboard</span>
           </div>
           <div
-            onClick={() => {
-              setActiveFilter('recent');
-              scrollToSection(recentRef);
-            }}
+            onClick={() => scrollToSection(recentRef)}
             className="flex items-center gap-5 px-6 py-3.5 rounded text-slate-500 hover:bg-white/5 hover:text-[#f8fafc] transition-all cursor-pointer"
           >
             <span className="material-symbols-outlined text-xl">history</span>
