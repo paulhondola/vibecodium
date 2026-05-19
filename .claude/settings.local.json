@@ -15,7 +15,8 @@
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
       "Bash(bunx tsc *)",
       "Bash(bun x *)",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(git *)"
     ]
   }
 }
