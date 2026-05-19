@@ -1,5 +1,5 @@
 import FileExplorer from "./FileExplorer";
-import ActivityFeed from "./ActivityFeed";
+import GitPanel from "./GitPanel";
 import EditorArea from "./EditorArea";
 import TerminalArea from "./TerminalArea";
 import VibeChat from "./VibeChat";
@@ -12,7 +12,7 @@ import YouTubeSidebarPanel from "./YouTubeSidebarPanel";
 import ReactionOverlay from "./ReactionOverlay";
 import CodeRoastModal from "./CodeRoastModal";
 import { API_BASE } from "@/lib/config";
-import { ArrowLeft, Loader2, Users, Check, Flame, GitCommit, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, Wrench, Key, Rocket, ExternalLink, X, FolderOpen, GitBranch, HelpCircle, Sparkles, Music, Youtube, Search, ChevronDown, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, Wrench, Key, Rocket, ExternalLink, X, FolderOpen, GitBranch, HelpCircle, Sparkles, Music, Youtube, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
@@ -72,27 +72,16 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [showMatrix, setShowMatrix] = useState(false);
     const [showRoast, setShowRoast] = useState(false);
     const [showPowerMode, setShowPowerMode] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
     const [showSecurityScan, setShowSecurityScan] = useState(false);
     const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'search' | 'git' | 'tools' | 'fun' | 'help' | 'spotify' | 'youtube'>('explorer');
-    const [commitMessage, setCommitMessage] = useState("");
     const [fileSearchQuery, setFileSearchQuery] = useState("");
     const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
     const [showEditorGame, setShowEditorGame] = useState(false);
     const [showQuickOpen, setShowQuickOpen] = useState(false);
     const [quickOpenQuery, setQuickOpenQuery] = useState("");
 
-    // Branch management
-    const [branches, setBranches] = useState<string[]>([]);
+    // Branch — kept here so EditorArea can receive it as branchName prop
     const [currentBranch, setCurrentBranch] = useState("main");
-    const [isLoadingBranches, setIsLoadingBranches] = useState(false);
-    const [newBranchName, setNewBranchName] = useState("");
-    const [showNewBranchForm, setShowNewBranchForm] = useState(false);
-    const [branchActionError, setBranchActionError] = useState<string | null>(null);
-
-    // Pending changes
-    const [changedFiles, setChangedFiles] = useState<{ path: string; status: string }[]>([]);
-    const [isLoadingChanges, setIsLoadingChanges] = useState(false);
 
     // Deployment State
     const [isDeploying, setIsDeploying] = useState(false);
@@ -319,35 +308,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
             });
     }, [files, fileSearchQuery]);
 
-    const handleSave = async (message?: string) => {
-        if (!projectId || !isAuthenticated) return;
-        setIsSaving(true);
-        try {
-            const token = await getAccessTokenSilently();
-            const payload: Record<string, string> = { branch: currentBranch };
-            if (message?.trim()) payload.message = message.trim();
-            const res = await fetch(`${API_BASE}/api/projects/${projectId}/push`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            const data = await res.json();
-            if (data.success) {
-                setCommitMessage("");
-                await fetchChangedFiles();
-            } else {
-                if (data.error === "GITHUB_TOKEN_REQUIRED") {
-                    setTokenPrompt({ type: 'GITHUB', message: data.message });
-                } else {
-                    console.error("Save failed:", data.error);
-                }
-            }
-        } catch (e) {
-            console.error("Save error:", e);
-        }
-        setIsSaving(false);
-    };
-
     const handleDeploy = async () => {
         if (!projectId || !isAuthenticated) return;
         setIsDeploying(true);
@@ -377,8 +337,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         }
         setIsDeploying(false);
     };
-
-    const branchName = currentBranch;
 
     const handleSelectFile = (file: ProjectFile) => {
         setOpenFiles(prev => {
@@ -412,125 +370,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
         setActiveFile(file);
     };
 
-    const runGit = useCallback(async (command: string): Promise<{ success: boolean; output: string }> => {
-        if (!projectId) return { success: false, output: "No project" };
-        const token = await getTokenRef.current();
-        const res = await fetch(`${API_BASE}/api/git`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ command, projectId }),
-        });
-        const data = await res.json();
-        if (data.error) return { success: false, output: data.error };
-        return data as { success: boolean; output: string };
-    }, [projectId]);
-
-    const fetchBranches = useCallback(async () => {
-        if (!projectId) return;
-        setIsLoadingBranches(true);
-        setBranchActionError(null);
-        try {
-            const [branchRes, currentRes] = await Promise.all([
-                runGit("git branch"),
-                runGit("git branch --show-current"),
-            ]);
-            if (branchRes.success) {
-                setBranches(
-                    branchRes.output
-                        .split("\n")
-                        .map(b => b.replace(/^\*?\s+/, "").trim())
-                        .filter(Boolean)
-                );
-            }
-            if (currentRes.success && currentRes.output) {
-                setCurrentBranch(currentRes.output.trim());
-            }
-        } catch { /* ignore */ }
-        setIsLoadingBranches(false);
-    }, [projectId, runGit]);
-
-    const handleCheckout = async (branch: string) => {
-        setBranchActionError(null);
-        const res = await runGit(`git checkout ${branch}`);
-        if (res.success) {
-            setCurrentBranch(branch);
-        } else {
-            setBranchActionError(res.output || "Checkout failed");
-        }
-    };
-
-    const handleCreateBranch = async () => {
-        const name = newBranchName.trim();
-        if (!name) return;
-        setBranchActionError(null);
-        try {
-            const token = await getTokenRef.current();
-            const res = await fetch(`${API_BASE}/api/projects/${projectId}/branches`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ name }),
-            });
-            const data = await res.json();
-            if (data.success) {
-                setNewBranchName("");
-                setShowNewBranchForm(false);
-                setCurrentBranch(name);
-                await fetchBranches();
-            } else {
-                setBranchActionError(data.error || "Failed to create branch");
-            }
-        } catch (e: unknown) {
-            setBranchActionError(e instanceof Error ? e.message : "Failed to create branch");
-        }
-    };
-
-    const handleDeleteBranch = async (branch: string) => {
-        if (branch === currentBranch) return;
-        setBranchActionError(null);
-        const res = await runGit(`git branch -d ${branch}`);
-        if (res.success) {
-            await fetchBranches();
-        } else {
-            setBranchActionError(res.output || "Delete failed");
-        }
-    };
-
-    const fetchChangedFiles = useCallback(async () => {
-        if (!projectId) return;
-        setIsLoadingChanges(true);
-        try {
-            const res = await runGit("git status --porcelain");
-            if (res.success) {
-                const parsed = res.output
-                    .split("\n")
-                    .filter(line => line.length >= 3 && line[0] !== ' ' || line[1] !== ' ')
-                    .filter(Boolean)
-                    .map(line => {
-                        const xy = line.substring(0, 2);
-                        const filePath = line.substring(3).trim();
-                        if (!filePath) return null;
-                        let status: string;
-                        if (xy === "??") status = "?";
-                        else if (xy[0] === "D" || xy[1] === "D") status = "D";
-                        else if (xy[0] === "A") status = "A";
-                        else status = "M";
-                        return { path: filePath, status };
-                    })
-                    .filter(Boolean) as { path: string; status: string }[];
-                setChangedFiles(parsed);
-            }
-            // If git status fails (no .git yet), leave changedFiles as-is so button stays enabled
-        } catch { /* ignore */ }
-        setIsLoadingChanges(false);
-    }, [projectId, runGit]);
-
-    // Fetch branches and changed files whenever the git tab becomes visible
-    useEffect(() => {
-        if (activeSidebarTab === 'git' && showSidebar) {
-            fetchBranches();
-            fetchChangedFiles();
-        }
-    }, [activeSidebarTab, showSidebar, fetchBranches, fetchChangedFiles]);
 
     if (isLoading) {
         return (
@@ -710,156 +549,12 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                         </div>
                                     )}
                                     {activeSidebarTab === 'git' && (
-                                        <div className="flex flex-col h-full overflow-hidden">
-                                            {/* ── Branch selector ── */}
-                                            <div className="px-3 pt-3 pb-3 border-b border-[#27272a] shrink-0 space-y-2">
-                                                <div className="flex items-center justify-between">
-                                                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Branch</p>
-                                                    <div className="flex items-center gap-1">
-                                                        <button
-                                                            onClick={() => { fetchBranches(); fetchChangedFiles(); }}
-                                                            disabled={isLoadingBranches}
-                                                            className="p-1 text-zinc-600 hover:text-zinc-300 transition-colors rounded"
-                                                            title="Refresh"
-                                                        >
-                                                            <RefreshCw size={11} className={isLoadingBranches ? "animate-spin" : ""} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => { setShowNewBranchForm(p => !p); setBranchActionError(null); setNewBranchName(""); }}
-                                                            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] text-zinc-400 hover:text-zinc-200 hover:bg-[#27272a] transition-colors"
-                                                            title="New branch"
-                                                        >
-                                                            <GitBranch size={11} /><span>+</span>
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Branch dropdown */}
-                                                <div className="relative">
-                                                    <GitBranch size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#A855F7] pointer-events-none z-10" />
-                                                    <select
-                                                        value={currentBranch}
-                                                        onChange={e => handleCheckout(e.target.value)}
-                                                        disabled={isLoadingBranches}
-                                                        className="w-full appearance-none bg-[#111113] border border-[#A855F7]/30 hover:border-[#A855F7]/50 focus:border-[#A855F7]/60 rounded-[5px] pl-7 pr-7 py-1.5 text-[11px] text-[#A855F7] font-mono focus:outline-none transition-colors cursor-pointer disabled:opacity-50"
-                                                    >
-                                                        {branches.length > 0 ? branches.map(b => (
-                                                            <option key={b} value={b}>{b}</option>
-                                                        )) : (
-                                                            <option value={currentBranch}>{currentBranch}</option>
-                                                        )}
-                                                    </select>
-                                                    <ChevronDown size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
-                                                </div>
-
-                                                {/* New branch form */}
-                                                {showNewBranchForm && (
-                                                    <div className="space-y-1.5 pt-1">
-                                                        <input
-                                                            autoFocus
-                                                            value={newBranchName}
-                                                            onChange={e => setNewBranchName(e.target.value)}
-                                                            onKeyDown={e => { if (e.key === 'Enter') handleCreateBranch(); if (e.key === 'Escape') { setShowNewBranchForm(false); setNewBranchName(""); } }}
-                                                            placeholder="branch-name"
-                                                            className="w-full bg-[#111113] border border-[#27272a] focus:border-purple-500/40 rounded-[5px] px-2.5 py-1.5 text-xs text-zinc-300 placeholder:text-zinc-600 font-mono focus:outline-none transition-colors"
-                                                        />
-                                                        <div className="flex gap-1.5">
-                                                            <Button variant="primary" size="sm" className="flex-1 text-[10px]" onClick={handleCreateBranch} disabled={!newBranchName.trim()}>
-                                                                <GitBranch size={11} /> Create &amp; Push
-                                                            </Button>
-                                                            <button onClick={() => { setShowNewBranchForm(false); setNewBranchName(""); }} className="px-2 py-1 text-zinc-500 hover:text-zinc-300 hover:bg-[#27272a] rounded text-[10px] transition-colors">
-                                                                <X size={11} />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Error */}
-                                                {branchActionError && (
-                                                    <p className="text-[10px] text-red-400 font-mono bg-red-500/10 border border-red-500/20 px-2 py-1.5 rounded-[5px] break-all">{branchActionError}</p>
-                                                )}
-                                            </div>
-
-                                            {/* ── Changed files ── */}
-                                            <div className="px-3 pt-2.5 pb-2.5 border-b border-[#27272a] shrink-0 space-y-1.5">
-                                                <div className="flex items-center justify-between">
-                                                    <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium flex items-center gap-1.5">
-                                                        Changes
-                                                        {changedFiles.length > 0 && (
-                                                            <span className="text-purple-400 bg-purple-500/10 px-1.5 rounded text-[9px] font-bold">{changedFiles.length}</span>
-                                                        )}
-                                                    </p>
-                                                    <button
-                                                        onClick={fetchChangedFiles}
-                                                        disabled={isLoadingChanges}
-                                                        className="p-1 text-zinc-600 hover:text-zinc-300 transition-colors rounded"
-                                                        title="Refresh changes"
-                                                    >
-                                                        <RefreshCw size={10} className={isLoadingChanges ? "animate-spin" : ""} />
-                                                    </button>
-                                                </div>
-                                                {isLoadingChanges ? (
-                                                    <div className="flex items-center gap-1.5 text-zinc-600 text-[10px]">
-                                                        <Loader2 size={9} className="animate-spin" /> Scanning…
-                                                    </div>
-                                                ) : changedFiles.length === 0 ? (
-                                                    <p className="text-[10px] text-zinc-600">No pending changes.</p>
-                                                ) : (
-                                                    <div className="space-y-px max-h-28 overflow-y-auto">
-                                                        {changedFiles.map(f => (
-                                                            <div key={f.path} className="flex items-center gap-1.5 px-1 py-0.5 rounded hover:bg-[#1e1e24] transition-colors">
-                                                                <span className={`text-[9px] font-bold font-mono px-1 rounded shrink-0 ${
-                                                                    f.status === 'M' ? 'text-blue-400 bg-blue-500/10' :
-                                                                    f.status === 'A' ? 'text-green-400 bg-green-500/10' :
-                                                                    f.status === 'D' ? 'text-red-400 bg-red-500/10' :
-                                                                    'text-yellow-400 bg-yellow-500/10'
-                                                                }`}>
-                                                                    {f.status === '?' ? 'U' : f.status}
-                                                                </span>
-                                                                <span className="text-[10px] font-mono text-zinc-400 truncate">{f.path}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* ── Commit section ── */}
-                                            <div className="px-3 pt-2.5 pb-3 border-b border-[#27272a] shrink-0 space-y-2">
-                                                <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
-                                                    <GitBranch size={9} className="text-[#A855F7] shrink-0" />
-                                                    <span>Commit to <span className="text-[#A855F7] font-mono">{currentBranch}</span></span>
-                                                </div>
-                                                <textarea
-                                                    value={commitMessage}
-                                                    onChange={e => setCommitMessage(e.target.value)}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                                            e.preventDefault();
-                                                            handleSave(commitMessage);
-                                                        }
-                                                    }}
-                                                    placeholder="Commit message (⌘↵ to push)…"
-                                                    rows={2}
-                                                    className="w-full bg-[#111113] border border-[#27272a] focus:border-purple-500/40 rounded-[5px] px-2.5 py-2 text-xs text-zinc-300 placeholder:text-zinc-600 resize-none focus:outline-none transition-colors"
-                                                />
-                                                <Button
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    className="w-full"
-                                                    onClick={() => handleSave(commitMessage)}
-                                                    loading={isSaving}
-                                                    disabled={isSaving}
-                                                >
-                                                    <GitCommit size={13} />
-                                                    Commit &amp; Push
-                                                </Button>
-                                            </div>
-
-                                            {/* ── Commit history ── */}
-                                            <div className="flex-1 overflow-hidden">
-                                                <ActivityFeed projectId={projectId} />
-                                            </div>
-                                        </div>
+                                        <GitPanel
+                                            projectId={projectId}
+                                            getToken={getAccessTokenSilently}
+                                            onBranchChange={setCurrentBranch}
+                                            onTokenRequired={(type, message) => setTokenPrompt({ type, message })}
+                                        />
                                     )}
                                     {activeSidebarTab === 'tools' && (
                                         <div className="flex flex-col h-full">
@@ -1004,7 +699,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                         onTimeTravelChange={setIsTimeTravelOpen}
                                         gameOpen={showEditorGame}
                                         onGameChange={setShowEditorGame}
-                                        branchName={branchName}
+                                        branchName={currentBranch}
                                     />
                                 )}
                             </Panel>
