@@ -495,6 +495,29 @@ interface WSData {
 const roomHosts = new Map<string, string>(); // projectId -> hostClientId
 const activeClients = new Map<string, WSData>(); // clientId -> WSData
 
+// Collaboration reliability — in-memory room file state cache
+const roomFileStates = new Map<string, Map<string, string>>(); // projectId -> filePath -> content
+const activeClientSockets = new Map<string, import("bun").ServerWebSocket<WSData>>(); // clientId -> ws
+const clientLastPong = new Map<string, number>(); // clientId -> last pong timestamp
+
+const HEARTBEAT_INTERVAL_MS = 25_000;
+const ZOMBIE_TIMEOUT_MS = 55_000; // 2 missed pings + margin
+
+setInterval(() => {
+    const now = Date.now();
+    for (const [clientId, sock] of activeClientSockets) {
+        const lastPong = clientLastPong.get(clientId) ?? now;
+        if (now - lastPong > ZOMBIE_TIMEOUT_MS) {
+            console.log(`[WS Heartbeat] Terminating zombie client ${clientId}`);
+            activeClientSockets.delete(clientId);
+            clientLastPong.delete(clientId);
+            try { sock.terminate(); } catch (_) {}
+        } else {
+            try { sock.send(JSON.stringify({ type: "ping" })); } catch (_) {}
+        }
+    }
+}, HEARTBEAT_INTERVAL_MS);
+
 export default {
 	port: process.env.PORT || 3000,
 	
@@ -602,6 +625,16 @@ export default {
                 user: { id: data.clientId, name: data.userName, color: data.color, isHost: data.isHost }
             }));
             
+            // Register for heartbeat tracking
+            activeClientSockets.set(data.clientId, ws);
+            clientLastPong.set(data.clientId, Date.now());
+
+            // Send current room state to reconnecting client
+            const roomState = roomFileStates.get(data.projectId);
+            if (roomState && roomState.size > 0) {
+                ws.send(JSON.stringify({ type: "room_state", files: Object.fromEntries(roomState) }));
+            }
+
             console.log(`[WS] ${data.userName} joined ${data.projectId} (Host: ${data.isHost})`);
         },
 
@@ -669,6 +702,21 @@ export default {
                 const payload = JSON.parse(message);
                 const data = ws.data;
 
+                // Heartbeat pong
+                if (payload.type === "pong") {
+                    clientLastPong.set(data.clientId, Date.now());
+                    return;
+                }
+
+                // Sync request — send current room state to requesting client
+                if (payload.type === "sync_request") {
+                    const roomState = roomFileStates.get(data.projectId);
+                    if (roomState && roomState.size > 0) {
+                        ws.send(JSON.stringify({ type: "room_state", files: Object.fromEntries(roomState) }));
+                    }
+                    return;
+                }
+
                 // Host Permission Overrides
                 if (payload.type === "JOIN_REQUEST") {
                     console.log(`[WS] Client ${data.clientId} requesting join to ${data.projectId}`);
@@ -706,6 +754,10 @@ export default {
 
                     // Also persist as a normal code_update in Supabase
                     if (payload.filePath && payload.content !== undefined) {
+                        // Update room file state cache
+                        if (!roomFileStates.has(data.projectId)) roomFileStates.set(data.projectId, new Map());
+                        roomFileStates.get(data.projectId)!.set(payload.filePath, payload.content);
+
                         setImmediate(() => {
                             (async () => {
                                 try {
@@ -766,6 +818,10 @@ export default {
 
                     // Async auto-save to DB
                     if (outbound.type === "code_update" && payload.filePath && payload.content !== undefined) {
+                        // Update room file state cache
+                        if (!roomFileStates.has(data.projectId)) roomFileStates.set(data.projectId, new Map());
+                        roomFileStates.get(data.projectId)!.set(payload.filePath, payload.content);
+
                         setImmediate(() => {
                             (async () => {
                                 try {
@@ -828,6 +884,8 @@ export default {
             const data = ws.data;
             ws.unsubscribe(data.projectId);
             activeClients.delete(data.clientId);
+            activeClientSockets.delete(data.clientId);
+            clientLastPong.delete(data.clientId);
 
             ws.publish(data.projectId, JSON.stringify({
                 type: "user_left",
@@ -853,6 +911,8 @@ export default {
 
             // When the last collaborator exits the project, purge timeline events from Supabase
             if (remaining.length === 0) {
+                roomFileStates.delete(data.projectId);
+
                 // Clear in-memory counters for this project
                 for (const key of timelineEventCounters.keys()) {
                     if (key.startsWith(`${data.projectId}::`)) timelineEventCounters.delete(key);
