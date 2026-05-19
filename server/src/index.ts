@@ -8,7 +8,6 @@ import type { ApiResponse, ExecuteRequest, ExecuteResponse } from "shared";
 import gitRoutes from "./routes/git";
 import projectsRoutes from "./routes/projects";
 import sessionsRoutes from "./routes/sessions";
-import reelsRoutes from "./routes/reels";
 import agentRoutes from "./routes/agent";
 import githubRoutes from "./routes/github";
 import usersRouter from "./routes/users";
@@ -79,7 +78,6 @@ export const app = new Hono()
 	.route("/api/git", gitRoutes)
 	.route("/api/projects", projectsRoutes)
 	.route("/api/sessions", sessionsRoutes)
-	.route("/api/reels", reelsRoutes)
 	.route("/api/agent", agentRoutes)
 	.route("/api/github", githubRoutes)
 	.route("/api/users", usersRouter)

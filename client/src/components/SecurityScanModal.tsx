@@ -1,6 +1,7 @@
 import { X, Shield, AlertTriangle, AlertCircle, Info, CheckCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { API_BASE } from "@/lib/config";
+import { Button } from "@/components/ui/button";
 
 interface VulnerabilityMatch {
 	pattern: string;
@@ -100,11 +101,11 @@ export default function SecurityScanModal({ onClose, projectId, token }: Securit
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-			<div className="bg-[#09090b] border border-[#27272a] rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+			<div className="bg-[#09090b] border border-[#27272a] rounded-[14px] max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
 				{/* Header */}
 				<div className="flex items-center justify-between p-4 border-b border-[#27272a] bg-[#18181b]">
 					<div className="flex items-center gap-2">
-						<Shield size={20} className="text-cyan-400" />
+						<Shield size={20} className="text-zinc-400" />
 						<h2 className="font-bold text-lg">Security Scan</h2>
 					</div>
 					<button
@@ -119,22 +120,19 @@ export default function SecurityScanModal({ onClose, projectId, token }: Securit
 				<div className="flex-1 overflow-auto p-6">
 					{!scanResult && !isScanning && !error && (
 						<div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-							<Shield size={64} className="text-cyan-400 opacity-50" />
+							<Shield size={64} className="text-zinc-400 opacity-50" />
 							<p className="text-gray-400">
 								Run a comprehensive security scan to detect vulnerabilities in your project code.
 							</p>
-							<button
-								onClick={runScan}
-								className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded font-bold hover:scale-105 transition-transform"
-							>
+							<Button variant="primary" onClick={runScan}>
 								Start Scan
-							</button>
+							</Button>
 						</div>
 					)}
 
 					{isScanning && (
 						<div className="flex flex-col items-center justify-center h-full gap-4">
-							<Loader2 size={48} className="animate-spin text-cyan-400" />
+							<Loader2 size={48} className="animate-spin text-[#A855F7]" />
 							<p className="text-gray-400">Scanning project files...</p>
 						</div>
 					)}
@@ -252,13 +250,15 @@ export default function SecurityScanModal({ onClose, projectId, token }: Securit
 							)}
 
 							{/* Rescan Button */}
-							<button
+							<Button
+								variant="secondary"
+								size="sm"
 								onClick={runScan}
 								disabled={isScanning}
-								className="px-4 py-2 bg-[#27272a] hover:bg-[#3f3f46] text-white rounded transition-colors self-start"
+								className="self-start"
 							>
 								Rescan Project
-							</button>
+							</Button>
 						</div>
 					)}
 				</div>

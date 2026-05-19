@@ -18,17 +18,6 @@ import { createMiddleware } from "hono/factory";
 import { jwtVerify, decodeProtectedHeader, createRemoteJWKSet } from "jose";
 import { upsertUser } from "../utils/tokens";
 
-const FUN_BIOS = [
-  "I use Arch btw.",
-  "Looking for a partner to rewrite my Node backend in Rust.",
-  "React developer. Swipe left if no functional components.",
-  "I like long walks on the beach and abstractSingletonProxyFactoryBeans.",
-  "Python enthusiast. My code is indent-pendent.",
-  "If you don't write tests, we already share a philosophy.",
-];
-const LANGUAGES = ["Rust", "TypeScript", "Java", "Python", "Go", "C++", "JavaScript", "HTML (yes, it's a language)"];
-const LOCATIONS = ["2 miles away", "5 miles away", "Right behind you", "In your node_modules", "Localhost", "Cloud9"];
-
 // ──────────────────────────────────────────────────────────────────────────────
 // In-memory token cache (avoids re-verifying the same JWT on every request)
 // ──────────────────────────────────────────────────────────────────────────────

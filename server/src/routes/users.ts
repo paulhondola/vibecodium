@@ -127,4 +127,67 @@ router.post("/tokens", authMiddleware, async (c) => {
     }
 });
 
+const VALID_LANGUAGES = [
+    "TypeScript", "JavaScript", "Python", "Go", "Rust", "C++",
+    "Java", "C#", "Kotlin", "Swift", "PHP", "Ruby", "Scala",
+    "Elixir", "Haskell", "Dart", "Zig", "C", "R", "Lua",
+];
+
+// GET /api/users/profile — return current user's bio, language, location
+router.get("/profile", authMiddleware, async (c) => {
+    try {
+        const currentUser = c.get("user");
+        const { data, error } = await supabase
+            .from("users")
+            .select("bio, language, location")
+            .eq("id", currentUser.sub)
+            .maybeSingle();
+        if (error) throw error;
+        return c.json({
+            success:  true,
+            bio:      data?.bio      ?? "",
+            language: data?.language ?? "",
+            location: data?.location ?? "",
+        });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        return c.json({ success: false, error: message }, 500);
+    }
+});
+
+// PUT /api/users/profile — update bio, language, location
+router.put("/profile", authMiddleware, async (c) => {
+    try {
+        const currentUser = c.get("user");
+        const body = await c.req.json<{ bio?: string; language?: string; location?: string }>();
+        const patch: Record<string, unknown> = {};
+
+        if (body.bio !== undefined) {
+            if (body.bio.length > 200)
+                return c.json({ success: false, error: "Bio must be 200 characters or fewer" }, 400);
+            patch.bio = body.bio || null;
+        }
+        if (body.language !== undefined) {
+            if (body.language && !VALID_LANGUAGES.includes(body.language))
+                return c.json({ success: false, error: "Invalid language selection" }, 400);
+            patch.language = body.language || null;
+        }
+        if (body.location !== undefined) {
+            if (body.location.length > 100)
+                return c.json({ success: false, error: "Location must be 100 characters or fewer" }, 400);
+            patch.location = body.location || null;
+        }
+
+        if (Object.keys(patch).length === 0)
+            return c.json({ success: false, error: "No fields to update" }, 400);
+
+        const { error } = await supabase.from("users").update(patch).eq("id", currentUser.sub);
+        if (error) throw error;
+        return c.json({ success: true, message: "Profile updated successfully" });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        return c.json({ success: false, error: message }, 500);
+    }
+});
+
 export default router;

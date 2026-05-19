@@ -60,9 +60,9 @@ export default function CommunityHelpModal({ isOpen, onClose, repoUrl }: Communi
                         initial={{ scale: 0.9, opacity: 0, y: 20 }}
                         animate={{ scale: 1, opacity: 1, y: 0 }}
                         exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                        className="bg-[#18181b] border border-[#A855F7]/30 rounded-2xl p-8 max-w-lg w-full shadow-[0_0_50px_rgba(168,85,247,0.2)] relative overflow-hidden"
+                        className="bg-[#18181b] border border-[#A855F7]/30 rounded-[14px] p-8 max-w-lg w-full relative overflow-hidden"
                     >
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-400 via-[#A855F7] to-blue-600" />
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#A855F7] to-purple-900" />
                         
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -126,7 +126,7 @@ export default function CommunityHelpModal({ isOpen, onClose, repoUrl }: Communi
 
                             <div className="p-4 bg-[#02040a] border border-white/5 rounded-xl">
                                 <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Attached Workspace</div>
-                                <div className="text-xs text-cyan-400 font-mono truncate opacity-70">{repoUrl}</div>
+                                <div className="text-xs text-zinc-400 font-mono truncate opacity-70">{repoUrl}</div>
                             </div>
 
                             {error && (
@@ -136,7 +136,7 @@ export default function CommunityHelpModal({ isOpen, onClose, repoUrl }: Communi
                             <button
                                 type="submit"
                                 disabled={isSubmitting || !title || !description}
-                                className="w-full py-4 bg-[#A855F7] hover:bg-[#9333ea] text-[#02040a] font-bold rounded-xl transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(168,85,247,0.3)] disabled:opacity-50 disabled:cursor-not-allowed group"
+                                className="w-full py-4 bg-[#A855F7] hover:bg-[#9333ea] text-[#02040a] font-bold rounded-xl transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
                             >
                                 {isSubmitting ? (
                                     <Loader2 size={20} className="animate-spin" />

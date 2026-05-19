@@ -10,7 +10,13 @@
       "mcp__plugin_supabase_supabase__execute_sql",
       "Bash(npx tsc *)",
       "mcp__plugin_supabase_supabase__list_projects",
-      "mcp__plugin_supabase_supabase__list_tables"
+      "mcp__plugin_supabase_supabase__list_tables",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(bunx tsc *)",
+      "Bash(bun x *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(git *)"
     ]
   }
 }

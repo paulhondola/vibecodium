@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import MonacoEditor, { useMonaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import { Bot, Check, X } from "lucide-react";
+import { Bot, Check, X, GitBranch } from "lucide-react";
 import type { ProjectFile } from "./Workspace";
 import { useSocket } from "../contexts/SocketProvider";
 import type { PendingUpdate } from "../hooks/useAgentStream";
@@ -29,12 +29,20 @@ interface EditorAreaProps {
     projectId?: string | null;
     agentToken?: string | null;
     powerModeEnabled?: boolean;
+    timeTravelOpen?: boolean;
+    onTimeTravelChange?: (open: boolean) => void;
+    gameOpen?: boolean;
+    onGameChange?: (open: boolean) => void;
+    branchName?: string;
+    onCloseOthers?: (file: ProjectFile) => void;
 }
 
 export default function EditorArea({
     openFiles, onSelectFile, onCloseFile,
     activeFile, userId, remoteCodeUpdate, remoteCursorUpdate,
     pendingUpdate, onPendingResolved, projectId, agentToken, powerModeEnabled = false,
+    timeTravelOpen = false, onTimeTravelChange, gameOpen = false, onGameChange,
+    branchName = 'main', onCloseOthers,
 }: EditorAreaProps) {
     const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
     const monaco = useMonaco();
@@ -48,15 +56,14 @@ export default function EditorArea({
     const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const editorContainerRef = useRef<HTMLDivElement>(null);
 
-    // Time-Travel Debugging state
-    const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
+    const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
+    const [contextMenu, setContextMenu] = useState<{ file: ProjectFile; x: number; y: number } | null>(null);
+
+    // Time-Travel Debugging state (open/close controlled by parent)
     const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
     const [eventIndex, setEventIndex] = useState(0);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
-
-    // Game state
-    const [showGame, setShowGame] = useState(false);
 
     const { send } = useSocket();
     const sendRef = useRef(send);
@@ -117,18 +124,19 @@ export default function EditorArea({
 
     // Sync code when active file changes
     useEffect(() => {
-        setIsTimeTravelOpen(false); // Close timeline on file switch
+        onTimeTravelChange?.(false); // Close timeline on file switch
         if (activeFile) {
             setCode(activeFile.content || "");
             decorationsRef.current?.clear();
         } else {
             setCode("");
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeFile]);
 
     // Fetch timeline events when Time-Travel opens
     useEffect(() => {
-        if (!isTimeTravelOpen || !projectId || !activeFile) return;
+        if (!timeTravelOpen || !projectId || !activeFile) return;
         setTimelineEvents([]);
         setAnalysisResult(null);
         const headers: Record<string, string> = {};
@@ -145,11 +153,11 @@ export default function EditorArea({
                 }
             })
             .catch(err => console.error("Failed fetching timeline:", err));
-    }, [isTimeTravelOpen, projectId, activeFile]);
+    }, [timeTravelOpen, projectId, activeFile]);
 
     // Apply timeline event content to editor when scrubbing
     useEffect(() => {
-        if (isTimeTravelOpen && timelineEvents.length > 0) {
+        if (timeTravelOpen && timelineEvents.length > 0) {
             const snappedCode = timelineEvents[eventIndex]?.content ?? "";
             setCode(snappedCode);
             if (editorRef.current) {
@@ -161,10 +169,10 @@ export default function EditorArea({
                 }
             }
         }
-    }, [eventIndex, isTimeTravelOpen, timelineEvents]);
+    }, [eventIndex, timeTravelOpen, timelineEvents]);
 
     const handleRestoreEvent = () => {
-        if (!isTimeTravelOpen || timelineEvents.length === 0) return;
+        if (!timeTravelOpen || timelineEvents.length === 0) return;
         const restoredContent = timelineEvents[eventIndex]?.content ?? "";
         if (activeFileRef.current) {
             activeFileRef.current.content = restoredContent;
@@ -174,7 +182,7 @@ export default function EditorArea({
                 content: restoredContent,
             });
         }
-        setIsTimeTravelOpen(false);
+        onTimeTravelChange?.(false);
     };
 
     const handleAnalyze = useCallback(async (eventIds: string[]): Promise<void> => {
@@ -268,6 +276,7 @@ export default function EditorArea({
         decorationsRef.current = ed.createDecorationsCollection([]);
 
         ed.onDidChangeCursorPosition((e) => {
+            setCursorPos({ line: e.position.lineNumber, col: e.position.column });
             if (activeFileRef.current) {
                 sendRef.current({
                     type: "cursor_move",
@@ -416,10 +425,18 @@ export default function EditorArea({
         return () => window.removeEventListener("keydown", onKey);
     }, [hasPending, handleReject]);
 
+    // Close context menu on outside click
+    useEffect(() => {
+        if (!contextMenu) return;
+        const handler = () => setContextMenu(null);
+        window.addEventListener("mousedown", handler);
+        return () => window.removeEventListener("mousedown", handler);
+    }, [contextMenu]);
+
     return (
         <div className="flex flex-col h-full bg-[#09090b] text-[#c9d1d9] relative">
             {/* Tab bar */}
-            <div className="flex bg-[#09090b] border-b border-[#27272a] shrink-0 overflow-x-auto no-scrollbar scroll-smooth">
+            <div className="flex bg-[#18181b] border-b border-[#27272a] shrink-0 overflow-x-auto no-scrollbar scroll-smooth">
                 {openFiles.map(file => {
                     const isActive = activeFile?.path === file.path;
                     const ext = file.path.split('.').pop()?.toUpperCase() || '';
@@ -429,13 +446,14 @@ export default function EditorArea({
                         <div
                             key={file.path}
                             onClick={() => onSelectFile(file)}
+                            onContextMenu={(e) => { e.preventDefault(); setContextMenu({ file, x: e.clientX, y: e.clientY }); }}
                             className={`flex items-center gap-2 px-3 py-1.5 border-r border-[#27272a] cursor-pointer max-w-[200px] min-w-[120px] group transition-colors ${
                                 isActive
-                                    ? "bg-[#18181b] border-t-[3px] border-t-cyan-500 text-gray-200"
-                                    : "bg-[#09090b] text-gray-500 hover:bg-[#18181b] hover:text-gray-300 border-t-[3px] border-t-transparent"
+                                    ? "bg-[#09090b] border-t-2 border-t-[#A855F7] text-zinc-100"
+                                    : "bg-[#18181b] text-zinc-500 hover:bg-[#111113] hover:text-zinc-300 border-t-2 border-t-transparent"
                             }`}
                         >
-                            <span className={`font-bold text-[10px] ${isActive ? (isJS ? "text-yellow-400" : "text-cyan-400") : "text-gray-600"}`}>
+                            <span className={`font-bold text-[10px] ${isActive ? (isJS ? "text-yellow-400" : "text-zinc-400") : "text-zinc-600"}`}>
                                 {isJS ? 'JS' : ext.substring(0, 3)}
                             </span>
                             <span className="text-xs truncate flex-1 font-medium">{file.path.split("/").pop()}</span>
@@ -449,29 +467,6 @@ export default function EditorArea({
                     );
                 })}
                 
-                {/* Time Travel Toggle Button */}
-                <div className="ml-auto p-1.5 flex items-center shrink-0 border-l border-[#27272a]">
-                    <button
-                        onClick={() => setIsTimeTravelOpen(prev => !prev)}
-                        className={`text-[10px] px-2 py-1 flex items-center gap-1.5 rounded transition font-medium tracking-wide ${isTimeTravelOpen ? "bg-cyan-500/20 text-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.2)]" : "text-gray-400 hover:text-gray-200 hover:bg-[#27272a]"}`}
-                        title="Time-Travel History"
-                    >
-                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        TIME TRAVEL
-                    </button>
-                </div>
-
-                {/* Game Toggle Button */}
-                <div className="p-1.5 flex items-center shrink-0 border-l border-[#27272a]">
-                    <button
-                        onClick={() => setShowGame(prev => !prev)}
-                        className="text-[10px] px-2 py-1 flex items-center gap-1.5 rounded transition font-medium tracking-wide bg-gradient-to-r from-orange-500/10 to-red-500/10 text-orange-400 hover:from-orange-500/20 hover:to-red-500/20 hover:shadow-[0_0_8px_rgba(249,115,22,0.2)] border border-orange-500/20"
-                        title="Play Code Runner Game"
-                    >
-                        <span className="text-xs">🎮</span>
-                        GAME
-                    </button>
-                </div>
             </div>
 
             {/* Power Mode indicator — only when enabled */}
@@ -492,7 +487,7 @@ export default function EditorArea({
 
             <div
                 ref={editorContainerRef}
-                className="flex-1 relative"
+                className="flex-1 relative overflow-hidden"
                 style={powerModeEnabled && isPowerMode ? {
                     animation: 'shake 0.08s ease-in-out infinite alternate',
                 } : undefined}
@@ -533,20 +528,20 @@ export default function EditorArea({
                             scrollBeyondLastLine: false,
                             fontFamily: isRetro ? "'Courier New', monospace" : "'JetBrains Mono', 'Fira Code', monospace",
                             padding: { top: 16 },
-                            readOnly: hasPending || isTimeTravelOpen, // lock editor while diff is shown or time traveling
+                            readOnly: hasPending || timeTravelOpen, // lock editor while diff is shown or time traveling
                         }}
                         onMount={handleEditorDidMount}
                     />
                     
                     {/* ── Time-Travel Timeline Bar ── */}
-                    {isTimeTravelOpen && (
+                    {timeTravelOpen && (
                         <TimelineBar
                             events={timelineEvents}
                             currentIndex={eventIndex}
                             onScrub={setEventIndex}
                             onRestore={handleRestoreEvent}
-                            onClose={() => setIsTimeTravelOpen(false)}
-                            onLive={() => { setEventIndex(timelineEvents.length - 1); setIsTimeTravelOpen(false); }}
+                            onClose={() => onTimeTravelChange?.(false)}
+                            onLive={() => { setEventIndex(timelineEvents.length - 1); onTimeTravelChange?.(false); }}
                             onAnalyze={handleAnalyze}
                             isLoading={timelineEvents.length === 0}
                             analysisResult={analysisResult}
@@ -557,14 +552,16 @@ export default function EditorArea({
                 ) : (
                     <div className="flex h-full w-full items-center justify-center bg-[#09090b] select-none">
                         <div className="text-center flex flex-col items-center">
-                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-[#09090b] text-3xl font-bold mb-6 shadow-[0_0_30px_rgba(34,211,238,0.2)]">iT</div>
-                            <h2 className="text-2xl font-bold text-gray-300 mb-2 font-['Space_Grotesk']">VibeCodium Editor</h2>
-                            <p className="text-gray-500 text-sm mb-10">Select a file from the explorer to begin coding.</p>
-                            <div className="flex flex-col items-start text-xs text-gray-500 gap-3 font-mono border-t border-[#27272a] pt-6">
-                                <div className="flex items-center justify-between w-64"><span className="text-gray-600">Show Explorer</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-gray-400">⌘ E</span></div>
-                                <div className="flex items-center justify-between w-64"><span className="text-gray-600">Toggle Terminal</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-gray-400">⌘ J</span></div>
-                                <div className="flex items-center justify-between w-64"><span className="text-gray-600">Toggle Agent Chat</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-gray-400">⌘ B</span></div>
-                                <div className="flex items-center justify-between w-64"><span className="text-gray-600 text-cyan-500/80">Toggle Zen Mode</span> <span className="px-1.5 py-0.5 rounded bg-cyan-900/20 border border-cyan-500/20 text-cyan-400">⌘ K</span></div>
+                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-purple-900 flex items-center justify-center text-white text-3xl font-bold mb-6">VC</div>
+                            <h2 className="text-2xl font-semibold text-zinc-200 mb-2 tracking-[-0.48px]">VibeCodium Editor</h2>
+                            <p className="text-zinc-500 text-sm mb-10">Select a file from the explorer to begin coding.</p>
+                            <div className="flex flex-col items-start text-xs text-zinc-500 gap-3 font-mono border-t border-[#27272a] pt-6">
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Go to File</span> <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">⌘ P</span></div>
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Search in Files</span> <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">⌘ ⇧ F</span></div>
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Show Explorer</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-zinc-400">⌘ E</span></div>
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Toggle Terminal</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-zinc-400">⌘ J</span></div>
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Toggle Agent Chat</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-zinc-400">⌘ B</span></div>
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-500">Toggle Zen Mode</span> <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">⌘ K</span></div>
                             </div>
                         </div>
                     </div>
@@ -572,7 +569,7 @@ export default function EditorArea({
 
                 {/* ── Compact Inline Agent Diff Panel ─────────────────────── */}
                 {hasPending && pendingUpdate && (
-                    <div className="absolute bottom-4 right-4 w-[480px] max-h-[55%] bg-[#0d0d0f]/98 backdrop-blur-xl border border-purple-500/40 rounded-xl overflow-hidden shadow-[0_8px_40px_rgba(168,85,247,0.2)] flex flex-col z-30">
+                    <div className="absolute bottom-4 right-4 w-[480px] max-h-[55%] bg-[#18181b] border border-purple-500/30 rounded-[10px] overflow-hidden flex flex-col z-30">
                         {/* Header */}
                         <div className="flex items-center justify-between px-3 py-2 bg-purple-900/20 border-b border-purple-500/20 shrink-0">
                             <div className="flex items-center gap-2 text-purple-300 font-medium text-[11px]">
@@ -627,6 +624,50 @@ export default function EditorArea({
                 )}
             </div>
 
+            {/* ── Status Bar ── */}
+            <div className="shrink-0 h-6 bg-[#111113] border-t border-[#1f1f24] flex items-center px-3 gap-4 text-[10px] font-mono text-zinc-500 select-none">
+                <span className="flex items-center gap-1">
+                    <GitBranch size={10} className="text-[#A855F7]" />
+                    {branchName}
+                </span>
+                {activeFile && (
+                    <>
+                        <span className="text-zinc-600">Ln {cursorPos.line}, Col {cursorPos.col}</span>
+                        <span className="text-zinc-600">{language}</span>
+                        <span className="truncate text-zinc-700 ml-auto">{activeFile.path.split("/").pop()}</span>
+                    </>
+                )}
+            </div>
+
+            {/* ── Tab context menu ── */}
+            {contextMenu && (
+                <div
+                    className="fixed z-[200] bg-[#18181b] border border-[#27272a] rounded-[8px] shadow-xl py-1 min-w-[160px]"
+                    style={{ top: contextMenu.y, left: contextMenu.x }}
+                    onMouseDown={e => e.stopPropagation()}
+                >
+                    <button
+                        className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-[#27272a] transition-colors"
+                        onClick={() => { onCloseFile(contextMenu.file); setContextMenu(null); }}
+                    >
+                        Close
+                    </button>
+                    <button
+                        className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-[#27272a] transition-colors"
+                        onClick={() => { onCloseOthers?.(contextMenu.file); setContextMenu(null); }}
+                    >
+                        Close Others
+                    </button>
+                    <div className="my-1 border-t border-[#27272a]" />
+                    <button
+                        className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-[#27272a] transition-colors"
+                        onClick={() => { navigator.clipboard.writeText(contextMenu.file.path); setContextMenu(null); }}
+                    >
+                        Copy Path
+                    </button>
+                </div>
+            )}
+
             <style>{`
                 @keyframes shake {
                     0% { transform: translate(-1px, 0px); }
@@ -642,8 +683,8 @@ export default function EditorArea({
             `}</style>
 
             {/* Game PIP */}
-            {showGame && (
-                <GamePIP onClose={() => setShowGame(false)} />
+            {gameOpen && (
+                <GamePIP onClose={() => onGameChange?.(false)} />
             )}
         </div>
     );
