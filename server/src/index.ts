@@ -18,6 +18,7 @@ import { syncProjectFilesToDisk } from "./utils/sync";
 import { supabase } from "./db/supabase";
 import * as nodePath from "node:path";
 import { scanCode, hasCriticalVulnerability, type ScanResult } from "./security/scanner";
+import * as Y from "yjs";
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
 const LLM_KEY = process.env.LLM_KEY ?? "";
@@ -500,6 +501,22 @@ const roomFileStates = new Map<string, Map<string, string>>(); // projectId -> f
 const activeClientSockets = new Map<string, import("bun").ServerWebSocket<WSData>>(); // clientId -> ws
 const clientLastPong = new Map<string, number>(); // clientId -> last pong timestamp
 
+// Yjs CRDT documents — one Y.Doc per (projectId, filePath)
+const roomYDocs = new Map<string, Map<string, Y.Doc>>(); // projectId -> filePath -> Y.Doc
+
+function getYDoc(projectId: string, filePath: string, initialContent?: string): Y.Doc {
+    if (!roomYDocs.has(projectId)) roomYDocs.set(projectId, new Map());
+    const projectDocs = roomYDocs.get(projectId)!;
+    if (!projectDocs.has(filePath)) {
+        const doc = new Y.Doc();
+        if (initialContent !== undefined && initialContent !== "") {
+            doc.transact(() => doc.getText("content").insert(0, initialContent), "init");
+        }
+        projectDocs.set(filePath, doc);
+    }
+    return projectDocs.get(filePath)!;
+}
+
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const ZOMBIE_TIMEOUT_MS = 55_000; // 2 missed pings + margin
 
@@ -708,12 +725,67 @@ export default {
                     return;
                 }
 
-                // Sync request — send current room state to requesting client
+                // Sync request — send current room state + Y.Doc states to requesting client
                 if (payload.type === "sync_request") {
                     const roomState = roomFileStates.get(data.projectId);
                     if (roomState && roomState.size > 0) {
                         ws.send(JSON.stringify({ type: "room_state", files: Object.fromEntries(roomState) }));
                     }
+                    const projectDocs = roomYDocs.get(data.projectId);
+                    if (projectDocs) {
+                        for (const [filePath, doc] of projectDocs) {
+                            const stateUpdate = Y.encodeStateAsUpdate(doc);
+                            ws.send(JSON.stringify({
+                                type: "yjs_sync",
+                                filePath,
+                                update: Buffer.from(stateUpdate).toString("base64"),
+                            }));
+                        }
+                    }
+                    return;
+                }
+
+                // Yjs update — apply CRDT delta, broadcast merged update to others
+                if (payload.type === "yjs_update") {
+                    const { filePath, update: updateB64 } = payload;
+                    if (!filePath || !updateB64) return;
+
+                    const existingContent = roomFileStates.get(data.projectId)?.get(filePath);
+                    const doc = getYDoc(data.projectId, filePath, existingContent);
+
+                    const updateBytes = new Uint8Array(Buffer.from(updateB64, "base64"));
+                    Y.applyUpdate(doc, updateBytes, "remote");
+
+                    const mergedContent = doc.getText("content").toString();
+
+                    // Keep roomFileStates in sync with merged content
+                    if (!roomFileStates.has(data.projectId)) roomFileStates.set(data.projectId, new Map());
+                    roomFileStates.get(data.projectId)!.set(filePath, mergedContent);
+
+                    // Broadcast the raw Yjs delta to all other clients
+                    ws.publish(data.projectId, JSON.stringify({
+                        type: "yjs_update",
+                        filePath,
+                        update: updateB64,
+                        clientId: data.clientId,
+                    }));
+
+                    // Persist merged content to Supabase
+                    setImmediate(() => {
+                        (async () => {
+                            try {
+                                await supabase.from("files").upsert({
+                                    project_id: data.projectId,
+                                    path: filePath,
+                                    content: mergedContent,
+                                    updated_at: new Date().toISOString(),
+                                }, { onConflict: "project_id,path" });
+                                logTimelineEvent(data.projectId, filePath, mergedContent, "code_update", data.clientId, data.userName, data.color);
+                            } catch (e) {
+                                console.error("[WS Yjs Save Error]:", e);
+                            }
+                        })();
+                    });
                     return;
                 }
 
@@ -909,9 +981,30 @@ export default {
                 }
             }
 
-            // When the last collaborator exits the project, purge timeline events from Supabase
+            // When the last collaborator exits the project, flush unsaved state and purge
             if (remaining.length === 0) {
+                // Flush all in-memory file states to Supabase before clearing (Fix 1 + Fix 3)
+                const finalStates = roomFileStates.get(data.projectId);
+                if (finalStates && finalStates.size > 0) {
+                    void (async () => {
+                        for (const [filePath, content] of finalStates) {
+                            try {
+                                await supabase.from("files").upsert({
+                                    project_id: data.projectId,
+                                    path: filePath,
+                                    content,
+                                    updated_at: new Date().toISOString(),
+                                }, { onConflict: "project_id,path" });
+                            } catch (e) {
+                                console.error("[WS Flush Error]:", e);
+                            }
+                        }
+                        console.log(`[WS] Flushed ${finalStates.size} file(s) to Supabase for project ${data.projectId}`);
+                    })();
+                }
+
                 roomFileStates.delete(data.projectId);
+                roomYDocs.delete(data.projectId);
 
                 // Clear in-memory counters for this project
                 for (const key of timelineEventCounters.keys()) {

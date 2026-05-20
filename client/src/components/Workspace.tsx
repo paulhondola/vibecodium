@@ -173,7 +173,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
             setFiles(prev => prev.map(f =>
                 f.path === data.filePath ? { ...f, content: data.content } : f
             ));
-            setRemoteCodeUpdate({ filePath: data.filePath, content: data.content, clientId: data.appliedBy ?? "agent" });
+            setRemoteCodeUpdate({ filePath: data.filePath, content: data.content, clientId: "__agent_accepted__" });
             setPendingUpdate(null);
         } else if (data.type === "room_state") {
             const incoming = data.files as Record<string, string>;
