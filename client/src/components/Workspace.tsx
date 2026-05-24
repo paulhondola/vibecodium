@@ -97,6 +97,8 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 
     // Collab
     const { isConnected, lastMessage, send } = useSocket();
+    const activeFileRef = useRef<ProjectFile | null>(null);
+    useEffect(() => { activeFileRef.current = activeFile; }, [activeFile]);
     const [collabUsers, setCollabUsers] = useState<{id: string, name: string, color: string, isHost?: boolean}[]>([]);
     const [, setMyColor] = useState("#A855F7");
     const [isHost, setIsHost] = useState(false);
@@ -171,8 +173,22 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
             setFiles(prev => prev.map(f =>
                 f.path === data.filePath ? { ...f, content: data.content } : f
             ));
-            setRemoteCodeUpdate({ filePath: data.filePath, content: data.content, clientId: data.appliedBy ?? "agent" });
+            setRemoteCodeUpdate({ filePath: data.filePath, content: data.content, clientId: "__agent_accepted__" });
             setPendingUpdate(null);
+        } else if (data.type === "room_state") {
+            const incoming = data.files as Record<string, string>;
+            setFiles(prev => {
+                const updated = [...prev];
+                for (const [filePath, content] of Object.entries(incoming)) {
+                    const idx = updated.findIndex(f => f.path === filePath);
+                    if (idx !== -1) updated[idx] = { ...updated[idx], content };
+                }
+                return updated;
+            });
+            const activeFilePath = activeFileRef.current?.path;
+            if (activeFilePath && activeFilePath in incoming) {
+                setRemoteCodeUpdate({ filePath: activeFilePath, content: incoming[activeFilePath], clientId: "room_state" });
+            }
         } else if (data.type === "host_changed") {
             // New host assignment from backend
         }
