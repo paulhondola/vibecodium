@@ -16,7 +16,8 @@
       "Bash(bunx tsc *)",
       "Bash(bun x *)",
       "Bash(echo \"exit: $?\")",
-      "Bash(git *)"
+      "Bash(git *)",
+      "mcp__codegraph__codegraph_files"
     ]
   }
 }

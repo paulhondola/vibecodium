@@ -66,6 +66,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [activeFile, setActiveFile] = useState<ProjectFile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [projectName, setProjectName] = useState<string | null>(null);
+    const [projectEnvironment, setProjectEnvironment] = useState<string>("auto");
     const [projectRepoUrl, setProjectRepoUrl] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const [showCommunityHelp, setShowCommunityHelp] = useState(false);
@@ -136,6 +137,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                     setFiles(data.files || []);
                     if (data.projectName) setProjectName(data.projectName);
                     if (data.repoUrl) setProjectRepoUrl(data.repoUrl);
+                    if (data.environment) setProjectEnvironment(data.environment);
                 }
                 setIsLoading(false);
             })
@@ -407,7 +409,12 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 					<div className="w-[1px] h-4 bg-[#27272a]"></div>
 					<div className="flex items-center gap-2">
 						<span className="font-semibold text-sm text-gray-200">{projectName ?? (projectId ? `Project ${projectId.slice(0, 8)}` : "itec-project")}</span>
-                        
+						{projectEnvironment && projectEnvironment !== "auto" && (
+							<span className="px-2 py-0.5 text-[9px] rounded-md bg-[#09090b] border border-[#27272a] text-gray-400 uppercase tracking-widest">
+								{projectEnvironment}
+							</span>
+						)}
+
                         <div className="ml-6 flex items-center bg-[#09090b] rounded-lg p-0.5 border border-[#27272a]">
                             <button
                                 onClick={() => setShowWhiteboard(false)}

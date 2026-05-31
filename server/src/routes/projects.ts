@@ -63,7 +63,7 @@ projectsRoutes.get("/", async (c) => {
 
         const { data, error } = await supabase
             .from("projects")
-            .select("id, project_name, repo_url, status, local_path, created_at")
+            .select("id, project_name, repo_url, status, local_path, created_at, environment")
             .eq("user_id", user.sub)
             .order("created_at", { ascending: false });
 
@@ -77,6 +77,7 @@ projectsRoutes.get("/", async (c) => {
             status: p.status,
             localPath: p.local_path,
             createdAt: p.created_at,
+            environment: p.environment ?? 'auto',
         }));
 
         return c.json({ success: true, projects }, 200);
@@ -109,6 +110,7 @@ projectsRoutes.post("/import", async (c) => {
     try {
         const payload = await c.req.json();
         const repoUrl = payload.repoUrl as string;
+        const environment: string = payload.environment ?? 'auto';
 
         if (!repoUrl) return c.json({ error: "Missing repoUrl parameter" }, 400);
         if (!repoUrl.startsWith("https://github.com/"))
@@ -180,6 +182,7 @@ projectsRoutes.post("/import", async (c) => {
             project_name: projectName,
             repo_url: repoUrl,
             status: "cloning",
+            environment,
         });
         if (insertErr) throw insertErr;
 
@@ -213,7 +216,7 @@ projectsRoutes.get("/:id/files", async (c) => {
 
         const { data: project } = await supabase
             .from("projects")
-            .select("project_name, repo_url, local_path")
+            .select("project_name, repo_url, local_path, environment")
             .eq("id", projectId)
             .maybeSingle();
 
@@ -239,7 +242,7 @@ projectsRoutes.get("/:id/files", async (c) => {
             }
         }
 
-        return c.json({ success: true, files: projectFiles ?? [], projectName, repoUrl: project?.repo_url ?? null });
+        return c.json({ success: true, files: projectFiles ?? [], projectName, repoUrl: project?.repo_url ?? null, environment: project?.environment ?? 'auto' });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }

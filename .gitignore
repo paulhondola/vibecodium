@@ -57,3 +57,9 @@ Icon?
 graphify-out/cache
 graphify-out/.graphify_python
 graphify-out/manifest.json
+
+# Codegraph
+.codegraph
+
+# Antigravity
+.antigravitycli

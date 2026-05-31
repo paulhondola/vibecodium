@@ -264,6 +264,16 @@ export const app = new Hono()
 // Docker Terminal Engine
 // ──────────────────────────────────────────
 
+// Explicit environment key → Docker image (overrides auto-detection when set on a project)
+const ENVIRONMENT_TO_IMAGE: Record<string, string> = {
+    python: "vibecodium-python:latest",
+    node:   "vibecodium-node:latest",
+    bun:    "vibecodium-bun:latest",
+    cpp:    "vibecodium-cpp:latest",
+    rust:   "vibecodium-rust:latest",
+    go:     "vibecodium-go:latest",
+};
+
 // Extension → Docker image mapping (uses local custom images)
 const EXT_TO_IMAGE: Record<string, string> = {
     ".py":  "vibecodium-python:latest",
@@ -360,7 +370,12 @@ async function bootstrapRoom(roomId: string): Promise<void> {
 
         broadcastToRoom(`\x1b[32m✓ Security scan passed\x1b[0m (${scanResult.scannedFiles} files, ${scanResult.scannedLines} lines, ${scanResult.scanDuration}ms)\r\n`);
 
-        const image = detectTerminalImage((projectFiles ?? []).map(f => f.path));
+        const { data: projectMeta } = await supabase
+            .from("projects").select("environment").eq("id", roomId).maybeSingle();
+        const image = (projectMeta?.environment && projectMeta.environment !== 'auto'
+            && ENVIRONMENT_TO_IMAGE[projectMeta.environment])
+            ? ENVIRONMENT_TO_IMAGE[projectMeta.environment]!
+            : detectTerminalImage((projectFiles ?? []).map(f => f.path));
         broadcastToRoom(`\x1b[90mImage: ${image}  |  ${hostDir} → /usr/src/app\x1b[0m\r\n`);
 
         if (!image.startsWith("vibecodium-")) {
