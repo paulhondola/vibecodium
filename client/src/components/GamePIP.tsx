@@ -1,12 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import SubwaySurfer3D from './SubwaySurfer3D';
+import FlappyBird from './FlappyBird';
 import { X } from 'lucide-react';
+
+export type GameType = 'subway' | 'flappy';
 
 interface GamePIPProps {
     onClose: () => void;
+    gameType: GameType;
+    onSwitchGame: (gameType: GameType) => void;
 }
 
-export default function GamePIP({ onClose }: GamePIPProps) {
+export default function GamePIP({ onClose, gameType, onSwitchGame }: GamePIPProps) {
     const [position, setPosition] = useState({ 
         x: Math.max(0, (window.innerWidth - 800) / 2), 
         y: Math.max(0, (window.innerHeight - 600) / 2) 
@@ -17,6 +22,15 @@ export default function GamePIP({ onClose }: GamePIPProps) {
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
     const pipRef = useRef<HTMLDivElement>(null);
+
+    // Auto-resize when game changes
+    useEffect(() => {
+        if (gameType === 'flappy') {
+            setSize({ width: 340, height: 520 });
+        } else {
+            setSize({ width: 800, height: 600 });
+        }
+    }, [gameType]);
 
     // Handle dragging
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -96,6 +110,13 @@ export default function GamePIP({ onClose }: GamePIPProps) {
                 </div>
                 <div className="flex items-center gap-1">
                     <button
+                        onClick={() => onSwitchGame(gameType === 'subway' ? 'flappy' : 'subway')}
+                        className="h-6 px-2 text-[10px] bg-white/10 hover:bg-white/20 rounded flex items-center justify-center transition-colors text-white mr-1 border border-white/20 font-semibold"
+                        title="Switch Game"
+                    >
+                        {gameType === 'subway' ? '🐦 FLAPPY BIRD' : '🏃‍♂️ SUBWAY SURFER'}
+                    </button>
+                    <button
                         onClick={handleGameClose}
                         className="w-6 h-6 hover:bg-red-500/50 rounded flex items-center justify-center transition-colors"
                         title="Close Game"
@@ -107,7 +128,11 @@ export default function GamePIP({ onClose }: GamePIPProps) {
 
             {/* Game Content */}
             <div className="w-full h-full pt-8">
-                <SubwaySurfer3D onClose={handleGameClose} />
+                {gameType === 'subway' ? (
+                    <SubwaySurfer3D onClose={handleGameClose} />
+                ) : (
+                    <FlappyBird onClose={handleGameClose} />
+                )}
             </div>
 
             {/* Resize Handle */}

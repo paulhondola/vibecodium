@@ -3,7 +3,7 @@ import { useAuth } from "../contexts/AuthProvider";
 import { Loader2, ExternalLink } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import CoderMatchModal from "../components/CoderMatchModal";
-import GamePIP from "../components/GamePIP";
+import GamePIP, { type GameType } from "../components/GamePIP";
 import DashboardHeader from "../components/dashboard/DashboardHeader";
 import DashboardSidebar from "../components/dashboard/DashboardSidebar";
 import CreateRepoModal from "../components/dashboard/CreateRepoModal";
@@ -55,7 +55,7 @@ function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCoderMatch, setShowCoderMatch] = useState(false);
-  const [showGame, setShowGame] = useState(false);
+  const [activeGame, setActiveGame] = useState<GameType | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"all" | "recent">("all");
   const [deployedApps, setDeployedApps] = useState<DeployedApp[]>([]);
@@ -270,7 +270,7 @@ function DashboardPage() {
         <div className="absolute inset-0 bg-[linear-gradient(rgba(168,85,247,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(168,85,247,0.05)_1px,transparent_1px)] bg-[size:40px_40px]" />
       </div>
 
-      <DashboardHeader user={user} onShowGame={() => setShowGame(true)} />
+      <DashboardHeader user={user} onShowGame={() => setActiveGame('flappy')} />
 
       <DashboardSidebar
         onFilterChange={setActiveFilter}
@@ -546,8 +546,8 @@ function DashboardPage() {
         <CoderMatchModal onClose={() => setShowCoderMatch(false)} />
       )}
 
-      {showGame && (
-        <GamePIP onClose={() => setShowGame(false)} />
+      {activeGame && (
+        <GamePIP gameType={activeGame} onSwitchGame={setActiveGame} onClose={() => setActiveGame(null)} />
       )}
 
       {showCreateModal && (

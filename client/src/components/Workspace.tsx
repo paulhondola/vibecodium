@@ -407,8 +407,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void; projectId: 
 										remoteCursorUpdate={remoteCursorUpdate}
 										pendingUpdate={pendingUpdate}
 										onPendingResolved={() => setPendingUpdate(null)}
-										projectId={projectId}
-										agentToken={agentToken}
 										powerModeEnabled={showPowerMode}
 									/>
 								)}

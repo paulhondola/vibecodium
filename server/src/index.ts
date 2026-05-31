@@ -52,6 +52,8 @@ export const app = new Hono()
 	.use("/favicon.ico", serveStatic({ path: "../client/dist/favicon.ico" }))
 	.use("/vibecodium_icon.svg", serveStatic({ path: "../client/dist/vibecodium_icon.svg" }))
 	.use("/vite.svg", serveStatic({ path: "../client/dist/vite.svg" }))
+	.use("/subway-surfer.html", serveStatic({ path: "../client/dist/subway-surfer.html" }))
+	.use("/flappy-bird/*", serveStatic({ root: "../client/dist" }))
 	.get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
 
 
