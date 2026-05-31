@@ -1,5 +1,4 @@
 import { supabase } from "../db/supabase";
-import { logTimelineEvent, timelineEventCounters } from "../utils/timeline";
 import type { WSData } from "./terminal";
 
 // ──────────────────────────────────────────
@@ -113,12 +112,6 @@ export function handleCollabMessage(ws: import("bun").ServerWebSocket<WSData>, m
 									content: payload.content,
 									timestamp: new Date().toISOString(),
 								});
-
-							// Log rich event to Supabase for timeline feature
-							logTimelineEvent(
-								data.projectId, payload.filePath, payload.content,
-								"agent_accepted", data.clientId, data.userName, data.color
-							);
 						} catch (e) {
 							console.error("[WS AgentAccept DB Error]:", e);
 						}
@@ -173,12 +166,6 @@ export function handleCollabMessage(ws: import("bun").ServerWebSocket<WSData>, m
 									content: payload.content,
 									timestamp: new Date().toISOString(),
 								});
-
-							// Log rich event to Supabase for timeline feature
-							logTimelineEvent(
-								data.projectId, payload.filePath, payload.content,
-								"code_update", data.clientId, data.userName, data.color
-							);
 						} catch (e) {
 							console.error("[WS AutoSave Error]:", e);
 						}
@@ -217,24 +204,6 @@ export function handleCollabClose(ws: import("bun").ServerWebSocket<WSData>) {
 		} else {
 			roomHosts.delete(data.projectId);
 		}
-	}
-
-	// When the last collaborator exits the project, purge timeline events from Supabase
-	if (remaining.length === 0) {
-		// Clear in-memory counters for this project
-		for (const key of timelineEventCounters.keys()) {
-			if (key.startsWith(`${data.projectId}::`)) timelineEventCounters.delete(key);
-		}
-		// Fire-and-forget Supabase cleanup
-		void supabase
-			.from("timeline_events")
-			.delete()
-			.eq("project_id", data.projectId)
-			.then(({ error }) => {
-				if (error) console.error("[Timeline purge error]:", error);
-				else console.log(`[Timeline] Purged events for project ${data.projectId}`);
-			});
-
 	}
 
 	console.log(`[WS] ${data.userName} left ${data.projectId}`);

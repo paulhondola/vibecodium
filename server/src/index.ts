@@ -12,7 +12,6 @@ import githubRoutes from "./routes/github";
 import usersRouter from "./routes/users";
 import deployRoutes from "./routes/deploy";
 import helpRoutes from "./routes/help";
-import timelineRoutes from "./routes/timeline";
 import llmRoutes from "./routes/llm";
 import executeRoutes from "./routes/execute";
 import { supabase } from "./db/supabase";
@@ -46,7 +45,6 @@ export const app = new Hono()
 	.route("/api/users", usersRouter)
 	.route("/api/deploy", deployRoutes)
 	.route("/api/help", helpRoutes)
-	.route("/api/timeline", timelineRoutes)
 	.route("/api", llmRoutes)
 	.route("/execute", executeRoutes)
 	// Serve static assets from the client dist folder

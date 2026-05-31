@@ -6,7 +6,6 @@ import type { ProjectFile } from "./Workspace";
 import { useSocket } from "../contexts/SocketProvider";
 import type { PendingUpdate } from "../hooks/useAgentStream";
 import GamePIP from "./GamePIP";
-import TimelineBar, { type TimelineEvent } from "./TimelineBar";
 import { API_BASE } from "@/lib/config";
 
 function safeCssId(id: string) {
@@ -47,13 +46,6 @@ export default function EditorArea({
     const [sparks, setSparks] = useState<{ id: string; x: number; y: number; color: string }[]>([]);
     const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const editorContainerRef = useRef<HTMLDivElement>(null);
-
-    // Time-Travel Debugging state
-    const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
-    const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
-    const [eventIndex, setEventIndex] = useState(0);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [analysisResult, setAnalysisResult] = useState<string | null>(null);
 
     // Game state
     const [showGame, setShowGame] = useState(false);
@@ -117,7 +109,6 @@ export default function EditorArea({
 
     // Sync code when active file changes
     useEffect(() => {
-        setIsTimeTravelOpen(false); // Close timeline on file switch
         if (activeFile) {
             setCode(activeFile.content || "");
             decorationsRef.current?.clear();
@@ -125,80 +116,6 @@ export default function EditorArea({
             setCode("");
         }
     }, [activeFile]);
-
-    // Fetch timeline events when Time-Travel opens
-    useEffect(() => {
-        if (!isTimeTravelOpen || !projectId || !activeFile) return;
-        setTimelineEvents([]);
-        setAnalysisResult(null);
-        const headers: Record<string, string> = {};
-        if (agentToken) headers["Authorization"] = `Bearer ${agentToken}`;
-        fetch(
-            `${API_BASE}/api/timeline/${projectId}?path=${encodeURIComponent(activeFile.path)}`,
-            { headers }
-        )
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.events) {
-                    setTimelineEvents(data.events); // already ASC (oldest → newest)
-                    setEventIndex(data.events.length - 1); // start at latest
-                }
-            })
-            .catch(err => console.error("Failed fetching timeline:", err));
-    }, [isTimeTravelOpen, projectId, activeFile]);
-
-    // Apply timeline event content to editor when scrubbing
-    useEffect(() => {
-        if (isTimeTravelOpen && timelineEvents.length > 0) {
-            const snappedCode = timelineEvents[eventIndex]?.content ?? "";
-            setCode(snappedCode);
-            if (editorRef.current) {
-                const model = editorRef.current.getModel();
-                if (model && model.getValue() !== snappedCode) {
-                    isRemoteUpdate.current = true;
-                    model.setValue(snappedCode);
-                    setTimeout(() => { isRemoteUpdate.current = false; }, 50);
-                }
-            }
-        }
-    }, [eventIndex, isTimeTravelOpen, timelineEvents]);
-
-    const handleRestoreEvent = () => {
-        if (!isTimeTravelOpen || timelineEvents.length === 0) return;
-        const restoredContent = timelineEvents[eventIndex]?.content ?? "";
-        if (activeFileRef.current) {
-            activeFileRef.current.content = restoredContent;
-            sendRef.current({
-                type: "code_change",
-                filePath: activeFileRef.current.path,
-                content: restoredContent,
-            });
-        }
-        setIsTimeTravelOpen(false);
-    };
-
-    const handleAnalyze = useCallback(async (eventIds: string[]): Promise<void> => {
-        if (!projectId || !activeFile) return;
-        setIsAnalyzing(true);
-        setAnalysisResult(null);
-        try {
-            const headers: Record<string, string> = { "Content-Type": "application/json" };
-            if (agentToken) headers["Authorization"] = `Bearer ${agentToken}`;
-            const res = await fetch(`${API_BASE}/api/timeline/${projectId}/analyze`, {
-                method: "POST",
-                headers,
-                body: JSON.stringify({ filePath: activeFile.path, eventIds }),
-            });
-            const data = await res.json();
-            if (data.success) setAnalysisResult(data.analysis);
-        } catch (e) {
-            console.error("AI analysis failed:", e);
-        } finally {
-            setIsAnalyzing(false);
-        }
-    }, [projectId, activeFile, agentToken]);
-
-
 
     // Emit file_focus when switching files
     useEffect(() => {
@@ -448,18 +365,6 @@ export default function EditorArea({
                         </div>
                     );
                 })}
-                
-                {/* Time Travel Toggle Button */}
-                <div className="ml-auto p-1.5 flex items-center shrink-0 border-l border-[#27272a]">
-                    <button
-                        onClick={() => setIsTimeTravelOpen(prev => !prev)}
-                        className={`text-[10px] px-2 py-1 flex items-center gap-1.5 rounded transition font-medium tracking-wide ${isTimeTravelOpen ? "bg-cyan-500/20 text-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.2)]" : "text-gray-400 hover:text-gray-200 hover:bg-[#27272a]"}`}
-                        title="Time-Travel History"
-                    >
-                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        TIME TRAVEL
-                    </button>
-                </div>
 
                 {/* Game Toggle Button */}
                 <div className="p-1.5 flex items-center shrink-0 border-l border-[#27272a]">
@@ -533,26 +438,10 @@ export default function EditorArea({
                             scrollBeyondLastLine: false,
                             fontFamily: isRetro ? "'Courier New', monospace" : "'JetBrains Mono', 'Fira Code', monospace",
                             padding: { top: 16 },
-                            readOnly: hasPending || isTimeTravelOpen, // lock editor while diff is shown or time traveling
+                            readOnly: hasPending, // lock editor while diff is shown
                         }}
                         onMount={handleEditorDidMount}
                     />
-                    
-                    {/* ── Time-Travel Timeline Bar ── */}
-                    {isTimeTravelOpen && (
-                        <TimelineBar
-                            events={timelineEvents}
-                            currentIndex={eventIndex}
-                            onScrub={setEventIndex}
-                            onRestore={handleRestoreEvent}
-                            onClose={() => setIsTimeTravelOpen(false)}
-                            onLive={() => { setEventIndex(timelineEvents.length - 1); setIsTimeTravelOpen(false); }}
-                            onAnalyze={handleAnalyze}
-                            isLoading={timelineEvents.length === 0}
-                            analysisResult={analysisResult}
-                            isAnalyzing={isAnalyzing}
-                        />
-                    )}
                     </>
                 ) : (
                     <div className="flex h-full w-full items-center justify-center bg-[#09090b] select-none">
