@@ -1,11 +1,10 @@
 import { Hono } from "hono";
-import Docker from "dockerode";
 import { Writable } from "stream";
+import { docker } from "../utils/docker";
 import { syncProjectFilesToDisk } from "../utils/sync";
 import type { ExecuteRequest, ExecuteResponse } from "shared";
 
 const executeRoutes = new Hono();
-const docker = new Docker();
 
 const LANGUAGE_IMAGES: Record<string, string> = {
 	python: "vibecodium-python:latest",

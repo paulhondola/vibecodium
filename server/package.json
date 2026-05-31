@@ -18,18 +18,15 @@
     "dev": "npx concurrently \"bun --watch run src/index.ts\" \"tsc --watch\""
   },
   "dependencies": {
-    "@types/mongoose": "^5.11.97",
+    "@supabase/supabase-js": "^2.106.2",
     "dockerode": "^4.0.10",
-    "drizzle-orm": "^0.45.2",
     "hono": "^4.10.8",
     "jose": "^6.2.2",
     "mongoose": "^9.3.3",
-    "node-pty": "^1.1.0",
     "shared": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/dockerode": "^4.0.1",
-    "drizzle-kit": "^0.31.10"
+    "@types/dockerode": "^4.0.1"
   }
 }

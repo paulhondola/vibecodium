@@ -1,28 +1,3 @@
-export type ApiResponse = {
-  message: string;
-  success: true;
-}
-
-// ── WebSocket editor protocol ──────────────────────────────────────────────
-
-export interface WsEditorUpdate {
-    type:     "update";
-    fileId:   string;
-    content:  string;
-}
-
-// Client → Server
-export type WsClientMessage = WsEditorUpdate;
-
-// Server → Client
-export interface WsServerUpdate {
-    type:     "update";
-    fileId:   string;
-    content:  string;
-    senderId: string;
-}
-
-export type WsServerMessage = WsServerUpdate;
 
 export type ExecuteRequest = {
   language: string;
