@@ -20,6 +20,7 @@ export async function upsertUser(payload: {
         `https://ui-avatars.com/api/?name=${encodeURIComponent(
           payload.name || payload.email || "U"
         )}&background=0D8ABC&color=fff`,
+      github_username: payload.nickname || null,
       created_at: new Date().toISOString(),
     },
     { onConflict: "id", ignoreDuplicates: false }

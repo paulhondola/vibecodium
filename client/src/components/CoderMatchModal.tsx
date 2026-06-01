@@ -10,6 +10,7 @@ import {
 	ChevronLeft,
 	Send,
 	UserX,
+	Github,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -25,6 +26,7 @@ interface MatchUser {
 	bio: string;
 	language: string;
 	location: string;
+	github_username: string | null;
 }
 
 interface MatchEntry {
@@ -456,6 +458,18 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 											<p className="text-gray-700 text-sm leading-snug mt-2 break-words">
 												"{profile.bio}"
 											</p>
+										)}
+										{profile.github_username && (
+											<a
+												href={`https://github.com/${profile.github_username}`}
+												target="_blank"
+												rel="noopener noreferrer"
+												onClick={(e) => e.stopPropagation()}
+												className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors w-fit"
+											>
+												<Github size={13} />
+												@{profile.github_username}
+											</a>
 										)}
 									</div>
 								</div>

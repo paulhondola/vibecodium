@@ -23,7 +23,7 @@ router.get("/match", authMiddleware, async (c) => {
 
         let baseQuery = supabase
             .from("users")
-            .select("id, name, email, picture, bio, language, location, created_at")
+            .select("id, name, email, picture, bio, language, location, created_at, github_username")
             .limit(20);
 
         // Exclude self + already-swiped (each neq is AND'd by PostgREST)
