@@ -11,6 +11,7 @@ import sessionsRoutes from "./routes/sessions";
 import agentRoutes from "./routes/agent";
 import githubRoutes from "./routes/github";
 import usersRouter from "./routes/users";
+import matchRouter from "./routes/match";
 import deployRoutes from "./routes/deploy";
 import helpRoutes from "./routes/help";
 import timelineRoutes from "./routes/timeline";
@@ -18,6 +19,7 @@ import { syncProjectFilesToDisk } from "./utils/sync";
 import { supabase } from "./db/supabase";
 import * as nodePath from "node:path";
 import { scanCode, hasCriticalVulnerability, type ScanResult } from "./security/scanner";
+import { addMatchClient, removeMatchClient } from "./ws/matchMessaging";
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
 const LLM_KEY = process.env.LLM_KEY ?? "";
@@ -81,6 +83,7 @@ export const app = new Hono()
 	.route("/api/agent", agentRoutes)
 	.route("/api/github", githubRoutes)
 	.route("/api/users", usersRouter)
+	.route("/api/match", matchRouter)
 	.route("/api/deploy", deployRoutes)
     .route("/api/help", helpRoutes)
     .route("/api/timeline", timelineRoutes)
@@ -488,7 +491,7 @@ interface WSData {
     userName: string;
     isHost: boolean;
     color: string;
-    type: "collab" | "terminal";
+    type: "collab" | "terminal" | "match";
 }
 
 // Room tracking for host resolution
@@ -501,6 +504,17 @@ export default {
     // Manual routing wrapper around Hono to sniff WS connections instantly
 	async fetch(req: Request, server: import("bun").Server<WSData>) {
         const url = new URL(req.url);
+
+        // Match chat WebSocket — /ws/match?matchId=&userId=
+        if (url.pathname === "/ws/match") {
+            const matchId = url.searchParams.get("matchId") || "";
+            const userId = url.searchParams.get("userId") || "anon";
+            if (!matchId) return new Response("matchId required", { status: 400 });
+            if (server.upgrade(req, {
+                data: { type: "match", projectId: matchId, clientId: userId, userName: "", isHost: false, color: "" }
+            })) return;
+            return new Response("Upgrade failed", { status: 500 });
+        }
 
         // Terminals — Docker-backed collaborative sandbox
         if (url.pathname === "/ws/terminal") {
@@ -543,6 +557,13 @@ export default {
 	websocket: {
         open(ws: import("bun").ServerWebSocket<WSData>) {
             const data = ws.data;
+
+            // Match chat room
+            if (data.type === "match") {
+                addMatchClient(data.projectId, ws);
+                return;
+            }
+
             if (data.type === "terminal") {
                 ws.subscribe(`term_${data.projectId}`);
                 const roomId = data.projectId;
@@ -806,6 +827,11 @@ export default {
         },
 
         close(ws: import("bun").ServerWebSocket<WSData>) {
+            if (ws.data.type === "match") {
+                removeMatchClient(ws.data.projectId, ws);
+                return;
+            }
+
             if (ws.data.type === "terminal") {
                 ws.unsubscribe(`term_${ws.data.projectId}`);
                 const roomId = ws.data.projectId;
