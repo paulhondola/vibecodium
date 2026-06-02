@@ -116,6 +116,7 @@ function ProfilePage() {
 		text: string;
 		type: "success" | "error";
 	} | null>(null);
+	const [showEditProfile, setShowEditProfile] = useState(false);
 
 	useEffect(() => {
 		if (user?.nickname) {
@@ -312,10 +313,10 @@ function ProfilePage() {
 			{/* Navigation */}
 			<nav className="fixed top-0 z-[100] flex items-center w-full px-6 h-14 bg-[#02040a]/80 backdrop-blur-md border-b border-[rgba(168,85,247,0.1)]">
 				<button
-					onClick={() => navigate({ to: "/", search: { w: undefined } })}
+					onClick={() => navigate({ to: "/dashboard", search: { w: undefined } })}
 					className="flex items-center gap-2 text-slate-400 hover:text-[#A855F7] transition-colors font-['Space_Grotesk'] text-sm tracking-widest uppercase"
 				>
-					<ArrowLeft size={16} /> Return Home
+					<ArrowLeft size={16} /> Return to dashboard
 				</button>
 			</nav>
 
@@ -355,10 +356,10 @@ function ProfilePage() {
 
 						<div className="space-y-3 pt-6 border-t border-white/5">
 							<button
-								onClick={() => document.getElementById("public-profile")?.scrollIntoView({ behavior: "smooth" })}
+								onClick={() => setShowEditProfile((prev) => !prev)}
 								className="w-full py-3 bg-[rgba(26,31,46,0.4)] hover:bg-[rgba(168,85,247,0.1)] border border-transparent hover:border-[rgba(168,85,247,0.3)] text-white rounded-xl transition-all font-['Space_Grotesk'] tracking-widest uppercase text-xs font-bold"
 							>
-								Edit Profile
+								{showEditProfile ? "Hide Edit Profile" : "Edit Profile"}
 							</button>
 							<button
 								onClick={() => logout()}
@@ -399,59 +400,61 @@ function ProfilePage() {
 					</div>
 
 					{/* Public Profile */}
-					<div id="public-profile" className={cardCls}>
-						<h3 className="text-md font-['Space_Grotesk'] font-bold text-white tracking-tight flex items-center gap-2 mb-6">
-							<User size={16} className="text-[#A855F7]" />
-							Public Profile
-						</h3>
-						<div className="space-y-5">
-							<div className="space-y-2">
-								<label className={labelCls}>Bio</label>
-								<textarea
-									value={profileBio}
-									onChange={(e) => setProfileBio(e.target.value.slice(0, 200))}
-									placeholder="Tell other coders about yourself..."
-									rows={3}
-									className={`${inputCls} resize-none`}
-								/>
-								<p className="text-[10px] text-slate-600 text-right">{profileBio.length}/200</p>
-							</div>
-							<div className="grid md:grid-cols-2 gap-6">
+					{showEditProfile && (
+						<div id="public-profile" className={cardCls}>
+							<h3 className="text-md font-['Space_Grotesk'] font-bold text-white tracking-tight flex items-center gap-2 mb-6">
+								<User size={16} className="text-[#A855F7]" />
+								Public Profile for Vibe Match
+							</h3>
+							<div className="space-y-5">
 								<div className="space-y-2">
-									<label className={labelCls}><Code2 size={12} /> Primary language</label>
-									<select value={profileLanguage} onChange={(e) => setProfileLanguage(e.target.value)} className={inputCls}>
-										<option value="">Select a language</option>
-										{PROFILE_LANGUAGES.map((lang) => <option key={lang} value={lang}>{lang}</option>)}
-									</select>
-								</div>
-								<div className="space-y-2">
-									<label className={labelCls}><MapPin size={12} /> Location</label>
-									<input
-										type="text"
-										value={profileLocation}
-										onChange={(e) => setProfileLocation(e.target.value.slice(0, 100))}
-										placeholder="City, Country"
-										className={inputCls}
+									<label className={labelCls}>Bio</label>
+									<textarea
+										value={profileBio}
+										onChange={(e) => setProfileBio(e.target.value.slice(0, 200))}
+										placeholder="Tell other coders about yourself..."
+										rows={3}
+										className={`${inputCls} resize-none`}
 									/>
+									<p className="text-[10px] text-slate-600 text-right">{profileBio.length}/200</p>
 								</div>
-							</div>
-							<div className="flex items-center gap-3 pt-2">
-								<button
-									onClick={handleSaveProfile}
-									disabled={isSavingProfile || isFetchingProfile}
-									className="px-8 py-2.5 bg-[#A855F7]/10 hover:bg-[#A855F7]/20 border border-[#A855F7]/30 text-[#A855F7] rounded-lg transition-all font-bold text-[10px] uppercase tracking-widest flex items-center gap-2 disabled:opacity-50"
-								>
-									{isSavingProfile ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-									{isSavingProfile ? "Saving..." : "Save Profile"}
-								</button>
-								{profileSaveMsg && (
-									<motion.span initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} className={`text-xs font-bold ${profileSaveMsg.type === "success" ? "text-green-400" : "text-red-400"}`}>
-										{profileSaveMsg.text}
-									</motion.span>
-								)}
+								<div className="grid md:grid-cols-2 gap-6">
+									<div className="space-y-2">
+										<label className={labelCls}><Code2 size={12} /> Primary language</label>
+										<select value={profileLanguage} onChange={(e) => setProfileLanguage(e.target.value)} className={inputCls}>
+											<option value="">Select a language</option>
+											{PROFILE_LANGUAGES.map((lang) => <option key={lang} value={lang}>{lang}</option>)}
+										</select>
+									</div>
+									<div className="space-y-2">
+										<label className={labelCls}><MapPin size={12} /> Location</label>
+										<input
+											type="text"
+											value={profileLocation}
+											onChange={(e) => setProfileLocation(e.target.value.slice(0, 100))}
+											placeholder="City, Country"
+											className={inputCls}
+										/>
+									</div>
+								</div>
+								<div className="flex items-center gap-3 pt-2">
+									<button
+										onClick={handleSaveProfile}
+										disabled={isSavingProfile || isFetchingProfile}
+										className="px-8 py-2.5 bg-[#A855F7]/10 hover:bg-[#A855F7]/20 border border-[#A855F7]/30 text-[#A855F7] rounded-lg transition-all font-bold text-[10px] uppercase tracking-widest flex items-center gap-2 disabled:opacity-50"
+									>
+										{isSavingProfile ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+										{isSavingProfile ? "Saving..." : "Save Profile"}
+									</button>
+									{profileSaveMsg && (
+										<motion.span initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} className={`text-xs font-bold ${profileSaveMsg.type === "success" ? "text-green-400" : "text-red-400"}`}>
+											{profileSaveMsg.text}
+										</motion.span>
+									)}
+								</div>
 							</div>
 						</div>
-					</div>
+					)}
 
 					{/* Integrations */}
 					<div className={cardCls}>
