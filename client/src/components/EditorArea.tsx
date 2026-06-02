@@ -8,6 +8,19 @@ import type { PendingUpdate } from "../hooks/useAgentStream";
 import GamePIP from "./GamePIP";
 import TimelineBar, { type TimelineEvent } from "./TimelineBar";
 import { API_BASE } from "@/lib/config";
+import * as Y from "yjs";
+
+function uint8ArrayToBase64(arr: Uint8Array): string {
+    let binary = "";
+    for (let i = 0; i < arr.byteLength; i++) binary += String.fromCharCode(arr[i]!);
+    return btoa(binary);
+}
+function base64ToUint8Array(b64: string): Uint8Array {
+    const binaryStr = atob(b64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    return bytes;
+}
 
 function safeCssId(id: string) {
     return id.replace(/[^a-zA-Z0-9]/g, "_");
@@ -65,15 +78,51 @@ export default function EditorArea({
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
 
-    const { send } = useSocket();
+    const { send, lastMessage: socketMessage } = useSocket();
     const sendRef = useRef(send);
     useEffect(() => { sendRef.current = send; }, [send]);
+
+    // One Y.Doc per open file — keyed by filePath
+    const ydocsRef = useRef(new Map<string, Y.Doc>());
 
     const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
     const isRemoteUpdate = useRef(false);
     const injectedStyles = useRef<Set<string>>(new Set());
     const activeFileRef = useRef(activeFile);
     useEffect(() => { activeFileRef.current = activeFile; }, [activeFile]);
+
+    // Initialise Y.Doc when active file changes (creates it if missing)
+    useEffect(() => {
+        if (!activeFile) return;
+        const { path: filePath, content: initialContent } = activeFile;
+        if (!ydocsRef.current.has(filePath)) {
+            const doc = new Y.Doc();
+            if (initialContent) {
+                doc.transact(() => doc.getText("content").insert(0, initialContent), "init");
+            }
+            doc.on("update", (update: Uint8Array, origin: unknown) => {
+                if (origin !== "local") return;
+                sendRef.current({
+                    type: "yjs_update",
+                    filePath: activeFileRef.current!.path,
+                    update: uint8ArrayToBase64(update),
+                });
+            });
+            ydocsRef.current.set(filePath, doc);
+        }
+        // Sync Monaco to Y.Doc on file switch (may have received remote edits while tab was inactive)
+        if (editorRef.current) {
+            const doc = ydocsRef.current.get(filePath)!;
+            const ydocContent = doc.getText("content").toString();
+            const model = editorRef.current.getModel();
+            if (model && ydocContent && model.getValue() !== ydocContent) {
+                isRemoteUpdate.current = true;
+                model.setValue(ydocContent);
+                setCode(ydocContent);
+                setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+            }
+        }
+    }, [activeFile?.path]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Konami code Easter Egg
     const konamiIndex = useRef(0);
@@ -122,11 +171,40 @@ export default function EditorArea({
         }
     }, [monaco]);
 
+    // Register onDidChangeContent on the current Monaco model.
+    // Placed after Y.Doc init so the Y.Doc exists when the listener first fires.
+    // Re-runs on file switch to future-proof against model changes (e.g. if a path prop is added).
+    useEffect(() => {
+        const ed = editorRef.current;
+        if (!ed) return;
+        const model = ed.getModel();
+        if (!model) return;
+        const disposable = model.onDidChangeContent((e) => {
+            if (isRemoteUpdate.current) return;
+            const filePath = activeFileRef.current?.path;
+            if (!filePath) return;
+            const doc = ydocsRef.current.get(filePath);
+            if (!doc) return;
+            for (const change of e.changes) {
+                doc.transact(() => {
+                    const ytext = doc.getText("content");
+                    if (change.rangeLength > 0) ytext.delete(change.rangeOffset, change.rangeLength);
+                    if (change.text) ytext.insert(change.rangeOffset, change.text);
+                }, "local");
+            }
+        });
+        return () => disposable.dispose();
+    }, [activeFile?.path]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // Sync code when active file changes
     useEffect(() => {
         onTimeTravelChange?.(false); // Close timeline on file switch
         if (activeFile) {
+            // Guard the model update that @monaco-editor/react will trigger via executeEdits
+            // (value prop change fires onDidChangeContent — must not corrupt the new file's Y.Doc)
+            isRemoteUpdate.current = true;
             setCode(activeFile.content || "");
+            setTimeout(() => { isRemoteUpdate.current = false; }, 100);
             decorationsRef.current?.clear();
         } else {
             setCode("");
@@ -176,11 +254,22 @@ export default function EditorArea({
         const restoredContent = timelineEvents[eventIndex]?.content ?? "";
         if (activeFileRef.current) {
             activeFileRef.current.content = restoredContent;
-            sendRef.current({
-                type: "code_change",
-                filePath: activeFileRef.current.path,
-                content: restoredContent,
-            });
+            const restoreDoc = ydocsRef.current.get(activeFileRef.current.path);
+            if (restoreDoc) {
+                // "local" origin triggers the Yjs observer → yjs_update broadcast to all peers
+                restoreDoc.transact(() => {
+                    const ytext = restoreDoc.getText("content");
+                    ytext.delete(0, ytext.length);
+                    ytext.insert(0, restoredContent);
+                }, "local");
+            } else {
+                // Fallback for files without an active Y.Doc
+                sendRef.current({
+                    type: "code_change",
+                    filePath: activeFileRef.current.path,
+                    content: restoredContent,
+                });
+            }
         }
         onTimeTravelChange?.(false);
     };
@@ -214,11 +303,31 @@ export default function EditorArea({
         sendRef.current({ type: "file_focus", filePath: activeFile.path });
     }, [activeFile]);
 
-    // Apply incoming remote code update
+    // Apply incoming remote code update (non-Yjs path — room_state and legacy code_update)
     useEffect(() => {
         if (!remoteCodeUpdate) return;
         if (remoteCodeUpdate.clientId === userId) return;
         if (remoteCodeUpdate.filePath !== activeFileRef.current?.path) return;
+
+        // If Yjs is active for this file, skip regular code_update — Yjs handles it more accurately.
+        // Always apply room_state (reconnect) and __agent_accepted__ (agent accept from another client).
+        if (
+            ydocsRef.current.has(remoteCodeUpdate.filePath) &&
+            remoteCodeUpdate.clientId !== "room_state" &&
+            remoteCodeUpdate.clientId !== "__agent_accepted__"
+        ) return;
+
+        if (remoteCodeUpdate.clientId === "room_state" || remoteCodeUpdate.clientId === "__agent_accepted__") {
+            // Re-initialise the Y.Doc from the authoritative content
+            const doc = ydocsRef.current.get(remoteCodeUpdate.filePath);
+            if (doc) {
+                const ytext = doc.getText("content");
+                doc.transact(() => {
+                    ytext.delete(0, ytext.length);
+                    ytext.insert(0, remoteCodeUpdate.content);
+                }, "agent_accepted");
+            }
+        }
 
         isRemoteUpdate.current = true;
         setCode(remoteCodeUpdate.content);
@@ -234,6 +343,51 @@ export default function EditorArea({
         }
         setTimeout(() => { isRemoteUpdate.current = false; }, 50);
     }, [remoteCodeUpdate, userId]);
+
+    // Apply incoming Yjs updates and syncs from socket
+    useEffect(() => {
+        if (!socketMessage) return;
+
+        if (socketMessage.type === "yjs_update") {
+            const { filePath, update: updateB64, clientId: remoteId } = socketMessage;
+            if (remoteId === userId) return;
+            const doc = ydocsRef.current.get(filePath);
+            if (!doc) return; // file not open — ignore; room_state will cover it on next open
+            Y.applyUpdate(doc, base64ToUint8Array(updateB64), "remote");
+            const merged = doc.getText("content").toString();
+            if (filePath === activeFileRef.current?.path && editorRef.current) {
+                isRemoteUpdate.current = true;
+                const model = editorRef.current.getModel();
+                if (model && model.getValue() !== merged) {
+                    const sels = editorRef.current.getSelections();
+                    model.setValue(merged);
+                    if (sels) editorRef.current.setSelections(sels);
+                }
+                setCode(merged);
+                if (activeFileRef.current) activeFileRef.current.content = merged;
+                setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+            }
+            return;
+        }
+
+        if (socketMessage.type === "yjs_sync") {
+            const { filePath, update: updateB64 } = socketMessage;
+            // Only apply to files that are already open (have a Y.Doc)
+            const doc = ydocsRef.current.get(filePath);
+            if (!doc) return;
+            Y.applyUpdate(doc, base64ToUint8Array(updateB64), "remote");
+            if (filePath === activeFileRef.current?.path && editorRef.current) {
+                const merged = doc.getText("content").toString();
+                isRemoteUpdate.current = true;
+                const model = editorRef.current.getModel();
+                if (model && model.getValue() !== merged) model.setValue(merged);
+                setCode(merged);
+                if (activeFileRef.current) activeFileRef.current.content = merged;
+                setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+            }
+            return;
+        }
+    }, [socketMessage, userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Apply incoming remote cursor update
     useEffect(() => {
@@ -364,6 +518,17 @@ export default function EditorArea({
         }
         if (activeFileRef.current) {
             activeFileRef.current.content = newContent;
+        }
+
+        // Sync Y.Doc so next keystroke produces a correct delta (not corrupt).
+        // Use "agent_accepted" origin so the observer doesn't double-send via yjs_update.
+        const acceptDoc = ydocsRef.current.get(pendingUpdate.filePath);
+        if (acceptDoc) {
+            acceptDoc.transact(() => {
+                const ytext = acceptDoc.getText("content");
+                ytext.delete(0, ytext.length);
+                ytext.insert(0, newContent);
+            }, "agent_accepted");
         }
 
         sendRef.current({
