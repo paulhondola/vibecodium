@@ -19,6 +19,7 @@ import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "reac
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthProvider";
 import { useNavigate } from "@tanstack/react-router";
+import { motion, AnimatePresence } from "framer-motion";
 import { SocketProvider, useSocket } from "../contexts/SocketProvider";
 import type { PendingUpdate, AgentFileAction } from "../hooks/useAgentStream";
 
