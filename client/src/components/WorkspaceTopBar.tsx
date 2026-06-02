@@ -39,7 +39,7 @@ export default function WorkspaceTopBar({
 		<div className="h-12 bg-[#111113] border-b border-[#27272a] flex items-center justify-between px-4 shrink-0 relative z-20">
 			<div className="flex items-center gap-4">
 				<button onClick={onBack} className="text-zinc-500 hover:text-zinc-200 transition-colors flex items-center gap-1.5 text-sm">
-					<ArrowLeft size={16} /> <span className="hidden sm:block">Back to Home</span>
+					<ArrowLeft size={16} /> <span className="hidden sm:block">Back to Dashboard</span>
 				</button>
 				<div className="w-[1px] h-4 bg-[#27272a]"></div>
 				<div className="flex items-center gap-2">

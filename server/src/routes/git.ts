@@ -82,7 +82,7 @@ gitRoutes.post("/", async (c) => {
 
         return c.json({
             success: exitCode === 0,
-            output: rawOut.trim() || rawErr.trim(),
+            output: rawOut.trimEnd() || rawErr.trimEnd(),
             exitCode,
         });
 
