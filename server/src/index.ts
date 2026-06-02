@@ -10,11 +10,13 @@ import reelsRoutes from "./routes/reels";
 import agentRoutes from "./routes/agent";
 import githubRoutes from "./routes/github";
 import usersRouter from "./routes/users";
+import matchRouter from "./routes/match";
 import deployRoutes from "./routes/deploy";
 import helpRoutes from "./routes/help";
 import llmRoutes from "./routes/llm";
 import executeRoutes from "./routes/execute";
 import { supabase } from "./db/supabase";
+import { addMatchClient, removeMatchClient } from "./ws/matchMessaging";
 
 // WebSocket handlers
 import type { WSData } from "./ws/terminal";
@@ -43,6 +45,7 @@ export const app = new Hono()
 	.route("/api/agent", agentRoutes)
 	.route("/api/github", githubRoutes)
 	.route("/api/users", usersRouter)
+	.route("/api/match", matchRouter)
 	.route("/api/deploy", deployRoutes)
 	.route("/api/help", helpRoutes)
 	.route("/api", llmRoutes)
@@ -55,8 +58,6 @@ export const app = new Hono()
 	.use("/subway-surfer.html", serveStatic({ path: "../client/dist/subway-surfer.html" }))
 	.use("/flappy-bird/*", serveStatic({ root: "../client/dist" }))
 	.get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
-
-
 	.get("*", serveStatic({ path: "../client/dist/index.html" }));
 
 // ──────────────────────────────────────────
@@ -66,9 +67,19 @@ export const app = new Hono()
 export default {
 	port: process.env.PORT || 3000,
 
-	// Manual routing wrapper around Hono to sniff WS connections instantly
 	async fetch(req: Request, server: import("bun").Server<WSData>) {
 		const url = new URL(req.url);
+
+		// Match chat WebSocket — /ws/match?matchId=&userId=
+		if (url.pathname === "/ws/match") {
+			const matchId = url.searchParams.get("matchId") || "";
+			const userId = url.searchParams.get("userId") || "anon";
+			if (!matchId) return new Response("matchId required", { status: 400 });
+			if (server.upgrade(req, {
+				data: { type: "match", projectId: matchId, clientId: userId, userName: "", isHost: false, color: "" }
+			})) return;
+			return new Response("Upgrade failed", { status: 500 });
+		}
 
 		// Terminals — Docker-backed collaborative sandbox
 		if (url.pathname === "/ws/terminal") {
@@ -84,7 +95,6 @@ export default {
 			const projectId = url.pathname.split("/").pop();
 			if (!projectId) return new Response("Bad Request", { status: 400 });
 
-			// Reject connections to non-existent projects before promoting to WS
 			const { data: proj } = await supabase
 				.from("projects")
 				.select("id")
@@ -107,9 +117,12 @@ export default {
 		return app.fetch(req, server);
 	},
 
-	// Raw Bun WS Interface — delegates to extracted handlers
 	websocket: {
 		open(ws: import("bun").ServerWebSocket<WSData>) {
+			if (ws.data.type === "match") {
+				addMatchClient(ws.data.projectId, ws);
+				return;
+			}
 			if (ws.data.type === "terminal") {
 				handleTerminalOpen(ws);
 			} else {
@@ -126,6 +139,10 @@ export default {
 		},
 
 		close(ws: import("bun").ServerWebSocket<WSData>) {
+			if (ws.data.type === "match") {
+				removeMatchClient(ws.data.projectId, ws);
+				return;
+			}
 			if (ws.data.type === "terminal") {
 				handleTerminalClose(ws);
 			} else {

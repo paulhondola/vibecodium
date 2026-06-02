@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../contexts/AuthProvider";
-import { Loader2, ExternalLink } from "lucide-react";
+import { Loader2, X, ExternalLink, Search } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import CoderMatchModal from "../components/CoderMatchModal";
-import GamePIP, { type GameType } from "../components/GamePIP";
+import ImportModal from "../components/ImportModal";
 import DashboardHeader from "../components/dashboard/DashboardHeader";
 import DashboardSidebar from "../components/dashboard/DashboardSidebar";
 import CreateRepoModal from "../components/dashboard/CreateRepoModal";
@@ -55,14 +55,26 @@ function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCoderMatch, setShowCoderMatch] = useState(false);
-  const [activeGame, setActiveGame] = useState<GameType | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<"all" | "recent">("all");
+  const [repoSearch, setRepoSearch] = useState('');
   const [deployedApps, setDeployedApps] = useState<DeployedApp[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [vibeMatchUnread, setVibeMatchUnread] = useState(0);
 
   const reposRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowCreateModal(false);
+        setShowCoderMatch(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   useEffect(() => {
     if (user?.nickname) {
@@ -112,6 +124,30 @@ function DashboardPage() {
     }
   }, [user?.nickname, getAccessTokenSilently]);
 
+  // Poll for unread VibeMatch messages every 30s
+  useEffect(() => {
+    if (!user) return;
+    const checkUnread = async () => {
+      try {
+        const token = await getAccessTokenSilently();
+        const res = await fetch(`${API_BASE}/api/match/matches`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success && Array.isArray(data.matches)) {
+          const total = (data.matches as { unreadCount: number }[]).reduce(
+            (acc, m) => acc + (m.unreadCount ?? 0),
+            0,
+          );
+          setVibeMatchUnread(total);
+        }
+      } catch (_) {}
+    };
+    checkUnread();
+    const interval = setInterval(checkUnread, 30_000);
+    return () => clearInterval(interval);
+  }, [user, getAccessTokenSilently]);
+
   const handleImport = async (repo: GithubRepo) => {
     setImportingRepoId(repo.id);
     setError(null);
@@ -138,6 +174,10 @@ function DashboardPage() {
       setError(err instanceof Error ? err.message : "Import failed");
       setImportingRepoId(null);
     }
+  };
+
+  const handleImportSuccess = (projectId: string) => {
+    navigate({ to: "/", search: { w: projectId } });
   };
 
   const handleCreateRepo = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -229,14 +269,15 @@ function DashboardPage() {
     return colors[language || ""] || "#8b949e";
   };
 
-  const getFilteredProjects = () => {
-    if (activeFilter === "recent") {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      return savedProjects.filter(p => new Date(p.createdAt) > thirtyDaysAgo);
-    }
-    return savedProjects;
-  };
+  const recentProjects = [...savedProjects]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 3);
+
+  const filteredRepos = repos.filter(r =>
+    !repoSearch ||
+    r.name.toLowerCase().includes(repoSearch.toLowerCase()) ||
+    (r.description ?? '').toLowerCase().includes(repoSearch.toLowerCase())
+  );
 
   if (isLoading) {
     return (
@@ -270,16 +311,91 @@ function DashboardPage() {
         <div className="absolute inset-0 bg-[linear-gradient(rgba(168,85,247,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(168,85,247,0.05)_1px,transparent_1px)] bg-[size:40px_40px]" />
       </div>
 
-      <DashboardHeader user={user} onShowGame={() => setActiveGame('flappy')} />
+      {/* TopAppBar */}
+      <header className="fixed top-0 z-[100] flex justify-between items-center w-full px-8 h-14 bg-[rgba(10,12,20,0.8)] backdrop-blur-xl border-b border-[rgba(168,85,247,0.1)]">
+        <div className="flex items-center gap-12">
+          <button type="button" className="text-xl font-bold tracking-tighter text-[#A855F7] font-['Space_Grotesk'] flex items-center gap-2 bg-transparent border-0 p-0" onClick={() => navigate({ to: "/", search: { w: undefined } })}>
+            <span className="material-symbols-outlined text-[#A855F7] fill-1 animate-pulse">terminal</span>
+              VibeCodium
+          </button>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="hidden lg:flex items-center bg-[rgba(168,85,247,0.1)] px-4 py-1.5 rounded-full border border-[rgba(168,85,247,0.2)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#A855F7] mr-3 animate-ping" />
+            <span className="text-[9px] uppercase tracking-[0.3em] font-black text-[#A855F7]">Online</span>
+          </div>
+          <div className="flex items-center gap-3 ml-2 border-l border-white/10 pl-5">
+            <span className="text-[9px] font-['JetBrains_Mono'] text-slate-500 uppercase tracking-widest hidden sm:block">
+              <span className="text-[#A855F7]">@{user.nickname}</span>
+            </span>
+            <div className="w-8 h-8 rounded-full border border-[rgba(168,85,247,0.3)] p-0.5 overflow-hidden">
+              <img alt="User Profile" className="w-full h-full rounded-full object-cover" src={user.picture || ''} />
+            </div>
+          </div>
+        </div>
+      </header>
 
-      <DashboardSidebar
-        onFilterChange={setActiveFilter}
-        onShowCreate={() => setShowCreateModal(true)}
-        onShowCoderMatch={() => setShowCoderMatch(true)}
-        scrollToSection={scrollToSection}
-        reposRef={reposRef}
-        recentRef={recentRef}
-      />
+      {/* SideNavBar */}
+      <aside className="fixed left-0 top-14 h-[calc(100vh-56px)] w-64 bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border-r border-[rgba(168,85,247,0.15)] flex flex-col py-8 z-40">
+        <div className="px-8 mb-12">
+          <div className="text-[9px] uppercase tracking-[0.4em] font-black text-[rgba(168,85,247,0.6)] mb-2">iTEC 2026</div>
+          <div className="text-sm font-['Space_Grotesk'] font-bold text-[#f8fafc] tracking-widest flex items-center gap-2">
+            VibeCodium
+            <span className="w-1.5 h-1.5 rounded-full bg-[#A855F7] animate-pulse" />
+          </div>
+          <div className="text-[9px] font-['JetBrains_Mono'] text-slate-500 mt-1">Collaborative IDE</div>
+        </div>
+        <nav className="flex-1 space-y-1 px-4">
+          <div className="flex items-center gap-5 px-6 py-3.5 rounded bg-[rgba(168,85,247,0.1)] text-[#A855F7] border-r-2 border-[#A855F7] transition-all group" aria-current="page">
+            <span className="material-symbols-outlined text-xl">dashboard</span>
+            <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Dashboard</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => scrollToSection(recentRef)}
+            className="w-full flex items-center gap-5 px-6 py-3.5 rounded text-slate-500 hover:bg-white/5 hover:text-[#f8fafc] transition-all"
+          >
+            <span className="material-symbols-outlined text-xl">history</span>
+            <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Recent</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowImportModal(true)}
+            className="w-full flex items-center gap-5 px-6 py-3.5 rounded text-slate-500 hover:bg-white/5 hover:text-[#f8fafc] transition-all"
+          >
+            <span className="material-symbols-outlined text-xl">upload_file</span>
+            <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Import</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/profile" })}
+            className="w-full flex items-center gap-5 px-6 py-3.5 rounded text-slate-500 hover:bg-white/5 hover:text-[#f8fafc] transition-all"
+          >
+            <span className="material-symbols-outlined text-xl">person</span>
+            <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Profile</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowCoderMatch(true)}
+            className="w-full flex items-center gap-5 px-6 py-3.5 rounded text-pink-500 hover:bg-pink-500/10 hover:text-pink-400 transition-all"
+          >
+            <span className="material-symbols-outlined text-xl">favorite</span>
+            <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Vibe Match</span>
+            {vibeMatchUnread > 0 && (
+              <span className="ml-auto w-2.5 h-2.5 bg-pink-500 rounded-full animate-pulse shrink-0" />
+            )}
+          </button>
+        </nav>
+        <div className="px-6 mt-auto">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="w-full flex items-center justify-center gap-3 py-5 bg-[#A855F7] text-[#02040a] font-['Space_Grotesk'] font-black text-[10px] uppercase tracking-[0.3em] rounded shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:brightness-110 active:scale-[0.98] transition-all"
+          >
+            <span className="material-symbols-outlined text-sm">add</span>
+            New Repository
+          </button>
+        </div>
+      </aside>
 
       {/* Main Content */}
       <main className="ml-64 pt-24 px-12 pb-24 max-w-[1600px] relative z-10">
@@ -317,6 +433,91 @@ function DashboardPage() {
           </div>
         )}
 
+        {/* Repository Search */}
+        <div className="relative mb-4">
+          <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+          <input
+            type="text"
+            value={repoSearch}
+            onChange={e => setRepoSearch(e.target.value)}
+            placeholder="Search repositories by name or description..."
+            className="w-full bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-[rgba(168,85,247,0.15)] rounded-xl pl-11 pr-4 py-3 text-sm text-[#f8fafc] placeholder:text-slate-600 focus:outline-none focus:border-[rgba(168,85,247,0.5)] transition-colors font-['JetBrains_Mono']"
+          />
+        </div>
+
+        {/* Inline Search Results */}
+        {repoSearch.trim() && (
+          <div className="mb-16">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/5">
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                {filteredRepos.length} result{filteredRepos.length !== 1 ? 's' : ''} for &ldquo;{repoSearch}&rdquo;
+              </span>
+              <button
+                onClick={() => setRepoSearch('')}
+                className="text-[9px] font-black text-slate-600 hover:text-slate-300 uppercase tracking-widest transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+            {filteredRepos.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-slate-600">
+                <span className="material-symbols-outlined text-3xl mb-2 opacity-30">search_off</span>
+                <p className="font-['Space_Grotesk'] text-xs uppercase tracking-widest">No repositories match</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                {filteredRepos.map(repo => {
+                  const isImporting = importingRepoId === repo.id;
+                  const languageColor = getLanguageColor(repo.language);
+                  return (
+                    <div
+                      key={repo.id}
+                      className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-[rgba(168,85,247,0.1)] shadow-[0_4px_16px_0_rgba(0,0,0,0.3)] flex items-center px-5 py-4 rounded-xl group transition-all duration-300 relative overflow-hidden hover:border-[rgba(168,85,247,0.5)] hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-[rgba(16,185,129,0.05)] flex items-center justify-center border border-[rgba(16,185,129,0.2)] mr-4 shrink-0">
+                        <span className="material-symbols-outlined text-[#10B981] text-lg">code</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-['Space_Grotesk'] font-bold text-sm text-[#f8fafc] tracking-tight truncate group-hover:text-[#10B981] transition-colors">
+                          {repo.full_name}
+                        </h4>
+                        <div className="flex items-center gap-4 mt-1 font-['JetBrains_Mono'] text-[9px] text-slate-500 uppercase tracking-widest">
+                          {repo.language && (
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: languageColor }} />
+                              {repo.language}
+                            </span>
+                          )}
+                          <span>Updated {getTimeDiff(repo.updated_at)}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleImport(repo)}
+                        disabled={isImporting || importingRepoId !== null}
+                        className={`ml-4 px-5 py-2 font-black text-[10px] uppercase tracking-[0.2em] rounded-lg transition-all shrink-0 ${
+                          isImporting
+                            ? "bg-[#A855F7]/20 text-[#A855F7] border border-[#A855F7]/30 cursor-wait"
+                            : importingRepoId !== null
+                              ? "bg-white/5 text-slate-600 border border-transparent cursor-not-allowed"
+                              : "bg-[#A855F7] text-[#02040a] hover:scale-105 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+                        }`}
+                      >
+                        {isImporting ? (
+                          <span className="flex items-center gap-1.5">
+                            <Loader2 size={12} className="animate-spin" /> Loading...
+                          </span>
+                        ) : 'Import'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!repoSearch.trim() && <div className="mb-16" />}
+
         {/* Recently Opened Section */}
         {(isFetchingExternal || savedProjects.length > 0) && (
           <section className="mb-24" ref={recentRef}>
@@ -326,17 +527,9 @@ function DashboardPage() {
                   <span className="material-symbols-outlined text-[#3B82F6]" style={{ fontVariationSettings: "'FILL' 1" }}>folder_open</span>
                 </div>
                 <h2 className="text-xs font-['Space_Grotesk'] font-black uppercase tracking-[0.5em] text-[rgba(248,250,252,0.8)]">
-                  {activeFilter === "recent" ? "Recently Opened (Last 30 Days)" : "Your Workspaces"}
+                  Recent Workspaces
                 </h2>
               </div>
-              {activeFilter === "recent" && (
-                <button
-                  onClick={() => setActiveFilter("all")}
-                  className="text-[9px] font-black uppercase tracking-[0.4em] text-[#3B82F6] hover:text-white transition-all border-b border-transparent hover:border-[#3B82F6] cursor-pointer"
-                >
-                  Show All
-                </button>
-              )}
             </div>
             {isFetchingExternal ? (
               <div className="flex flex-col items-center justify-center py-12">
@@ -345,43 +538,48 @@ function DashboardPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {getFilteredProjects().slice(0, 5).map(project => (
-                  <div
-                    key={project._id}
-                    onClick={() => navigate({ to: "/", search: { w: project._id } })}
-                    className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-[rgba(168,85,247,0.15)] shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] group relative p-10 rounded-xl transition-all duration-500 overflow-hidden cursor-pointer hover:border-[rgba(168,85,247,0.6)] hover:shadow-[0_0_40px_rgba(168,85,247,0.3)]"
-                    style={{ animation: "pulseGlow 4s ease-in-out infinite" }}
-                  >
-                    <div className="absolute top-0 left-0 w-1 h-full bg-[#3B82F6] opacity-30 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative z-10">
-                      <div className="flex justify-between items-start mb-8">
-                        <div className="w-14 h-14 rounded-lg bg-[rgba(59,130,246,0.1)] flex items-center justify-center border border-[rgba(59,130,246,0.2)] shadow-[0_0_20px_rgba(59,130,246,0.15)]">
-                          <span className="material-symbols-outlined text-[#3B82F6] text-3xl">folder</span>
+                {recentProjects.map(project => {
+                  return (
+                    <button
+                      key={project._id}
+                      type="button"
+                      onClick={() => navigate({ to: "/", search: { w: project._id } })}
+                      className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-[rgba(168,85,247,0.15)] shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] group relative p-10 rounded-xl transition-all duration-500 overflow-hidden text-left hover:border-[rgba(168,85,247,0.6)] hover:shadow-[0_0_40px_rgba(168,85,247,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#02040a]"
+                      style={{ animation: 'pulseGlow 4s ease-in-out infinite' }}
+                    >
+                      <div className="absolute top-0 left-0 w-1 h-full bg-[#3B82F6] opacity-30 group-hover:opacity-100 transition-opacity" />
+                      <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-8">
+                          <div className="w-14 h-14 rounded-lg bg-[rgba(59,130,246,0.1)] flex items-center justify-center border border-[rgba(59,130,246,0.2)] shadow-[0_0_20px_rgba(59,130,246,0.15)]">
+                            <span className="material-symbols-outlined text-[#3B82F6] text-3xl">folder</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] font-['JetBrains_Mono'] text-slate-500 uppercase tracking-widest">
+                            <span className="material-symbols-outlined text-sm">schedule</span> {getTimeDiff(project.createdAt)}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] font-['JetBrains_Mono'] text-slate-500 uppercase tracking-widest">
-                          <span className="material-symbols-outlined text-sm">schedule</span> {getTimeDiff(project.createdAt)}
+                        <h3 className="text-2xl font-['Space_Grotesk'] font-bold mb-3 group-hover:text-[#3B82F6] transition-colors tracking-tighter" style={{ textShadow: '0 0 12px rgba(59, 130, 246, 0.6)' }}>
+                          {project.name}
+                        </h3>
+                        <p className="text-sm text-slate-400 mb-10 leading-relaxed h-12 overflow-hidden font-['JetBrains_Mono'] text-[10px]">{project.repoUrl}</p>
+                        <div className="w-full py-4 bg-[rgba(59,130,246,0.1)] border border-[rgba(59,130,246,0.3)] text-[#3B82F6] font-black text-[10px] uppercase tracking-[0.3em] rounded-lg group-hover:bg-[#3B82F6] group-hover:text-[#02040a] transition-all shadow-lg text-center">
+                          Open Workspace
                         </div>
                       </div>
-                      <h3 className="text-2xl font-['Space_Grotesk'] font-bold mb-3 group-hover:text-[#3B82F6] transition-colors tracking-tighter" style={{ textShadow: "0 0 12px rgba(59, 130, 246, 0.6)" }}>
-                        {project.name}
-                      </h3>
-                      <p className="text-sm text-slate-400 mb-10 leading-relaxed h-12 overflow-hidden font-['JetBrains_Mono'] text-[10px]">{project.repoUrl}</p>
-                      <button className="w-full py-4 bg-[rgba(59,130,246,0.1)] border border-[rgba(59,130,246,0.3)] text-[#3B82F6] font-black text-[10px] uppercase tracking-[0.3em] rounded-lg hover:bg-[#3B82F6] hover:text-[#02040a] transition-all active:scale-95 shadow-lg">
-                        Open Workspace
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <div
-                  onClick={() => scrollToSection(reposRef)}
-                  className="bg-transparent border-2 border-dashed border-[rgba(168,85,247,0.2)] group p-10 rounded-xl flex flex-col items-center justify-center text-center hover:bg-white/5 transition-all relative overflow-hidden cursor-pointer"
+                    </button>
+                  );
+                })}
+                {/* Import Card */}
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(true)}
+                  className="bg-transparent border-2 border-dashed border-[rgba(168,85,247,0.2)] group p-10 rounded-xl flex flex-col items-center justify-center text-center hover:bg-white/5 transition-all relative overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A855F7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#02040a]"
                 >
                   <div className="w-16 h-16 rounded-xl bg-[rgba(10,12,20,0.4)] flex items-center justify-center mb-8 text-slate-600 group-hover:text-[#A855F7] transition-colors border border-[rgba(168,85,247,0.1)]">
                     <span className="material-symbols-outlined text-4xl group-hover:rotate-90 transition-transform duration-700">add</span>
                   </div>
                   <h3 className="text-[11px] font-['Space_Grotesk'] font-black uppercase tracking-[0.4em] text-[rgba(248,250,252,0.6)] group-hover:text-[#A855F7] transition-colors">Import Project</h3>
                   <p className="text-[9px] text-slate-600 mt-4 uppercase tracking-[0.3em] font-['JetBrains_Mono']">From GitHub</p>
-                </div>
+                </button>
               </div>
             )}
           </section>
@@ -454,12 +652,14 @@ function DashboardPage() {
 
         {/* GitHub Repositories Section */}
         <section ref={reposRef}>
-          <div className="flex items-center justify-between mb-10">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-5">
               <div className="w-10 h-10 rounded bg-[rgba(16,185,129,0.1)] flex items-center justify-center border border-[rgba(16,185,129,0.2)]">
                 <span className="material-symbols-outlined text-[#10B981]" style={{ fontVariationSettings: "'FILL' 1" }}>cloud_sync</span>
               </div>
-              <h2 className="text-xs font-['Space_Grotesk'] font-black uppercase tracking-[0.5em] text-[rgba(248,250,252,0.8)]">GitHub Repositories</h2>
+              <h2 className="text-xs font-['Space_Grotesk'] font-black uppercase tracking-[0.5em] text-[rgba(248,250,252,0.8)]">
+                GitHub Repositories
+              </h2>
             </div>
             <button
               onClick={() => setShowCreateModal(true)}
@@ -469,6 +669,7 @@ function DashboardPage() {
               Create New
             </button>
           </div>
+
           {isFetchingRepos ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Loader2 size={40} className="animate-spin text-[#10B981] mb-6" />
@@ -546,9 +747,12 @@ function DashboardPage() {
         <CoderMatchModal onClose={() => setShowCoderMatch(false)} />
       )}
 
-      {activeGame && (
-        <GamePIP gameType={activeGame} onSwitchGame={setActiveGame} onClose={() => setActiveGame(null)} />
-      )}
+      {/* Import Repository Modal */}
+      <ImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onSuccess={handleImportSuccess}
+      />
 
       {showCreateModal && (
         <CreateRepoModal

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../middleware/authMiddleware";
 import { supabase } from "../db/supabase";
-import { syncProjectFilesToDisk } from "../utils/sync";
+import { syncProjectFilesToDisk, ensureGitRepo } from "../utils/sync";
 import { getUserTokens } from "../utils/tokens";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -117,6 +117,13 @@ projectsRoutes.post("/import", async (c) => {
         const user = (c.get as any)("user");
         const userId = user?.sub ?? "anonymous";
 
+        // Build authenticated clone URL if user has a GitHub token (required for private repos)
+        const tokens = await getUserTokens(userId);
+        const githubToken = tokens.githubToken || process.env.GITHUB_TOKEN_REPO || process.env.GITHUB_TOKEN;
+        const cloneUrl = githubToken && githubToken !== "undefined" && repoUrl.startsWith("https://github.com/")
+            ? repoUrl.replace("https://github.com/", `https://${githubToken}@github.com/`)
+            : repoUrl;
+
         // Check if already imported
         const { data: existing } = await supabase
             .from("projects")
@@ -146,7 +153,7 @@ projectsRoutes.post("/import", async (c) => {
                     console.log(`Re-cloning project ${projectId}...`);
                     await supabase.from("projects").update({ status: "cloning" }).eq("id", projectId);
                     fs.mkdirSync("/tmp/vibecodium", { recursive: true });
-                    const cloneProc = Bun.spawn(["git", "clone", repoUrl, targetDir], { stdout: "pipe", stderr: "pipe" });
+                    const cloneProc = Bun.spawn(["git", "clone", cloneUrl, targetDir], { stdout: "pipe", stderr: "pipe" });
                     if (await cloneProc.exited !== 0) {
                         const errText = await new Response(cloneProc.stderr).text();
                         await supabase.from("projects").update({ status: "error" }).eq("id", projectId);
@@ -177,7 +184,7 @@ projectsRoutes.post("/import", async (c) => {
         if (insertErr) throw insertErr;
 
         fs.mkdirSync("/tmp/vibecodium", { recursive: true });
-        const proc = Bun.spawn(["git", "clone", repoUrl, targetDir], { stdout: "pipe", stderr: "pipe" });
+        const proc = Bun.spawn(["git", "clone", cloneUrl, targetDir], { stdout: "pipe", stderr: "pipe" });
         const exitCode = await proc.exited;
 
         if (exitCode !== 0) {
@@ -291,17 +298,32 @@ projectsRoutes.post("/:id/push", async (c) => {
 
         if (!project) return c.json({ error: "Project not found" }, 404);
 
-        const targetDir = await syncProjectFilesToDisk(projectId);
+        let commitMessage = "Auto-Save Sandbox Commit";
+        let targetBranch = "main";
+        try {
+            const body = await c.req.json();
+            if (body?.message?.trim()) commitMessage = body.message.trim();
+            if (body?.branch?.trim()) targetBranch = body.branch.trim();
+        } catch { /* no body is fine */ }
+
+        const targetDir = await ensureGitRepo(projectId, project.repo_url, githubToken);
 
         const gitConfigUser = Bun.spawn(["git", "config", "user.name", "VibeCodium Live Collaboration"], { cwd: targetDir });
         await gitConfigUser.exited;
         const gitConfigEmail = Bun.spawn(["git", "config", "user.email", "live@vibecodium.cloud"], { cwd: targetDir });
         await gitConfigEmail.exited;
 
+        // Checkout the target branch (try plain checkout first, fall back to -b for new branches)
+        const checkoutProc = Bun.spawn(["git", "checkout", targetBranch], { cwd: targetDir, stdout: "pipe", stderr: "pipe" });
+        if ((await checkoutProc.exited) !== 0) {
+            const checkoutB = Bun.spawn(["git", "checkout", "-b", targetBranch], { cwd: targetDir, stdout: "pipe", stderr: "pipe" });
+            await checkoutB.exited;
+        }
+
         const gitAdd = Bun.spawn(["git", "add", "."], { cwd: targetDir });
         await gitAdd.exited;
 
-        const gitCommit = Bun.spawn(["git", "commit", "-m", "Auto-Save Sandbox Commit"], { cwd: targetDir });
+        const gitCommit = Bun.spawn(["git", "commit", "-m", commitMessage], { cwd: targetDir });
         await gitCommit.exited;
 
         const repoUrl = project.repo_url;
@@ -309,7 +331,7 @@ projectsRoutes.post("/:id/push", async (c) => {
             ? repoUrl.replace("https://github.com/", `https://${githubToken}@github.com/`)
             : repoUrl;
 
-        const gitPush = Bun.spawn(["git", "push", authenticatedUrl, "HEAD:main", "--force"], {
+        const gitPush = Bun.spawn(["git", "push", authenticatedUrl, `HEAD:${targetBranch}`, "--force"], {
             cwd: targetDir, stdout: "pipe", stderr: "pipe",
         });
         const exitCode = await gitPush.exited;
@@ -319,6 +341,82 @@ projectsRoutes.post("/:id/push", async (c) => {
         if (exitCode !== 0) return c.json({ error: "Failed to push to GitHub", details: stderr }, 500);
         return c.json({ success: true, message: "Successfully pushed to GitHub", output: stdout });
 
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
+    }
+});
+
+// POST /api/projects/:id/branches — create a branch locally and push it to GitHub
+projectsRoutes.post("/:id/branches", async (c) => {
+    try {
+        const projectId = c.req.param("id");
+        if (!projectId) return c.json({ error: "Missing projectId" }, 400);
+
+        const user = (c.get as any)("user");
+        const userId = user?.sub;
+        if (!userId) return c.json({ error: "Unauthorized" }, 401);
+
+        const { name } = await c.req.json<{ name: string }>();
+        const branchName = name?.trim();
+        if (!branchName) return c.json({ error: "Missing branch name" }, 400);
+        if (!/^[a-zA-Z0-9._\-\/]+$/.test(branchName))
+            return c.json({ error: "Invalid branch name — use letters, numbers, -, _, /, ." }, 400);
+
+        const tokens = await getUserTokens(userId);
+        const githubToken = tokens.githubToken || process.env.GITHUB_TOKEN_REPO || process.env.GITHUB_TOKEN;
+        if (!githubToken || githubToken === "undefined") {
+            return c.json({
+                success: false,
+                error: "GITHUB_TOKEN_REQUIRED",
+                message: "You need to register your GitHub Token in your profile to push branches.",
+            }, 403);
+        }
+
+        const { data: project } = await supabase
+            .from("projects")
+            .select("repo_url")
+            .eq("id", projectId)
+            .maybeSingle();
+        if (!project) return c.json({ error: "Project not found" }, 404);
+
+        const targetDir = await ensureGitRepo(projectId, project.repo_url, githubToken);
+
+        const configUser = Bun.spawn(["git", "config", "user.name", "VibeCodium Live Collaboration"], { cwd: targetDir });
+        await configUser.exited;
+        const configEmail = Bun.spawn(["git", "config", "user.email", "live@vibecodium.cloud"], { cwd: targetDir });
+        await configEmail.exited;
+
+        // Create branch locally
+        const checkoutProc = Bun.spawn(["git", "checkout", "-b", branchName], {
+            cwd: targetDir, stdout: "pipe", stderr: "pipe",
+        });
+        const [, checkoutErr, checkoutExit] = await Promise.all([
+            new Response(checkoutProc.stdout).text(),
+            new Response(checkoutProc.stderr).text(),
+            checkoutProc.exited,
+        ]);
+        if (checkoutExit !== 0) {
+            return c.json({ success: false, error: checkoutErr.trim() || "Failed to create branch" }, 400);
+        }
+
+        // Push the new branch to GitHub with auth token
+        const authenticatedUrl = project.repo_url.startsWith("https://github.com/")
+            ? project.repo_url.replace("https://github.com/", `https://${githubToken}@github.com/`)
+            : project.repo_url;
+
+        const pushProc = Bun.spawn(["git", "push", "-u", authenticatedUrl, branchName], {
+            cwd: targetDir, stdout: "pipe", stderr: "pipe",
+        });
+        const [, pushErr, pushExit] = await Promise.all([
+            new Response(pushProc.stdout).text(),
+            new Response(pushProc.stderr).text(),
+            pushProc.exited,
+        ]);
+        if (pushExit !== 0) {
+            return c.json({ success: false, error: pushErr.trim() || "Failed to push branch to GitHub" }, 500);
+        }
+
+        return c.json({ success: true, branch: branchName });
     } catch (e: any) {
         return c.json({ error: e.message }, 500);
     }
@@ -513,6 +611,56 @@ projectsRoutes.get("/:id/commits", async (c) => {
         return c.json({ success: true, commits: parsedCommits }, 200);
     } catch (err: any) {
         return c.json({ error: err.message }, 500);
+    }
+});
+
+// GET /api/projects/:id/commits/:sha — fetch changed files for a single commit
+projectsRoutes.get("/:id/commits/:sha", async (c) => {
+    try {
+        const projectId = c.req.param("id");
+        const sha = c.req.param("sha");
+        if (!projectId || !sha) return c.json({ error: "Missing params" }, 400);
+
+        const { data: project } = await supabase
+            .from("projects")
+            .select("repo_url")
+            .eq("id", projectId)
+            .maybeSingle();
+        if (!project?.repo_url) return c.json({ error: "Project not found" }, 404);
+
+        const urlStr = project.repo_url.replace(".git", "");
+        const [owner, repo] = urlStr.split("github.com/")[1]?.split("/") ?? [];
+        if (!owner || !repo) return c.json({ error: "Invalid repo URL" }, 400);
+
+        const user = (c.get as any)("user");
+        const tokens = await getUserTokens(user?.sub);
+        const githubToken = tokens.githubToken || process.env.GITHUB_TOKEN;
+
+        const headers: Record<string, string> = {
+            Accept: "application/vnd.github.v3+json",
+            "User-Agent": "VibeCodium-App",
+        };
+        if (githubToken && githubToken !== "undefined") {
+            headers["Authorization"] = `Bearer ${githubToken}`;
+        }
+
+        const ghRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits/${sha}`, { headers });
+        if (!ghRes.ok) return c.json({ error: `GitHub API error: ${ghRes.statusText}` }, 500);
+
+        const data = await ghRes.json() as any;
+        return c.json({
+            success: true,
+            sha: data.sha,
+            stats: data.stats ?? { additions: 0, deletions: 0, total: 0 },
+            files: (data.files ?? []).map((f: any) => ({
+                filename: f.filename,
+                status: f.status,
+                additions: f.additions,
+                deletions: f.deletions,
+            })),
+        });
+    } catch (e: any) {
+        return c.json({ error: e.message }, 500);
     }
 });
 

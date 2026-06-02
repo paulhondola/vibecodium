@@ -2,9 +2,18 @@ import { Hono } from "hono";
 import { Writable } from "stream";
 import { docker } from "../utils/docker";
 import { syncProjectFilesToDisk } from "../utils/sync";
+import { authMiddleware } from "../middleware/authMiddleware";
+import { supabase } from "../db/supabase";
 import type { ExecuteRequest, ExecuteResponse } from "shared";
 
-const executeRoutes = new Hono();
+type Variables = { user: Record<string, any> };
+const executeRoutes = new Hono<{ Variables: Variables }>();
+
+executeRoutes.use("/*", authMiddleware);
+
+function isSafeFilePath(file: string): boolean {
+	return /^[a-zA-Z0-9._\-/]+$/.test(file) && !file.includes("..") && !file.startsWith("/");
+}
 
 const LANGUAGE_IMAGES: Record<string, string> = {
 	python: "vibecodium-python:latest",
@@ -22,6 +31,7 @@ const EXEC_COMMANDS: Record<string, () => string[]> = {
 
 executeRoutes.post("/", async (c) => {
     try {
+        const user = c.get("user");
         const body = await c.req.json<ExecuteRequest>();
         if (!body.language || !body.version || !body.code) return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: "Missing language, version, or code." }, 400);
 
@@ -31,15 +41,29 @@ executeRoutes.post("/", async (c) => {
 
         let cmd = getCmd();
         let hostConfig: any = { Memory: 2048 * 1024 * 1024, NetworkMode: "none" };
-        const reqBody = body as any;
-        
-        if (reqBody.projectId && reqBody.entryFile) {
-            const targetDir = await syncProjectFilesToDisk(reqBody.projectId);
+
+        if (body.projectId && body.entryFile) {
+            if (!isSafeFilePath(body.entryFile)) {
+                return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: "Invalid entry file path." }, 400);
+            }
+
+            const { data: project } = await supabase
+                .from("projects")
+                .select("user_id")
+                .eq("id", body.projectId)
+                .maybeSingle();
+
+            if (!project || project.user_id !== user.sub) {
+                return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: "Project not found." }, 404);
+            }
+
+            const targetDir = await syncProjectFilesToDisk(body.projectId);
             hostConfig.Binds = [`${targetDir}:/app`];
-            if (body.language === "node") cmd = ["node", `/app/${reqBody.entryFile}`];
-            if (body.language === "python") cmd = ["python", `/app/${reqBody.entryFile}`];
-            if (body.language === "c++") cmd = ["sh", "-c", `cd /app && g++ ${reqBody.entryFile} && ./a.out`];
-            if (body.language === "rust") cmd = ["sh", "-c", `cd /app && rustc ${reqBody.entryFile} && ./main`];
+            if (body.language === "node") cmd = ["node", `/app/${body.entryFile}`];
+            if (body.language === "python") cmd = ["python", `/app/${body.entryFile}`];
+            // Use positional argument to avoid shell injection
+            if (body.language === "c++") cmd = ["sh", "-c", 'cd /app && g++ "$1" && ./a.out', "--", body.entryFile];
+            if (body.language === "rust") cmd = ["sh", "-c", 'cd /app && rustc "$1" && ./main', "--", body.entryFile];
         }
 
         const container = await docker.createContainer({

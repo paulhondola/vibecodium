@@ -1,54 +1,114 @@
 import { Hono } from "hono";
+import * as path from "node:path";
+import * as fs from "node:fs";
 import { authMiddleware } from "../middleware/authMiddleware";
+import { ensureGitRepo, syncProjectFilesToDisk } from "../utils/sync";
+import { supabase } from "../db/supabase";
+import { getUserTokens } from "../utils/tokens";
 
 const gitRoutes = new Hono();
 
-// Securing the route
 gitRoutes.use("*", authMiddleware);
 
 gitRoutes.post("/", async (c) => {
-	try {
+    try {
         const payload = await c.req.json();
-        const command = payload.command as string;
         const projectId = payload.projectId as string;
-        
-        if (!command || !projectId) {
-            return c.json({ error: "Missing command or projectId" }, 400);
+        if (!projectId) return c.json({ error: "Missing projectId" }, 400);
+
+        // Accept either { args: string[] } (new) or { command: string } (legacy)
+        let args: string[];
+        if (Array.isArray(payload.args)) {
+            args = payload.args;
+        } else if (typeof payload.command === "string") {
+            args = shellSplit(payload.command);
+        } else {
+            return c.json({ error: "Missing command or args" }, 400);
         }
 
-        // Basic bash injection prevention (allow only git)
-        if (!command.startsWith("git ")) {
+        if (args[0] !== "git") {
             return c.json({ error: "Only git commands are allowed." }, 403);
         }
 
-        const projectDir = `/tmp/vibecodium/${projectId}`;
-        
-        try {
-            // Using Bun.spawn to execute the git command synchronously
-            const args = command.split(" ");
-            
-            const proc = Bun.spawn(args, {
-                cwd: projectDir,
-                stdout: "pipe",
-                stderr: "pipe",
-            });
+        const user = (c.get as any)("user");
+        const userId = user?.sub;
 
-            const rawOutput = await new Response(proc.stdout).text();
-            const rawError = await new Response(proc.stderr).text();
+        const [{ data: project }, tokens] = await Promise.all([
+            supabase.from("projects").select("repo_url").eq("id", projectId).maybeSingle(),
+            getUserTokens(userId),
+        ]);
 
-            return c.json({
-                success: proc.exitCode === 0,
-                output: rawOutput.trim() || rawError.trim(), // return stderr if stdout is empty
-                exitCode: proc.exitCode
-            });
-            
-        } catch (execError: any) {
-            return c.json({ error: execError.message }, 500);
+        const githubToken = tokens.githubToken || process.env.GITHUB_TOKEN_REPO || process.env.GITHUB_TOKEN;
+        const repoUrl = project?.repo_url || "";
+        const targetDir = `/tmp/vibecodium/${projectId}`;
+        const gitDir = path.join(targetDir, ".git");
+
+        // Only do a full ensureGitRepo (clone + sync) when .git is missing.
+        // For status/diff commands, also sync files so the latest Supabase edits show up.
+        // For stage/unstage/revert/branch ops, just ensure the dir exists without re-syncing.
+        const subCommand = args[1] ?? "";
+        const needsSync = !fs.existsSync(gitDir) || subCommand === "status" || subCommand === "diff";
+
+        let projectDir: string;
+        if (needsSync) {
+            projectDir = await ensureGitRepo(projectId, repoUrl, githubToken);
+        } else {
+            if (!fs.existsSync(targetDir)) {
+                projectDir = await ensureGitRepo(projectId, repoUrl, githubToken);
+            } else {
+                projectDir = targetDir;
+            }
         }
 
-	} catch (error: any) {
-		return c.json({ error: error.message }, 500);
-	}
+        // Ensure git identity
+        const emailCheck = Bun.spawn(["git", "config", "user.email"], { cwd: projectDir, stdout: "pipe" });
+        const email = (await new Response(emailCheck.stdout).text()).trim();
+        await emailCheck.exited;
+        if (!email) {
+            const pu = Bun.spawn(["git", "config", "user.name", "VibeCodium"], { cwd: projectDir });
+            await pu.exited;
+            const pe = Bun.spawn(["git", "config", "user.email", "live@vibecodium.cloud"], { cwd: projectDir });
+            await pe.exited;
+        }
+
+        const proc = Bun.spawn(args, { cwd: projectDir, stdout: "pipe", stderr: "pipe" });
+        const [rawOut, rawErr, exitCode] = await Promise.all([
+            new Response(proc.stdout).text(),
+            new Response(proc.stderr).text(),
+            proc.exited,
+        ]);
+
+        return c.json({
+            success: exitCode === 0,
+            output: rawOut.trim() || rawErr.trim(),
+            exitCode,
+        });
+
+    } catch (err: any) {
+        return c.json({ error: err.message }, 500);
+    }
 });
+
+// Very small shell-like tokenizer: handles double-quoted strings.
+function shellSplit(cmd: string): string[] {
+    const tokens: string[] = [];
+    let cur = "";
+    let inQuote = false;
+    for (let i = 0; i < cmd.length; i++) {
+        const ch = cmd[i];
+        if (inQuote) {
+            if (ch === '"') inQuote = false;
+            else cur += ch;
+        } else if (ch === '"') {
+            inQuote = true;
+        } else if (ch === " ") {
+            if (cur) { tokens.push(cur); cur = ""; }
+        } else {
+            cur += ch;
+        }
+    }
+    if (cur) tokens.push(cur);
+    return tokens;
+}
 
 export default gitRoutes;

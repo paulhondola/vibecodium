@@ -47,7 +47,7 @@ export default function CodeRoastModal({ code, fileName, onClose }: CodeRoastMod
 
     return (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-            <div className="bg-[#09090b] border border-orange-500/30 rounded-2xl max-w-xl w-full shadow-[0_0_60px_rgba(249,115,22,0.2)] overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="bg-[#09090b] border border-orange-500/30 rounded-[14px] max-w-xl w-full overflow-hidden flex flex-col max-h-[80vh]">
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border-b border-orange-500/20 shrink-0">
                     <div className="flex items-center gap-3">

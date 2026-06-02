@@ -26,3 +26,42 @@ export async function syncProjectFilesToDisk(projectId: string): Promise<string>
 
     return targetDir;
 }
+
+// Ensures targetDir has a valid .git repo. Re-clones from GitHub if missing,
+// then re-applies the latest files from Supabase on top (they may be ahead of GitHub).
+export async function ensureGitRepo(
+    projectId: string,
+    repoUrl: string,
+    githubToken?: string
+): Promise<string> {
+    const targetDir = `/tmp/vibecodium/${projectId}`;
+    const gitDir = path.join(targetDir, ".git");
+
+    if (!fs.existsSync(gitDir)) {
+        if (fs.existsSync(targetDir)) {
+            fs.rmSync(targetDir, { recursive: true, force: true });
+        }
+        const cloneUrl =
+            githubToken &&
+            githubToken !== "undefined" &&
+            repoUrl.startsWith("https://github.com/")
+                ? repoUrl.replace("https://github.com/", `https://${githubToken}@github.com/`)
+                : repoUrl;
+
+        const cloneProc = Bun.spawn(["git", "clone", cloneUrl, targetDir], {
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        if ((await cloneProc.exited) !== 0) {
+            // Fallback: bare init so subsequent git commands don't crash
+            fs.mkdirSync(targetDir, { recursive: true });
+            const initProc = Bun.spawn(["git", "init"], { cwd: targetDir });
+            await initProc.exited;
+            const remoteProc = Bun.spawn(["git", "remote", "add", "origin", repoUrl], { cwd: targetDir });
+            await remoteProc.exited;
+        }
+    }
+
+    // Re-apply latest files from Supabase (may be ahead of GitHub)
+    return await syncProjectFilesToDisk(projectId);
+}

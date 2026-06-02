@@ -50,4 +50,12 @@ supabase/.temp
 .DS_Store
 Icon?
 
+# Claude Remember Plugin
 .remember/
+
+# Graphify
+graphify-out/cache
+graphify-out/.graphify_python
+graphify-out/manifest.json
+graphify-out/
+knip_output.txt

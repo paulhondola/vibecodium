@@ -1,16 +1,5 @@
 import { supabase } from "../db/supabase";
 
-const FUN_BIOS = [
-  "I use Arch btw.",
-  "Looking for a partner to rewrite my Node backend in Rust.",
-  "React developer. Swipe left if no functional components.",
-  "I like long walks on the beach and abstractSingletonProxyFactoryBeans.",
-  "Python enthusiast. My code is indent-pendent.",
-  "If you don't write tests, we already share a philosophy.",
-];
-const LANGUAGES = ["Rust", "TypeScript", "Java", "Python", "Go", "C++", "JavaScript", "HTML (yes, it's a language)"];
-const LOCATIONS = ["2 miles away", "5 miles away", "Right behind you", "In your node_modules", "Localhost", "Cloud9"];
-
 /**
  * Upserts a user into public.users (fire-and-forget safe to call from middleware).
  */
@@ -31,9 +20,7 @@ export async function upsertUser(payload: {
         `https://ui-avatars.com/api/?name=${encodeURIComponent(
           payload.name || payload.email || "U"
         )}&background=0D8ABC&color=fff`,
-      bio: FUN_BIOS[Math.floor(Math.random() * FUN_BIOS.length)],
-      language: LANGUAGES[Math.floor(Math.random() * LANGUAGES.length)],
-      location: LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)],
+      github_username: payload.nickname || null,
       created_at: new Date().toISOString(),
     },
     { onConflict: "id", ignoreDuplicates: false }
@@ -51,24 +38,35 @@ async function readVaultSecret(id: string): Promise<string | null> {
 }
 
 /**
- * Returns the stored GitHub / Vercel tokens for a user, decrypted from Vault.
+ * Returns the stored GitHub / Vercel / LLM tokens for a user, decrypted from Vault.
  */
-export async function getUserTokens(
-  userId: string
-): Promise<{ githubToken: string | null; vercelToken: string | null }> {
+export async function getUserTokens(userId: string): Promise<{
+  githubToken: string | null;
+  vercelToken: string | null;
+  llmApiKey:   string | null;
+  llmBaseUrl:  string | null;
+  llmModel:    string | null;
+}> {
   const { data, error } = await supabase
     .from("user_tokens")
-    .select("github_secret_id, vercel_secret_id")
+    .select("github_secret_id, vercel_secret_id, llm_secret_id, llm_base_url, llm_model")
     .eq("user_id", userId)
     .maybeSingle();
 
   if (error) console.error("[getUserTokens]", error.message);
-  if (!data) return { githubToken: null, vercelToken: null };
+  if (!data) return { githubToken: null, vercelToken: null, llmApiKey: null, llmBaseUrl: null, llmModel: null };
 
-  const [githubToken, vercelToken] = await Promise.all([
+  const [githubToken, vercelToken, llmApiKey] = await Promise.all([
     data.github_secret_id ? readVaultSecret(data.github_secret_id) : Promise.resolve(null),
     data.vercel_secret_id ? readVaultSecret(data.vercel_secret_id) : Promise.resolve(null),
+    data.llm_secret_id    ? readVaultSecret(data.llm_secret_id)    : Promise.resolve(null),
   ]);
 
-  return { githubToken, vercelToken };
+  return {
+    githubToken,
+    vercelToken,
+    llmApiKey,
+    llmBaseUrl: (data.llm_base_url as string | null) ?? null,
+    llmModel:   (data.llm_model   as string | null) ?? null,
+  };
 }

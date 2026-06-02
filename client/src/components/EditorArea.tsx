@@ -5,7 +5,8 @@ import { Bot, Check, X } from "lucide-react";
 import type { ProjectFile } from "./Workspace";
 import { useSocket } from "../contexts/SocketProvider";
 import type { PendingUpdate } from "../hooks/useAgentStream";
-import GamePIP, { type GameType } from "./GamePIP";
+import GamePIP from "./GamePIP";
+import { API_BASE } from "@/lib/config";
 
 function safeCssId(id: string) {
     return id.replace(/[^a-zA-Z0-9]/g, "_");
@@ -24,13 +25,15 @@ interface EditorAreaProps {
     remoteCursorUpdate?: RemoteCursorUpdate | null;
     pendingUpdate?: PendingUpdate | null;
     onPendingResolved?: () => void;
+    projectId?: string | null;
+    agentToken?: string | null;
     powerModeEnabled?: boolean;
 }
 
 export default function EditorArea({
     openFiles, onSelectFile, onCloseFile,
     activeFile, userId, remoteCodeUpdate, remoteCursorUpdate,
-    pendingUpdate, onPendingResolved, powerModeEnabled = false,
+    pendingUpdate, onPendingResolved, projectId, agentToken, powerModeEnabled = false,
 }: EditorAreaProps) {
     const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
     const monaco = useMonaco();
@@ -45,9 +48,7 @@ export default function EditorArea({
     const editorContainerRef = useRef<HTMLDivElement>(null);
 
     // Game state
-    const [activeGame, setActiveGame] = useState<GameType | null>(null);
-    const [showGameMenu, setShowGameMenu] = useState(false);
-    const gameMenuRef = useRef<HTMLDivElement>(null);
+    const [showGame, setShowGame] = useState(false);
 
     const { send } = useSocket();
     const sendRef = useRef(send);
@@ -105,18 +106,6 @@ export default function EditorArea({
             });
         }
     }, [monaco]);
-
-    // Close game menu on outside click
-    useEffect(() => {
-        if (!showGameMenu) return;
-        function handleClickOutside(e: MouseEvent) {
-            if (gameMenuRef.current && !gameMenuRef.current.contains(e.target as Node)) {
-                setShowGameMenu(false);
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [showGameMenu]);
 
     // Sync code when active file changes
     useEffect(() => {
@@ -377,34 +366,16 @@ export default function EditorArea({
                     );
                 })}
 
-                {/* Game Dropdown Menu */}
-                <div className="p-1.5 flex items-center shrink-0 border-l border-[#27272a] relative" ref={gameMenuRef}>
+                {/* Game Toggle Button */}
+                <div className="p-1.5 flex items-center shrink-0 border-l border-[#27272a]">
                     <button
-                        onClick={() => setShowGameMenu(prev => !prev)}
+                        onClick={() => setShowGame(prev => !prev)}
                         className="text-[10px] px-2 py-1 flex items-center gap-1.5 rounded transition font-medium tracking-wide bg-gradient-to-r from-orange-500/10 to-red-500/10 text-orange-400 hover:from-orange-500/20 hover:to-red-500/20 hover:shadow-[0_0_8px_rgba(249,115,22,0.2)] border border-orange-500/20"
-                        title="Play Code Runner Games"
+                        title="Play Code Runner Game"
                     >
                         <span className="text-xs">🎮</span>
-                        GAMES
-                        <svg className={`w-3 h-3 transition-transform ${showGameMenu ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
+                        GAME
                     </button>
-                    
-                    {showGameMenu && (
-                        <div className="absolute top-full right-0 mt-1 w-40 bg-[#18181b] border border-[#27272a] rounded-lg shadow-xl overflow-hidden z-50">
-                            <button
-                                onClick={() => { setActiveGame('subway'); setShowGameMenu(false); }}
-                                className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-[#27272a] hover:text-white transition-colors flex items-center gap-2"
-                            >
-                                <span>🏃‍♂️</span> Subway Surfer
-                            </button>
-                            <button
-                                onClick={() => { setActiveGame('flappy'); setShowGameMenu(false); }}
-                                className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-[#27272a] hover:text-white transition-colors flex items-center gap-2"
-                            >
-                                <span>🐦</span> Flappy Bird
-                            </button>
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -560,12 +531,8 @@ export default function EditorArea({
             `}</style>
 
             {/* Game PIP */}
-            {activeGame && (
-                <GamePIP 
-                    gameType={activeGame} 
-                    onSwitchGame={setActiveGame}
-                    onClose={() => setActiveGame(null)} 
-                />
+            {showGame && (
+                <GamePIP onClose={() => setShowGame(false)} />
             )}
         </div>
     );

@@ -82,8 +82,8 @@ function ContextMenu({ menu, onClose, onNewFile, onNewFolder, onRename, onDelete
         >
             {!menu.node.isFile && (
                 <>
-                    <button className={btn} onClick={onNewFile}><FilePlus size={13} className="text-cyan-400" /> New File</button>
-                    <button className={btn} onClick={onNewFolder}><FolderPlus size={13} className="text-cyan-400" /> New Folder</button>
+                    <button className={btn} onClick={onNewFile}><FilePlus size={13} className="text-zinc-400" /> New File</button>
+                    <button className={btn} onClick={onNewFolder}><FolderPlus size={13} className="text-zinc-400" /> New Folder</button>
                     <div className="my-1 border-t border-[#27272a]" />
                 </>
             )}
@@ -115,7 +115,7 @@ function InlineInput({ depth, defaultValue = "", placeholder, onConfirm, onCance
                 placeholder={placeholder}
                 onKeyDown={e => { if (e.key === "Enter") confirm(); if (e.key === "Escape") onCancel(); }}
                 onBlur={confirm}
-                className="flex-1 bg-[#27272a] border border-cyan-500/60 text-white text-xs rounded px-2 py-1 outline-none font-mono"
+                className="flex-1 bg-[#27272a] border border-purple-500/40 text-white text-xs rounded px-2 py-1 outline-none font-mono"
             />
         </div>
     );
@@ -167,7 +167,7 @@ function FileTreeNode({
                         onContextMenu={handleCtxMenu}
                         onClick={() => onSelect(node.fileData!)}
                         className={`flex items-center gap-1.5 px-3 py-[3px] cursor-pointer select-none transition-colors border-l-2 group ${
-                            isActive ? "bg-[#18181b] border-cyan-500 text-white" : "border-transparent hover:bg-[#18181b] text-gray-400 hover:text-white"
+                            isActive ? "bg-[#18181b] border-purple-500 text-white" : "border-transparent hover:bg-[#18181b] text-zinc-400 hover:text-white"
                         }`}
                         style={{ paddingLeft: `calc(0.75rem + ${depth * 0.75}rem)` }}
                     >
@@ -225,16 +225,16 @@ function FileTreeNode({
                     style={{ paddingLeft: `calc(0.75rem + ${depth * 0.75}rem)` }}
                 >
                     {isOpen ? <ChevronDown size={13} className="text-gray-500 shrink-0" /> : <ChevronRight size={13} className="text-gray-500 shrink-0" />}
-                    {isOpen ? <FolderOpen size={13} className="text-cyan-400 shrink-0" /> : <Folder size={13} className="text-cyan-500 shrink-0" />}
+                    {isOpen ? <FolderOpen size={13} className="text-zinc-400 shrink-0" /> : <Folder size={13} className="text-zinc-500 shrink-0" />}
                     <span className="truncate text-[12px]">{node.name}</span>
                     <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
                         <button
                             onClick={e => { e.stopPropagation(); setIsOpen(true); setInlineMode("newFile"); }}
-                            className="p-0.5 hover:text-cyan-400 text-gray-500 rounded transition-colors" title="New file"
+                            className="p-0.5 hover:text-purple-400 text-gray-500 rounded transition-colors" title="New file"
                         ><FilePlus size={11} /></button>
                         <button
                             onClick={e => { e.stopPropagation(); setIsOpen(true); setInlineMode("newFolder"); }}
-                            className="p-0.5 hover:text-cyan-400 text-gray-500 rounded transition-colors" title="New folder"
+                            className="p-0.5 hover:text-purple-400 text-gray-500 rounded transition-colors" title="New folder"
                         ><FolderPlus size={11} /></button>
                         <button
                             onClick={e => { e.stopPropagation(); actions.onDelete(node.path, false); }}

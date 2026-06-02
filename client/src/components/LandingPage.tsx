@@ -338,7 +338,7 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
 
 							<div className="flex gap-6 group p-8 glass-card rounded-2xl hover:border-[rgba(16,185,129,0.3)] transition-colors">
 								<div className="flex-shrink-0 w-12 h-12 glass-card flex items-center justify-center border-[rgba(16,185,129,0.3)] group-hover:scale-110 transition-transform rounded-xl">
-									<span className="material-symbols-outlined text-[#10B981] text-xl">shield_check</span>
+									<span className="material-symbols-outlined text-[#10B981] text-xl">security</span>
 								</div>
 								<div>
 									<h4 className="text-lg font-bold font-['Space_Grotesk'] mb-2 text-[#f8fafc] group-hover:text-[#10B981] transition-colors">

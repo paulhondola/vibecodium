@@ -39,7 +39,7 @@ export interface WSData {
 	userName: string;
 	isHost: boolean;
 	color: string;
-	type: "collab" | "terminal";
+	type: "collab" | "terminal" | "match";
 }
 
 export const termClients = new Map<string, Set<import("bun").ServerWebSocket<WSData>>>();

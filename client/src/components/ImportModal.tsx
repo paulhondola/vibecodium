@@ -75,7 +75,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
 
 						<div className="p-6">
 							<p className="text-sm text-gray-400 mb-4">
-								Enter a public GitHub repository URL to securely clone into your isolated workspace.
+								Enter a GitHub repository URL to clone into your isolated workspace. Private repos require a GitHub token set in your profile.
 							</p>
 
 							<div className="flex flex-col gap-2 mb-6">
