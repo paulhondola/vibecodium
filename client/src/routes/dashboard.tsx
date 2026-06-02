@@ -4,6 +4,7 @@ import { Loader2, ExternalLink, Search } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import CoderMatchModal from "../components/CoderMatchModal";
 import ImportModal from "../components/ImportModal";
+import GamePIP from "../components/GamePIP";
 import DashboardHeader from "../components/dashboard/DashboardHeader";
 import DashboardSidebar from "../components/dashboard/DashboardSidebar";
 import CreateRepoModal from "../components/dashboard/CreateRepoModal";
@@ -61,6 +62,7 @@ function DashboardPage() {
   const [isLoadingApps, setIsLoadingApps] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [vibeMatchUnread, setVibeMatchUnread] = useState(0);
+  const [showDashboardGame, setShowDashboardGame] = useState(false);
 
   const reposRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
@@ -312,7 +314,7 @@ function DashboardPage() {
       </div>
 
       {/* TopAppBar */}
-      <DashboardHeader user={user} onShowGame={() => {}} />
+      <DashboardHeader user={user} onShowGame={() => setShowDashboardGame(true)} />
 
       {/* SideNavBar */}
       <DashboardSidebar
@@ -691,6 +693,14 @@ function DashboardPage() {
       )}
 
       <DashboardFooter repoCount={repos.length} workspaceCount={savedProjects.length} />
+
+      {showDashboardGame && (
+        <GamePIP
+          gameType="flappy"
+          onSwitchGame={() => {}}
+          onClose={() => setShowDashboardGame(false)}
+        />
+      )}
     </div>
   );
 }
