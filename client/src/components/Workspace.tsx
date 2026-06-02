@@ -13,8 +13,7 @@ import WorkspaceTopBar from "./WorkspaceTopBar";
 import DeploySuccessModal from "./DeploySuccessModal";
 import TokenPromptModal from "./TokenPromptModal";
 import { API_BASE } from "@/lib/config";
-import { Loader2, Flame, Terminal, Wrench, FolderOpen, GitBranch, HelpCircle, Sparkles, Music, Youtube, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Loader2, Flame, Terminal, FolderOpen, GitBranch, HelpCircle, Sparkles, Music, Youtube, Search } from "lucide-react";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthProvider";
@@ -71,9 +70,8 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [showMatrix, setShowMatrix] = useState(false);
     const [showRoast, setShowRoast] = useState(false);
     const [showPowerMode, setShowPowerMode] = useState(false);
-    const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'search' | 'git' | 'tools' | 'fun' | 'help' | 'spotify' | 'youtube'>('explorer');
+    const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'search' | 'git' | 'fun' | 'help' | 'spotify' | 'youtube'>('explorer');
     const [fileSearchQuery, setFileSearchQuery] = useState("");
-    const [isTimeTravelOpen, setIsTimeTravelOpen] = useState(false);
     const [showEditorGame, setShowEditorGame] = useState(false);
     const [showQuickOpen, setShowQuickOpen] = useState(false);
     const [quickOpenQuery, setQuickOpenQuery] = useState("");
@@ -458,7 +456,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                     <SidebarTabBtn icon={<FolderOpen size={17} />} label="Explorer" active={showSidebar && activeSidebarTab === 'explorer'} onClick={() => { if (showSidebar && activeSidebarTab === 'explorer') { setShowSidebar(false); } else { setActiveSidebarTab('explorer'); setShowSidebar(true); } }} />
                     <SidebarTabBtn icon={<Search size={17} />} label="Search" active={showSidebar && activeSidebarTab === 'search'} onClick={() => { if (showSidebar && activeSidebarTab === 'search') { setShowSidebar(false); } else { setActiveSidebarTab('search'); setShowSidebar(true); } }} />
                     <SidebarTabBtn icon={<GitBranch size={17} />} label="Git" active={showSidebar && activeSidebarTab === 'git'} onClick={() => { if (showSidebar && activeSidebarTab === 'git') { setShowSidebar(false); } else { setActiveSidebarTab('git'); setShowSidebar(true); } }} />
-                    <SidebarTabBtn icon={<Wrench size={17} />} label="Tools" active={showSidebar && activeSidebarTab === 'tools'} onClick={() => { if (showSidebar && activeSidebarTab === 'tools') { setShowSidebar(false); } else { setActiveSidebarTab('tools'); setShowSidebar(true); } }} />
                     <SidebarTabBtn icon={<Sparkles size={17} />} label="Fun" active={showSidebar && activeSidebarTab === 'fun'} onClick={() => { if (showSidebar && activeSidebarTab === 'fun') { setShowSidebar(false); } else { setActiveSidebarTab('fun'); setShowSidebar(true); } }} />
                     <SidebarTabBtn icon={<HelpCircle size={17} />} label="Help" active={showSidebar && activeSidebarTab === 'help'} onClick={() => { if (showSidebar && activeSidebarTab === 'help') { setShowSidebar(false); } else { setActiveSidebarTab('help'); setShowSidebar(true); } }} />
                     <div className="flex-1" />
@@ -538,25 +535,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                             onBranchChange={setCurrentBranch}
                                             onTokenRequired={(type, message) => setTokenPrompt({ type, message })}
                                         />
-                                    )}
-                                    {activeSidebarTab === 'tools' && (
-                                        <div className="flex flex-col h-full">
-                                            <div className="px-3 py-2 border-b border-[#27272a] shrink-0">
-                                                <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Developer Tools</p>
-                                            </div>
-                                            <div className="flex-1 overflow-y-auto p-2 space-y-px">
-                                                <button
-                                                    onClick={() => setIsTimeTravelOpen(p => !p)}
-                                                    className={`w-full flex items-start gap-2.5 px-3 py-2.5 rounded-[5px] text-left hover:bg-[#1e1e24] transition-colors group ${isTimeTravelOpen ? 'bg-purple-500/10' : ''}`}
-                                                >
-                                                    <svg className={`shrink-0 mt-0.5 ${isTimeTravelOpen ? 'text-purple-400' : 'text-zinc-500 group-hover:text-zinc-300'}`} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                                                    <div>
-                                                        <div className={`text-xs font-medium ${isTimeTravelOpen ? 'text-purple-400' : 'text-zinc-300'}`}>Time Travel</div>
-                                                        <div className="text-[10px] text-zinc-600 mt-0.5">Scrub file edit history</div>
-                                                    </div>
-                                                </button>
-                                            </div>
-                                        </div>
                                     )}
                                     {activeSidebarTab === 'fun' && (
                                         <div className="flex flex-col h-full">
@@ -659,11 +637,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                         remoteCursorUpdate={remoteCursorUpdate}
                                         pendingUpdate={pendingUpdate}
                                         onPendingResolved={() => setPendingUpdate(null)}
-                                        projectId={projectId}
-                                        agentToken={agentToken}
                                         powerModeEnabled={showPowerMode}
-                                        timeTravelOpen={isTimeTravelOpen}
-                                        onTimeTravelChange={setIsTimeTravelOpen}
                                         gameOpen={showEditorGame}
                                         onGameChange={setShowEditorGame}
                                         branchName={currentBranch}

@@ -14,7 +14,6 @@ import matchRouter from "./routes/match";
 import deployRoutes from "./routes/deploy";
 import helpRoutes from "./routes/help";
 import llmRoutes from "./routes/llm";
-import timelineRoutes from "./routes/timeline";
 import executeRoutes from "./routes/execute";
 import { supabase } from "./db/supabase";
 import { addMatchClient, removeMatchClient } from "./ws/matchMessaging";
@@ -49,7 +48,6 @@ export const app = new Hono()
 	.route("/api/match", matchRouter)
 	.route("/api/deploy", deployRoutes)
 	.route("/api/help", helpRoutes)
-	.route("/api/timeline", timelineRoutes)
 	.route("/api", llmRoutes)
 	.route("/execute", executeRoutes)
 	// Serve static assets from the client dist folder

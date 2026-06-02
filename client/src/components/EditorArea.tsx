@@ -6,8 +6,6 @@ import type { ProjectFile } from "./Workspace";
 import { useSocket } from "../contexts/SocketProvider";
 import type { PendingUpdate } from "../hooks/useAgentStream";
 import GamePIP, { type GameType } from "./GamePIP";
-import TimelineBar, { type TimelineEvent } from "./TimelineBar";
-import { API_BASE } from "@/lib/config";
 import * as Y from "yjs";
 
 function uint8ArrayToBase64(arr: Uint8Array): string {
@@ -39,11 +37,7 @@ interface EditorAreaProps {
     remoteCursorUpdate?: RemoteCursorUpdate | null;
     pendingUpdate?: PendingUpdate | null;
     onPendingResolved?: () => void;
-    projectId?: string | null;
-    agentToken?: string | null;
     powerModeEnabled?: boolean;
-    timeTravelOpen?: boolean;
-    onTimeTravelChange?: (open: boolean) => void;
     gameOpen?: boolean;
     onGameChange?: (open: boolean) => void;
     branchName?: string;
@@ -53,8 +47,8 @@ interface EditorAreaProps {
 export default function EditorArea({
     openFiles, onSelectFile, onCloseFile,
     activeFile, userId, remoteCodeUpdate, remoteCursorUpdate,
-    pendingUpdate, onPendingResolved, projectId, agentToken, powerModeEnabled = false,
-    timeTravelOpen = false, onTimeTravelChange, gameOpen = false, onGameChange,
+    pendingUpdate, onPendingResolved, powerModeEnabled = false,
+    gameOpen = false, onGameChange,
     branchName = 'main', onCloseOthers,
 }: EditorAreaProps) {
     const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -73,11 +67,7 @@ export default function EditorArea({
     const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
     const [contextMenu, setContextMenu] = useState<{ file: ProjectFile; x: number; y: number } | null>(null);
 
-    // Time-Travel Debugging state (open/close controlled by parent)
-    const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
-    const [eventIndex, setEventIndex] = useState(0);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+
 
     const { send, lastMessage: socketMessage } = useSocket();
     const sendRef = useRef(send);
@@ -199,7 +189,6 @@ export default function EditorArea({
 
     // Sync code when active file changes
     useEffect(() => {
-        onTimeTravelChange?.(false); // Close timeline on file switch
         if (activeFile) {
             // Guard the model update that @monaco-editor/react will trigger via executeEdits
             // (value prop change fires onDidChangeContent — must not corrupt the new file's Y.Doc)
@@ -212,91 +201,6 @@ export default function EditorArea({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeFile]);
-
-    // Fetch timeline events when Time-Travel opens
-    useEffect(() => {
-        if (!timeTravelOpen || !projectId || !activeFile) return;
-        setTimelineEvents([]);
-        setAnalysisResult(null);
-        const headers: Record<string, string> = {};
-        if (agentToken) headers["Authorization"] = `Bearer ${agentToken}`;
-        fetch(
-            `${API_BASE}/api/timeline/${projectId}?path=${encodeURIComponent(activeFile.path)}`,
-            { headers }
-        )
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.events) {
-                    setTimelineEvents(data.events); // already ASC (oldest → newest)
-                    setEventIndex(data.events.length - 1); // start at latest
-                }
-            })
-            .catch(err => console.error("Failed fetching timeline:", err));
-    }, [timeTravelOpen, projectId, activeFile]);
-
-    // Apply timeline event content to editor when scrubbing
-    useEffect(() => {
-        if (timeTravelOpen && timelineEvents.length > 0) {
-            const snappedCode = timelineEvents[eventIndex]?.content ?? "";
-            setCode(snappedCode);
-            if (editorRef.current) {
-                const model = editorRef.current.getModel();
-                if (model && model.getValue() !== snappedCode) {
-                    isRemoteUpdate.current = true;
-                    model.setValue(snappedCode);
-                    setTimeout(() => { isRemoteUpdate.current = false; }, 50);
-                }
-            }
-        }
-    }, [eventIndex, timeTravelOpen, timelineEvents]);
-
-    const handleRestoreEvent = () => {
-        if (!timeTravelOpen || timelineEvents.length === 0) return;
-        const restoredContent = timelineEvents[eventIndex]?.content ?? "";
-        if (activeFileRef.current) {
-            activeFileRef.current.content = restoredContent;
-            const restoreDoc = ydocsRef.current.get(activeFileRef.current.path);
-            if (restoreDoc) {
-                // "local" origin triggers the Yjs observer → yjs_update broadcast to all peers
-                restoreDoc.transact(() => {
-                    const ytext = restoreDoc.getText("content");
-                    ytext.delete(0, ytext.length);
-                    ytext.insert(0, restoredContent);
-                }, "local");
-            } else {
-                // Fallback for files without an active Y.Doc
-                sendRef.current({
-                    type: "code_change",
-                    filePath: activeFileRef.current.path,
-                    content: restoredContent,
-                });
-            }
-        }
-        onTimeTravelChange?.(false);
-    };
-
-    const handleAnalyze = useCallback(async (eventIds: string[]): Promise<void> => {
-        if (!projectId || !activeFile) return;
-        setIsAnalyzing(true);
-        setAnalysisResult(null);
-        try {
-            const headers: Record<string, string> = { "Content-Type": "application/json" };
-            if (agentToken) headers["Authorization"] = `Bearer ${agentToken}`;
-            const res = await fetch(`${API_BASE}/api/timeline/${projectId}/analyze`, {
-                method: "POST",
-                headers,
-                body: JSON.stringify({ filePath: activeFile.path, eventIds }),
-            });
-            const data = await res.json();
-            if (data.success) setAnalysisResult(data.analysis);
-        } catch (e) {
-            console.error("AI analysis failed:", e);
-        } finally {
-            setIsAnalyzing(false);
-        }
-    }, [projectId, activeFile, agentToken]);
-
-
 
     // Emit file_focus when switching files
     useEffect(() => {
@@ -694,26 +598,10 @@ export default function EditorArea({
                             scrollBeyondLastLine: false,
                             fontFamily: isRetro ? "'Courier New', monospace" : "'JetBrains Mono', 'Fira Code', monospace",
                             padding: { top: 16 },
-                            readOnly: hasPending || timeTravelOpen, // lock editor while diff is shown or time traveling
+                            readOnly: hasPending, // lock editor while diff is shown
                         }}
                         onMount={handleEditorDidMount}
                     />
-                    
-                    {/* ── Time-Travel Timeline Bar ── */}
-                    {timeTravelOpen && (
-                        <TimelineBar
-                            events={timelineEvents}
-                            currentIndex={eventIndex}
-                            onScrub={setEventIndex}
-                            onRestore={handleRestoreEvent}
-                            onClose={() => onTimeTravelChange?.(false)}
-                            onLive={() => { setEventIndex(timelineEvents.length - 1); onTimeTravelChange?.(false); }}
-                            onAnalyze={handleAnalyze}
-                            isLoading={timelineEvents.length === 0}
-                            analysisResult={analysisResult}
-                            isAnalyzing={isAnalyzing}
-                        />
-                    )}
                     </>
                 ) : (
                     <div className="flex h-full w-full items-center justify-center bg-[#09090b] select-none">
