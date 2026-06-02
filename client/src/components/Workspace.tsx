@@ -93,7 +93,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 	const [showWhiteboard, setShowWhiteboard] = useState(false);
 
     // Collab
-    const { isConnected, lastMessage, send } = useSocket();
+    const { isConnected, lastMessage } = useSocket();
     const activeFileRef = useRef<ProjectFile | null>(null);
     useEffect(() => { activeFileRef.current = activeFile; }, [activeFile]);
     const [collabUsers, setCollabUsers] = useState<{id: string, name: string, color: string, isHost?: boolean}[]>([]);
@@ -438,16 +438,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 				onSave={handleSave}
 				onCopyCollabLink={copyCollabLink}
 				onShowCommunityHelp={() => { setActiveSidebarTab("help"); setShowSidebar(true); }}
-				activeFile={activeFile}
-				send={send}
-				user={user}
-				lastMessage={lastMessage}
-				showPowerMode={showPowerMode}
-				setShowPowerMode={setShowPowerMode}
-				showMatrix={showMatrix}
-				setShowMatrix={setShowMatrix}
-				onShowReels={() => { setActiveSidebarTab("youtube"); setShowSidebar(true); }}
-				onShowRoast={() => setShowRoast(true)}
 			/>
 
 			<div className="flex-1 flex overflow-hidden">

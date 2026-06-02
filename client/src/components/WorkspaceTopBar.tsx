@@ -1,7 +1,4 @@
-import { useState, useRef, useEffect } from "react";
-import { ArrowLeft, Loader2, Users, Check, GitCommit, PanelLeft, TerminalSquare, PanelRight, Wrench, ChevronDown, Rocket } from "lucide-react";
-import ToolsMenu from "./ToolsMenu";
-import type { ProjectFile } from "./Workspace";
+import { ArrowLeft, Loader2, Users, Check, GitCommit, PanelLeft, TerminalSquare, PanelRight, Rocket } from "lucide-react";
 
 interface CollabUser {
 	id: string;
@@ -32,16 +29,6 @@ interface WorkspaceTopBarProps {
 	onSave: () => void;
 	onCopyCollabLink: () => void;
 	onShowCommunityHelp: () => void;
-	activeFile: ProjectFile | null;
-	send: (msg: object) => void;
-	user: { name?: string } | null;
-	lastMessage: unknown;
-	showPowerMode: boolean;
-	setShowPowerMode: React.Dispatch<React.SetStateAction<boolean>>;
-	showMatrix: boolean;
-	setShowMatrix: React.Dispatch<React.SetStateAction<boolean>>;
-	onShowReels: () => void;
-	onShowRoast: () => void;
 }
 
 export default function WorkspaceTopBar({
@@ -49,23 +36,9 @@ export default function WorkspaceTopBar({
 	showSidebar, setShowSidebar, showTerminal, setShowTerminal,
 	showChat, setShowChat, isHost, isConnected, isDeploying, isSaving,
 	collabUsers, copied, onBack, onDeploy, onSave, onCopyCollabLink,
-	onShowCommunityHelp, activeFile, send, user, lastMessage,
-	showPowerMode, setShowPowerMode, showMatrix, setShowMatrix,
-	onShowReels, onShowRoast,
+	onShowCommunityHelp,
 }: WorkspaceTopBarProps) {
-	const [showToolsMenu, setShowToolsMenu] = useState(false);
-	const toolsMenuRef = useRef<HTMLDivElement>(null);
 
-	useEffect(() => {
-		if (!showToolsMenu) return;
-		function handleClickOutside(e: MouseEvent) {
-			if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target as Node)) {
-				setShowToolsMenu(false);
-			}
-		}
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, [showToolsMenu]);
 
 	return (
 		<div className="h-12 bg-[#18181b] border-b border-[#27272a] shadow-sm flex items-center justify-between px-4 shrink-0 relative z-20">
@@ -168,32 +141,6 @@ export default function WorkspaceTopBar({
 					</div>
 				)}
 
-				<div className="relative" ref={toolsMenuRef}>
-					<button
-						onClick={() => setShowToolsMenu(prev => !prev)}
-						className={`text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all font-semibold shadow-sm bg-[#27272a] hover:bg-[#3f3f46] text-gray-200 ${showToolsMenu ? "ring-1 ring-cyan-500/50" : ""}`}
-					>
-						<Wrench size={14} />
-						Tools
-						<ChevronDown size={12} className={`transition-transform ${showToolsMenu ? "rotate-180" : ""}`} />
-					</button>
-
-					{showToolsMenu && (
-						<ToolsMenu
-							activeFile={activeFile}
-							send={send}
-							user={user}
-							lastMessage={lastMessage}
-							showPowerMode={showPowerMode}
-							setShowPowerMode={setShowPowerMode}
-							showMatrix={showMatrix}
-							setShowMatrix={setShowMatrix}
-							onShowReels={onShowReels}
-							onShowRoast={onShowRoast}
-							onClose={() => setShowToolsMenu(false)}
-						/>
-					)}
-				</div>
 			</div>
 		</div>
 	);
