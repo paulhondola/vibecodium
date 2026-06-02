@@ -66,8 +66,7 @@ function Index() {
     return <Workspace projectId={projectId} onBack={() => {
         setManualApp(false);
         setProjectId(null);
-        navigate({ to: "/", search: { w: undefined }, replace: true });
+        navigate({ to: "/dashboard" });
     }} />;
 }
 
-export default Index;

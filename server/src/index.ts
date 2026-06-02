@@ -2,69 +2,29 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { serveStatic } from "hono/bun";
-import Docker from "dockerode";
-import { Writable } from "stream";
-import type { ApiResponse, ExecuteRequest, ExecuteResponse } from "shared";
+
 import gitRoutes from "./routes/git";
 import projectsRoutes from "./routes/projects";
 import sessionsRoutes from "./routes/sessions";
+import reelsRoutes from "./routes/reels";
 import agentRoutes from "./routes/agent";
 import githubRoutes from "./routes/github";
 import usersRouter from "./routes/users";
 import matchRouter from "./routes/match";
 import deployRoutes from "./routes/deploy";
 import helpRoutes from "./routes/help";
-import timelineRoutes from "./routes/timeline";
-import { syncProjectFilesToDisk } from "./utils/sync";
+import llmRoutes from "./routes/llm";
+import executeRoutes from "./routes/execute";
 import { supabase } from "./db/supabase";
-import * as nodePath from "node:path";
-import { scanCode, hasCriticalVulnerability, type ScanResult } from "./security/scanner";
 import { addMatchClient, removeMatchClient } from "./ws/matchMessaging";
-import * as Y from "yjs";
 
-const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "https://api.deepseek.com/v1";
-const LLM_KEY = process.env.LLM_KEY ?? "";
-const LLM_MODEL = process.env.LLM_MODEL ?? "deepseek-chat";
+// WebSocket handlers
+import type { WSData } from "./ws/terminal";
+import { handleTerminalOpen, handleTerminalMessage, handleTerminalClose } from "./ws/terminal";
+import { handleCollabOpen, handleCollabMessage, handleCollabClose } from "./ws/collaboration";
 
-const LOCAL_BASE_URL = "http://localhost:1234/v1";
-const LOCAL_MODEL = process.env.LOCAL_MODEL ?? "qwen2.5-coder-32b-instruct";
-
-async function pingProvider(baseURL: string, apiKey: string, model: string) {
-	const res = await fetch(`${baseURL}/chat/completions`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${apiKey}`,
-		},
-		body: JSON.stringify({
-			model,
-			messages: [{ role: "user", content: "Reply with exactly: pong" }],
-			max_tokens: 10,
-		}),
-		signal: AbortSignal.timeout(8_000),
-	});
-
-	if (!res.ok) throw new Error(await res.text());
-
-	const data = await res.json() as { choices: { message: { content: string } }[] };
-	return data.choices[0]?.message?.content?.trim();
-}
-
-const docker = new Docker();
-
-const LANGUAGE_IMAGES: Record<string, string> = {
-	python: "vibecodium-python:latest",
-	node: "vibecodium-node:latest",
-	"c++": "vibecodium-cpp:latest",
-	rust: "vibecodium-rust:latest"
-};
-
-const EXEC_COMMANDS: Record<string, () => string[]> = {
-	python: () => ["python", "-c", "import os\nexec(os.environ.get('USER_CODE', ''))"],
-	node: () => ["node", "-e", "eval(process.env.USER_CODE)"],
-	"c++": () => ["sh", "-c", "printenv USER_CODE > main.cpp && g++ main.cpp && ./a.out"],
-	rust: () => ["sh", "-c", "printenv USER_CODE > main.rs && rustc main.rs && ./main"] 
-};
+// Re-export for deploy.ts
+export { broadcastToTerminal } from "./ws/terminal";
 
 export const app = new Hono()
 	.onError((err, c) => {
@@ -81,975 +41,113 @@ export const app = new Hono()
 	.route("/api/git", gitRoutes)
 	.route("/api/projects", projectsRoutes)
 	.route("/api/sessions", sessionsRoutes)
+	.route("/api/reels", reelsRoutes)
 	.route("/api/agent", agentRoutes)
 	.route("/api/github", githubRoutes)
 	.route("/api/users", usersRouter)
 	.route("/api/match", matchRouter)
 	.route("/api/deploy", deployRoutes)
-    .route("/api/help", helpRoutes)
-    .route("/api/timeline", timelineRoutes)
+	.route("/api/help", helpRoutes)
+	.route("/api", llmRoutes)
+	.route("/execute", executeRoutes)
 	// Serve static assets from the client dist folder
 	.use("/assets/*", serveStatic({ root: "../client/dist" }))
 	.use("/favicon.ico", serveStatic({ path: "../client/dist/favicon.ico" }))
 	.use("/vibecodium_icon.svg", serveStatic({ path: "../client/dist/vibecodium_icon.svg" }))
 	.use("/vite.svg", serveStatic({ path: "../client/dist/vite.svg" }))
+	.use("/subway-surfer.html", serveStatic({ path: "../client/dist/subway-surfer.html" }))
+	.use("/flappy-bird/*", serveStatic({ root: "../client/dist" }))
 	.get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
-
-	// Security Scanning Endpoint
-	.post("/api/scan", async (c) => {
-		try {
-			const body = await c.req.json<{ projectId: string }>();
-			if (!body.projectId) {
-				return c.json({ success: false, error: "Missing projectId" }, 400);
-			}
-
-		const { data: projectFiles, error: fErr } = await supabase
-				.from("files")
-				.select("path, content")
-				.eq("project_id", body.projectId);
-
-			if (fErr) throw fErr;
-
-			const filesToScan = (projectFiles ?? [])
-				.filter((f) => f.content)
-				.map((f) => ({ path: f.path, content: f.content! }));
-
-			const scanResult = await scanCode(filesToScan);
-
-			return c.json({
-				success: true,
-				scan: scanResult,
-			});
-		} catch (error: any) {
-			console.error("Security scan error:", error);
-			return c.json({ success: false, error: error.message }, 500);
-		}
-	})
-	// Roast My Code Endpoint
-	.post("/api/roast", async (c) => {
-		try {
-			const body = await c.req.json<{ code: string; fileName?: string }>();
-			if (!body.code) return c.json({ success: false, error: "No code to roast" }, 400);
-
-			if (!LLM_KEY) {
-				// Fallback roast when no LLM key is configured
-				const fallbacks = [
-					"I've seen better code in COBOL tutorials from 1985. Your variable names are so cryptic, even you don't know what they mean anymore. The indentation looks like you coded this during an earthquake. Congrats on shipping it though, I guess.",
-					"This code has more nested callbacks than a Russian doll convention. Stack Overflow would close your question as 'unclear what you're asking'. Your future self will hate you for this, as they should.",
-					"Whoever wrote this comment — '// TODO: fix later' — that was 3 years ago, wasn't it? The cyclomatic complexity of this file is higher than your coffee intake, and that's saying something.",
-				];
-				return c.json({ success: true, roast: fallbacks[Math.floor(Math.random() * fallbacks.length)] });
-			}
-
-			const systemPrompt = `You are a savage but ultimately well-meaning senior software engineer with 20 years of experience and zero patience for bad code. You will roast the submitted code mercilessly but with humor and specificity. Point out real issues (bad naming, complexity, potential bugs, style violations, missing error handling, etc.) in an entertaining, exaggerated, comedic way. Keep it under 200 words. Don't be cruel about the person, only the code. End with one genuine small compliment buried in sarcasm.`;
-
-			const res = await fetch(`${LLM_BASE_URL}/chat/completions`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json", Authorization: `Bearer ${LLM_KEY}` },
-				body: JSON.stringify({
-					model: LLM_MODEL,
-					messages: [
-						{ role: "system", content: systemPrompt },
-						{ role: "user", content: `Roast this code from file "${body.fileName || "unknown"}":\n\n\`\`\`\n${body.code.slice(0, 3000)}\n\`\`\`` },
-					],
-					max_tokens: 350,
-					temperature: 0.9,
-				}),
-				signal: AbortSignal.timeout(20_000),
-			});
-
-			if (!res.ok) {
-				const err = await res.text();
-				return c.json({ success: false, error: err }, 500);
-			}
-
-			const data = await res.json() as { choices: { message: { content: string } }[] };
-			return c.json({ success: true, roast: data.choices[0]?.message?.content?.trim() });
-		} catch (error: any) {
-			console.error("Roast error:", error);
-			return c.json({ success: false, error: error.message }, 500);
-		}
-	})
-    .get("/api/ping-llm", async (c) => {
-        if (!LLM_KEY) return c.json({ success: false, error: "LLM_KEY is not set" }, 500);
-        const res = await fetch(`${LLM_BASE_URL}/chat/completions`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${LLM_KEY}` },
-            body: JSON.stringify({ model: LLM_MODEL, messages: [{ role: "user", content: "Reply with exactly: pong" }], max_tokens: 10 }),
-            signal: AbortSignal.timeout(15_000),
-        });
-        if (!res.ok) {
-            const error = await res.text();
-            return c.json({ success: false, error }, res.status as any);
-        }
-        const data = await res.json() as { choices: { message: { content: string } }[] };
-        return c.json({ success: true, model: LLM_MODEL, reply: data.choices[0]?.message?.content?.trim() });
-    })
-    .get("/api/ping-llm/auto", async (c) => {
-        try {
-            const reply = await pingProvider(LOCAL_BASE_URL, "lm-studio", LOCAL_MODEL);
-            return c.json({ success: true, provider: "local", model: LOCAL_MODEL, reply });
-        } catch (localErr) {
-            if (!LLM_KEY) return c.json({ success: false, error: "Local LM Studio unreachable and LLM_KEY is not set" }, 503);
-            try {
-                const reply = await pingProvider(LLM_BASE_URL, LLM_KEY, LLM_MODEL);
-                return c.json({ success: true, provider: "deepseek", model: LLM_MODEL, reply });
-            } catch (remoteErr) {
-                return c.json({ success: false, error: "Both providers failed", local: String(localErr), deepseek: String(remoteErr) }, 503);
-            }
-        }
-    })
-    .post("/execute", async (c) => {
-        try {
-            const body = await c.req.json<ExecuteRequest>();
-            if (!body.language || !body.version || !body.code) return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: "Missing language, version, or code." }, 400);
-
-			// Security scan before execution
-			if (hasCriticalVulnerability(body.code)) {
-				return c.json<ExecuteResponse>({
-					success: false,
-					stdout: "",
-					stderr: "🛡️ SECURITY BLOCK: Critical vulnerability detected in code.\nExecution refused for safety.\n\nRun a full scan for details.",
-					error: "Security policy violation"
-				}, 403);
-			}
-            
-            const imageName = LANGUAGE_IMAGES[body.language];
-            const getCmd = EXEC_COMMANDS[body.language];
-            if (!imageName || !getCmd) return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: `Unsupported language: ${body.language}` }, 400);
-
-            let cmd = getCmd();
-            let hostConfig: any = { Memory: 2048 * 1024 * 1024, NetworkMode: "none" };
-            const reqBody = body as any;
-            
-            if (reqBody.projectId && reqBody.entryFile) {
-                const targetDir = await syncProjectFilesToDisk(reqBody.projectId);
-                hostConfig.Binds = [`${targetDir}:/app`];
-                if (body.language === "node") cmd = ["node", `/app/${reqBody.entryFile}`];
-                if (body.language === "python") cmd = ["python", `/app/${reqBody.entryFile}`];
-                if (body.language === "c++") cmd = ["sh", "-c", `cd /app && g++ ${reqBody.entryFile} && ./a.out`];
-                if (body.language === "rust") cmd = ["sh", "-c", `cd /app && rustc ${reqBody.entryFile} && ./main`];
-            }
-
-            const container = await docker.createContainer({
-                Image: imageName, Cmd: cmd, Env: [`USER_CODE=${body.code}`],
-                HostConfig: hostConfig, Tty: false
-            });
-
-            try {
-                const stream = await container.attach({ stream: true, stdout: true, stderr: true });
-                let stdoutData = ""; let stderrData = "";
-                container.modem.demuxStream(stream, new Writable({ write(c, e, n) { stdoutData += c.toString(); n(); } }), new Writable({ write(c, e, n) { stderrData += c.toString(); n(); } }));
-                await container.start();
-
-                const waitPromise = container.wait();
-                let timeoutTrigged = false;
-                const timeoutPromise = new Promise<{ StatusCode: number }>((resolve) => setTimeout(() => { timeoutTrigged = true; resolve({ StatusCode: 137 }); }, 3000));
-                
-                const waitResult = await Promise.race([waitPromise, timeoutPromise]);
-                if (timeoutTrigged) {
-                    await container.kill().catch(() => {});
-                    return c.json<ExecuteResponse>({ success: false, stdout: stdoutData, stderr: stderrData, error: "Execution Timeout: Killed." });
-                }
-                return c.json<ExecuteResponse>({ success: waitResult.StatusCode === 0, stdout: stdoutData, stderr: stderrData, compileOutput: "" });
-            } finally {
-                await container.remove({ force: true }).catch(() => {});
-            }
-        } catch (err: any) {
-            console.error(err);
-            if (err.statusCode === 404) return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: "Docker image missing!" }, 500);
-            return c.json<ExecuteResponse>({ success: false, stdout: "", stderr: "", error: "Internal Error executing code." }, 500);
-        }
-    })
-    .get("*", serveStatic({ path: "../client/dist/index.html" }));
-
-// ──────────────────────────────────────────
-// Docker Terminal Engine
-// ──────────────────────────────────────────
-
-// Extension → Docker image mapping (uses local custom images)
-const EXT_TO_IMAGE: Record<string, string> = {
-    ".py":  "vibecodium-python:latest",
-    ".rs":  "vibecodium-rust:latest",
-    ".cpp": "vibecodium-cpp:latest",
-    ".cc":  "vibecodium-cpp:latest",
-    ".c":   "vibecodium-cpp:latest",
-    ".go":  "vibecodium-go:latest",
-};
-
-function detectTerminalImage(filePaths: string[]): string {
-    for (const fp of filePaths) {
-        const ext = nodePath.extname(fp).toLowerCase();
-        if (EXT_TO_IMAGE[ext]) return EXT_TO_IMAGE[ext]!;
-    }
-    return "vibecodium-node:latest"; // default for JS/TS projects
-}
-
-// Per-room state for the collaborative Docker terminal
-interface TerminalRoom {
-    container: Docker.Container;
-    proc: ReturnType<typeof Bun.spawn>;
-    sink: import("bun").FileSink; // typed stdin pipe
-}
-
-const termClients       = new Map<string, Set<import("bun").ServerWebSocket<WSData>>>();
-const termRooms         = new Map<string, TerminalRoom>();
-const termLineBuffers   = new Map<string, string>(); // per-room line edit buffer
-const termCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const termBootstrapping = new Set<string>(); // rooms whose container is being created (race-condition lock)
-const termStopped       = new Set<string>(); // rooms manually stopped by the user
-
-// Per project+file event counter for checkpoint marking.
-// NOTE: resets on server restart — checkpoints are cosmetic anchors, not exact.
-const timelineEventCounters = new Map<string, number>(); // key: `${projectId}::${filePath}`
-
-async function stopTerminal(roomId: string): Promise<void> {
-    const room    = termRooms.get(roomId);
-    const clients = termClients.get(roomId);
-    termRooms.delete(roomId);
-    termClients.delete(roomId);
-    termLineBuffers.delete(roomId);
-    const pending = termCleanupTimers.get(roomId);
-    if (pending) { clearTimeout(pending); termCleanupTimers.delete(roomId); }
-
-    clients?.forEach(c => {
-        try { c.send("\r\n\x1b[33m[Container stopped]\x1b[0m\r\n"); } catch (_) {}
-    });
-
-    if (room) {
-        try { room.proc?.kill(); } catch (_) {}
-        try { await room.container.stop({ t: 5 }); } catch (_) {}
-        try { await room.container.remove(); } catch (_) {}
-        console.log(`[Terminal] Cleaned up container for room ${roomId}`);
-    }
-}
-
-async function bootstrapRoom(roomId: string): Promise<void> {
-    if (termBootstrapping.has(roomId)) return; // lock — prevent concurrent bootstraps for the same room
-    termBootstrapping.add(roomId);
-
-    const broadcastToRoom = (msg: string) =>
-        termClients.get(roomId)?.forEach(c => { try { c.send(msg); } catch (_) {} });
-
-    let container: Docker.Container | null = null;
-    try {
-        broadcastToRoom("\x1b[1;36m[VibeCodium]\x1b[0m Syncing project files...\r\n");
-        const hostDir = await syncProjectFilesToDisk(roomId);
-
-        const { data: projectFiles } = await supabase
-            .from("files")
-            .select("path, content")
-            .eq("project_id", roomId);
-
-        const scanResult = await scanCode(
-            (projectFiles ?? [])
-                .filter((f) => f.content)
-                .map((f) => ({ path: f.path, content: f.content! }))
-        );
-
-        if (!scanResult.safe) {
-            broadcastToRoom("\x1b[1;31m[🛡️ SECURITY BLOCK]\x1b[0m Critical vulnerabilities detected:\r\n\r\n");
-            scanResult.vulnerabilities
-                .filter((v) => v.severity === "critical" || v.severity === "high")
-                .forEach((v) => {
-                    broadcastToRoom(`  \x1b[31m● ${v.severity.toUpperCase()}\x1b[0m: ${v.description}\r\n`);
-                    broadcastToRoom(`    Code: ${v.code}\r\n`);
-                    broadcastToRoom(`    Fix: ${v.recommendation}\r\n\r\n`);
-                });
-            broadcastToRoom("\x1b[33mExecution refused for safety. Fix issues and try again.\x1b[0m\r\n");
-            termClients.get(roomId)?.forEach(c => c.close(1008, "Security policy violation"));
-            return;
-        }
-
-        broadcastToRoom(`\x1b[32m✓ Security scan passed\x1b[0m (${scanResult.scannedFiles} files, ${scanResult.scannedLines} lines, ${scanResult.scanDuration}ms)\r\n`);
-
-        const image = detectTerminalImage((projectFiles ?? []).map(f => f.path));
-        broadcastToRoom(`\x1b[90mImage: ${image}  |  ${hostDir} → /usr/src/app\x1b[0m\r\n`);
-
-        if (!image.startsWith("vibecodium-")) {
-            broadcastToRoom("\x1b[90mPulling image...\x1b[0m\r\n");
-            await new Promise<void>((res, rej) => {
-                docker.pull(image, (err: Error | null, pullStream: any) => {
-                    if (err) return rej(err);
-                    pullStream.on("data", () => {});
-                    pullStream.on("end", res);
-                    pullStream.on("error", rej);
-                });
-            });
-        }
-
-        container = await docker.createContainer({
-            Image: image,
-            Cmd: ["sleep", "infinity"],
-            Tty: false,
-            WorkingDir: "/usr/src/app",
-            HostConfig: {
-                Memory: 2048 * 1024 * 1024,
-                MemorySwap: 2048 * 1024 * 1024,
-                CpuQuota: 50000,
-                CpuPeriod: 100000,
-                PidsLimit: 50,
-                Binds: [`${hostDir}:/usr/src/app`],
-                AutoRemove: false,
-            },
-        });
-        await container.start();
-
-        const proc = Bun.spawn(
-            ["docker", "exec", "-i", container.id, "/bin/sh", "-i"],
-            { stdin: "pipe", stdout: "pipe", stderr: "pipe" }
-        );
-
-        const sink = proc.stdin as import("bun").FileSink;
-        termRooms.set(roomId, { container, proc, sink });
-
-        (async () => {
-            const reader = proc.stdout.getReader();
-            const dec = new TextDecoder();
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                broadcastToRoom(dec.decode(value).replace(/\r?\n/g, "\r\n"));
-            }
-            broadcastToRoom("\r\n\x1b[33m[Shell exited]\x1b[0m\r\n");
-            stopTerminal(roomId);
-        })();
-
-        (async () => {
-            const reader = proc.stderr.getReader();
-            const dec = new TextDecoder();
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                broadcastToRoom(dec.decode(value).replace(/\r?\n/g, "\r\n"));
-            }
-        })();
-
-        broadcastToRoom("\x1b[1;32m[Ready]\x1b[0m Sandbox started. Working dir: \x1b[33m/usr/src/app\x1b[0m\r\n\r\n");
-
-    } catch (e: any) {
-        if (container) {
-            try { await container.stop({ t: 0 }); } catch (_) {}
-            try { await container.remove(); } catch (_) {}
-        }
-        termClients.get(roomId)?.forEach(c => {
-            try { c.send(`\x1b[1;31m[Error]\x1b[0m ${e.message}\r\n`); } catch (_) {}
-            c.close(1011, e.message);
-        });
-        console.error("[Terminal] Container start failed:", e.message);
-    } finally {
-        termBootstrapping.delete(roomId); // always release the lock
-    }
-}
+	.get("*", serveStatic({ path: "../client/dist/index.html" }));
 
 // ──────────────────────────────────────────
 // Bun.serve Engine
 // ──────────────────────────────────────────
-const COLORS = ["#A855F7", "#3B82F6", "#10B981", "#F59E0B", "#EC4899", "#EF4444", "#14B8A6", "#F97316"];
-
-// Fire-and-forget Supabase timeline logger.
-// Saves every Nth code_update to avoid flooding. agent_accepted events always saved.
-const TIMELINE_SAVE_INTERVAL = 7;
-
-function logTimelineEvent(
-    projectId: string,
-    filePath: string,
-    content: string,
-    eventType: "code_update" | "agent_accepted",
-    userId: string,
-    userName: string,
-    userColor: string,
-): void {
-    if (content.length > 500_000) return;
-    (async () => {
-        try {
-            const key = `${projectId}::${filePath}`;
-            const count = (timelineEventCounters.get(key) ?? 0) + 1;
-            timelineEventCounters.set(key, count);
-
-            if (eventType === "code_update" && count % TIMELINE_SAVE_INTERVAL !== 0) return;
-
-            await supabase.from("timeline_events").insert({
-                project_id: projectId,
-                file_path: filePath,
-                event_type: eventType,
-                user_id: userId,
-                user_name: userName,
-                user_color: userColor,
-                content,
-                is_checkpoint: count % 50 === 0,
-                created_at: new Date().toISOString(),
-            });
-        } catch (e) {
-            console.error("[Timeline log error]:", e);
-        }
-    })();
-}
-
-interface WSData {
-    projectId: string;
-    clientId: string;
-    userName: string;
-    isHost: boolean;
-    color: string;
-    type: "collab" | "terminal" | "match";
-}
-
-// Room tracking for host resolution
-const roomHosts = new Map<string, string>(); // projectId -> hostClientId
-const activeClients = new Map<string, WSData>(); // clientId -> WSData
-
-// Collaboration reliability — in-memory room file state cache
-const roomFileStates = new Map<string, Map<string, string>>(); // projectId -> filePath -> content
-const activeClientSockets = new Map<string, import("bun").ServerWebSocket<WSData>>(); // clientId -> ws
-const clientLastPong = new Map<string, number>(); // clientId -> last pong timestamp
-
-// Yjs CRDT documents — one Y.Doc per (projectId, filePath)
-const roomYDocs = new Map<string, Map<string, Y.Doc>>(); // projectId -> filePath -> Y.Doc
-
-function getYDoc(projectId: string, filePath: string, initialContent?: string): Y.Doc {
-    if (!roomYDocs.has(projectId)) roomYDocs.set(projectId, new Map());
-    const projectDocs = roomYDocs.get(projectId)!;
-    if (!projectDocs.has(filePath)) {
-        const doc = new Y.Doc();
-        if (initialContent !== undefined && initialContent !== "") {
-            doc.transact(() => doc.getText("content").insert(0, initialContent), "init");
-        }
-        projectDocs.set(filePath, doc);
-    }
-    return projectDocs.get(filePath)!;
-}
-
-const HEARTBEAT_INTERVAL_MS = 25_000;
-const ZOMBIE_TIMEOUT_MS = 55_000; // 2 missed pings + margin
-
-setInterval(() => {
-    const now = Date.now();
-    for (const [clientId, sock] of activeClientSockets) {
-        const lastPong = clientLastPong.get(clientId) ?? now;
-        if (now - lastPong > ZOMBIE_TIMEOUT_MS) {
-            console.log(`[WS Heartbeat] Terminating zombie client ${clientId}`);
-            activeClientSockets.delete(clientId);
-            clientLastPong.delete(clientId);
-            try { sock.terminate(); } catch (_) {}
-        } else {
-            try { sock.send(JSON.stringify({ type: "ping" })); } catch (_) {}
-        }
-    }
-}, HEARTBEAT_INTERVAL_MS);
 
 export default {
 	port: process.env.PORT || 3000,
-	
-    // Manual routing wrapper around Hono to sniff WS connections instantly
+
 	async fetch(req: Request, server: import("bun").Server<WSData>) {
-        const url = new URL(req.url);
+		const url = new URL(req.url);
 
-        // Match chat WebSocket — /ws/match?matchId=&userId=
-        if (url.pathname === "/ws/match") {
-            const matchId = url.searchParams.get("matchId") || "";
-            const userId = url.searchParams.get("userId") || "anon";
-            if (!matchId) return new Response("matchId required", { status: 400 });
-            if (server.upgrade(req, {
-                data: { type: "match", projectId: matchId, clientId: userId, userName: "", isHost: false, color: "" }
-            })) return;
-            return new Response("Upgrade failed", { status: 500 });
-        }
+		// Match chat WebSocket — /ws/match?matchId=&userId=
+		if (url.pathname === "/ws/match") {
+			const matchId = url.searchParams.get("matchId") || "";
+			const userId = url.searchParams.get("userId") || "anon";
+			if (!matchId) return new Response("matchId required", { status: 400 });
+			if (server.upgrade(req, {
+				data: { type: "match", projectId: matchId, clientId: userId, userName: "", isHost: false, color: "" }
+			})) return;
+			return new Response("Upgrade failed", { status: 500 });
+		}
 
-        // Terminals — Docker-backed collaborative sandbox
-        if (url.pathname === "/ws/terminal") {
-            const roomId = url.searchParams.get("roomId") || "default";
-            if (server.upgrade(req, {
-                data: { type: "terminal", projectId: roomId, clientId: crypto.randomUUID(), userName: "terminal", color: "", isHost: false }
-            })) return;
-            return new Response("Upgrade failed", { status: 500 });
-        }
+		// Terminals — Docker-backed collaborative sandbox
+		if (url.pathname === "/ws/terminal") {
+			const roomId = url.searchParams.get("roomId") || "default";
+			if (server.upgrade(req, {
+				data: { type: "terminal", projectId: roomId, clientId: crypto.randomUUID(), userName: "terminal", color: "", isHost: false }
+			})) return;
+			return new Response("Upgrade failed", { status: 500 });
+		}
 
-        // Collaboration
-        if (url.pathname.startsWith("/ws/collab/")) {
-            const projectId = url.pathname.split("/").pop();
-            if (!projectId) return new Response("Bad Request", { status: 400 });
+		// Collaboration
+		if (url.pathname.startsWith("/ws/collab/")) {
+			const projectId = url.pathname.split("/").pop();
+			if (!projectId) return new Response("Bad Request", { status: 400 });
 
-            // Reject connections to non-existent projects before promoting to WS
-            const { data: proj } = await supabase
-                .from("projects")
-                .select("id")
-                .eq("id", projectId)
-                .maybeSingle();
-            if (!proj) return new Response("Project not found", { status: 404 });
+			const { data: proj } = await supabase
+				.from("projects")
+				.select("id")
+				.eq("id", projectId)
+				.maybeSingle();
+			if (!proj) return new Response("Project not found", { status: 404 });
 
-            const clientId = url.searchParams.get("userId") || "anon";
-            const userName = url.searchParams.get("userName") || "Anonymous";
+			const clientId = url.searchParams.get("userId") || "anon";
+			const userName = url.searchParams.get("userName") || "Anonymous";
 
-            if (server.upgrade(req, {
-                data: { type: "collab", projectId, clientId, userName, isHost: false, color: "" }
-            })) {
-                return;
-            }
-            return new Response("Upgrade failed", { status: 500 });
-        }
+			if (server.upgrade(req, {
+				data: { type: "collab", projectId, clientId, userName, isHost: false, color: "" }
+			})) {
+				return;
+			}
+			return new Response("Upgrade failed", { status: 500 });
+		}
 
-        // Standard Hono API
-        return app.fetch(req, server);
+		// Standard Hono API
+		return app.fetch(req, server);
 	},
 
-    // Raw Bun WS Interface
 	websocket: {
-        open(ws: import("bun").ServerWebSocket<WSData>) {
-            const data = ws.data;
+		open(ws: import("bun").ServerWebSocket<WSData>) {
+			if (ws.data.type === "match") {
+				addMatchClient(ws.data.projectId, ws);
+				return;
+			}
+			if (ws.data.type === "terminal") {
+				handleTerminalOpen(ws);
+			} else {
+				handleCollabOpen(ws);
+			}
+		},
 
-            // Match chat room
-            if (data.type === "match") {
-                addMatchClient(data.projectId, ws);
-                return;
-            }
+		message(ws: import("bun").ServerWebSocket<WSData>, message: string) {
+			if (ws.data.type === "terminal") {
+				handleTerminalMessage(ws, message);
+			} else {
+				handleCollabMessage(ws, message);
+			}
+		},
 
-            if (data.type === "terminal") {
-                ws.subscribe(`term_${data.projectId}`);
-                const roomId = data.projectId;
-
-                // Register client
-                if (!termClients.has(roomId)) termClients.set(roomId, new Set());
-                termClients.get(roomId)!.add(ws);
-
-                // Attach to running room
-                if (termRooms.has(roomId) || termBootstrapping.has(roomId)) {
-                    // Cancel any pending cleanup — client reconnected in time (e.g. page refresh)
-                    const pending = termCleanupTimers.get(roomId);
-                    if (pending) { clearTimeout(pending); termCleanupTimers.delete(roomId); }
-                    ws.send("\x1b[90m[Joined existing terminal session]\x1b[0m\r\n");
-                    return;
-                }
-
-                // User previously stopped this container — notify and wait for explicit start
-                if (termStopped.has(roomId)) {
-                    ws.send(JSON.stringify({ type: "container_stopped" }));
-                    return;
-                }
-
-                // First client for this room — bootstrap container
-                bootstrapRoom(roomId);
-                return;
-            }
-
-            // Collab handling
-            ws.subscribe(data.projectId);
-            activeClients.set(data.clientId, data);
-
-            // Host Assignment Logic
-            if (!roomHosts.has(data.projectId)) {
-                roomHosts.set(data.projectId, data.clientId);
-                data.isHost = true;
-            } else {
-                data.isHost = (roomHosts.get(data.projectId) === data.clientId);
-            }
-            data.color = COLORS[activeClients.size % COLORS.length]!;
-
-            // Send standard connect ACK
-            ws.send(JSON.stringify({
-                type: "connected",
-                clientId: data.clientId,
-                color: data.color,
-                isHost: data.isHost,
-                hostId: roomHosts.get(data.projectId),
-                users: Array.from(activeClients.values()).filter(c => c.projectId === data.projectId).map(c => ({
-                    id: c.clientId, name: c.userName, color: c.color, isHost: c.isHost
-                }))
-            }));
-
-            // Tell others
-            ws.publish(data.projectId, JSON.stringify({
-                type: "user_joined",
-                user: { id: data.clientId, name: data.userName, color: data.color, isHost: data.isHost }
-            }));
-            
-            // Register for heartbeat tracking
-            activeClientSockets.set(data.clientId, ws);
-            clientLastPong.set(data.clientId, Date.now());
-
-            // Send current room state to reconnecting client
-            const roomState = roomFileStates.get(data.projectId);
-            if (roomState && roomState.size > 0) {
-                ws.send(JSON.stringify({ type: "room_state", files: Object.fromEntries(roomState) }));
-            }
-
-            console.log(`[WS] ${data.userName} joined ${data.projectId} (Host: ${data.isHost})`);
-        },
-
-        message(ws: import("bun").ServerWebSocket<WSData>, message: string) {
-            if (ws.data.type === "terminal") {
-                const roomId = ws.data.projectId;
-
-                // JSON control messages — handled before the room guard so stop/start work in any state
-                try {
-                    const msg = JSON.parse(message);
-                    if (msg.type === "resize") {
-                        return; // no PTY — no-op
-                    }
-                    if (msg.type === "stop") {
-                        termStopped.add(roomId); // persist stopped intent across reconnects
-                        stopTerminal(roomId);
-                        return;
-                    }
-                    if (msg.type === "start") {
-                        termStopped.delete(roomId);
-                        if (!termRooms.has(roomId) && !termBootstrapping.has(roomId)) {
-                            bootstrapRoom(roomId);
-                        }
-                        return;
-                    }
-                } catch { /* not JSON — treat as raw stdin */ }
-
-                const room = termRooms.get(ws.data.projectId);
-                if (!room) return;
-
-                // Server-side line buffering (no PTY = no kernel line discipline)
-                // We echo characters locally and only flush the line to the shell on Enter.
-                const broadcastAll = (msg: string) =>
-                    termClients.get(roomId)?.forEach(c => { try { c.send(msg); } catch (_) {} });
-
-                if (message === "\r" || message === "\n") {
-                    // Enter — flush buffered line to shell
-                    const line = (termLineBuffers.get(roomId) ?? "") + "\n";
-                    termLineBuffers.set(roomId, "");
-                    broadcastAll("\r\n");
-                    try { room.sink.write(line); } catch (_) {}
-                } else if (message === "\x7f" || message === "\b") {
-                    // Backspace — pop last char from buffer, erase on screen
-                    const buf = termLineBuffers.get(roomId) ?? "";
-                    if (buf.length > 0) {
-                        termLineBuffers.set(roomId, buf.slice(0, -1));
-                        broadcastAll("\b \b");
-                    }
-                } else if (message.startsWith("\x1b")) {
-                    // Escape sequences (arrow keys, etc.) — forward directly, don't buffer
-                    try { room.sink.write(message); } catch (_) {}
-                } else if (message.length === 1 && message.charCodeAt(0) < 32) {
-                    // Other control chars (Ctrl+C, Ctrl+D, etc.) — forward directly
-                    try { room.sink.write(message); } catch (_) {}
-                } else {
-                    // Printable chars — append to buffer and echo
-                    const buf = termLineBuffers.get(roomId) ?? "";
-                    termLineBuffers.set(roomId, buf + message);
-                    broadcastAll(message);
-                }
-                return;
-            }
-
-            try {
-                const payload = JSON.parse(message);
-                const data = ws.data;
-
-                // Heartbeat pong
-                if (payload.type === "pong") {
-                    clientLastPong.set(data.clientId, Date.now());
-                    return;
-                }
-
-                // Sync request — send current room state + Y.Doc states to requesting client
-                if (payload.type === "sync_request") {
-                    const roomState = roomFileStates.get(data.projectId);
-                    if (roomState && roomState.size > 0) {
-                        ws.send(JSON.stringify({ type: "room_state", files: Object.fromEntries(roomState) }));
-                    }
-                    const projectDocs = roomYDocs.get(data.projectId);
-                    if (projectDocs) {
-                        for (const [filePath, doc] of projectDocs) {
-                            const stateUpdate = Y.encodeStateAsUpdate(doc);
-                            ws.send(JSON.stringify({
-                                type: "yjs_sync",
-                                filePath,
-                                update: Buffer.from(stateUpdate).toString("base64"),
-                            }));
-                        }
-                    }
-                    return;
-                }
-
-                // Yjs update — apply CRDT delta, broadcast merged update to others
-                if (payload.type === "yjs_update") {
-                    const { filePath, update: updateB64 } = payload;
-                    if (!filePath || !updateB64) return;
-
-                    const existingContent = roomFileStates.get(data.projectId)?.get(filePath);
-                    const doc = getYDoc(data.projectId, filePath, existingContent);
-
-                    const updateBytes = new Uint8Array(Buffer.from(updateB64, "base64"));
-                    Y.applyUpdate(doc, updateBytes, "remote");
-
-                    const mergedContent = doc.getText("content").toString();
-
-                    // Keep roomFileStates in sync with merged content
-                    if (!roomFileStates.has(data.projectId)) roomFileStates.set(data.projectId, new Map());
-                    roomFileStates.get(data.projectId)!.set(filePath, mergedContent);
-
-                    // Broadcast the raw Yjs delta to all other clients
-                    ws.publish(data.projectId, JSON.stringify({
-                        type: "yjs_update",
-                        filePath,
-                        update: updateB64,
-                        clientId: data.clientId,
-                    }));
-
-                    // Persist merged content to Supabase
-                    setImmediate(() => {
-                        (async () => {
-                            try {
-                                await supabase.from("files").upsert({
-                                    project_id: data.projectId,
-                                    path: filePath,
-                                    content: mergedContent,
-                                    updated_at: new Date().toISOString(),
-                                }, { onConflict: "project_id,path" });
-                                logTimelineEvent(data.projectId, filePath, mergedContent, "code_update", data.clientId, data.userName, data.color);
-                            } catch (e) {
-                                console.error("[WS Yjs Save Error]:", e);
-                            }
-                        })();
-                    });
-                    return;
-                }
-
-                // Host Permission Overrides
-                if (payload.type === "JOIN_REQUEST") {
-                    console.log(`[WS] Client ${data.clientId} requesting join to ${data.projectId}`);
-                    ws.publish(data.projectId, JSON.stringify({ ...payload, fromClient: data.clientId }));
-                    return;
-                }
-                if (payload.type === "JOIN_RESPONSE") {
-                    if (data.isHost) {
-                        ws.publish(data.projectId, JSON.stringify(payload)); // Send approval
-                    }
-                    return;
-                }
-
-                // emoji_reaction: broadcast to all peers in the room
-                if (payload.type === "emoji_reaction") {
-                    ws.publish(data.projectId, JSON.stringify({
-                        type: "emoji_reaction",
-                        emoji: payload.emoji,
-                        sender: payload.sender || data.userName,
-                        clientId: data.clientId,
-                    }));
-                    return;
-                }
-
-                // agent_accepted: one client accepted a suggestion — atomically broadcast to all
-                if (payload.type === "agent_accepted") {
-                    const broadcast = {
-                        type: "agent_accepted",
-                        filePath: payload.filePath,
-                        content: payload.content,
-                        appliedBy: data.clientId,
-                        updateId: payload.updateId,
-                    };
-                    ws.publish(data.projectId, JSON.stringify(broadcast));
-
-                    // Also persist as a normal code_update in Supabase
-                    if (payload.filePath && payload.content !== undefined) {
-                        // Update room file state cache
-                        if (!roomFileStates.has(data.projectId)) roomFileStates.set(data.projectId, new Map());
-                        roomFileStates.get(data.projectId)!.set(payload.filePath, payload.content);
-
-                        setImmediate(() => {
-                            (async () => {
-                                try {
-                                    await supabase
-                                        .from("files")
-                                        .upsert({
-                                            project_id: data.projectId,
-                                            path: payload.filePath,
-                                            content: payload.content,
-                                            updated_at: new Date().toISOString(),
-                                        }, { onConflict: "project_id,path" });
-
-                                    await supabase
-                                        .from("snapshots")
-                                        .insert({
-                                            project_id: data.projectId,
-                                            path: payload.filePath,
-                                            content: payload.content,
-                                            timestamp: new Date().toISOString(),
-                                        });
-
-                                    // Log rich event to Supabase for timeline feature
-                                    logTimelineEvent(
-                                        data.projectId, payload.filePath, payload.content,
-                                        "agent_accepted", data.clientId, data.userName, data.color
-                                    );
-                                } catch (e) {
-                                    console.error("[WS AgentAccept DB Error]:", e);
-                                }
-                            })();
-                        });
-                    }
-                    return;
-                }
-
-                // Standard pub/sub forward
-                if (
-                    payload.type === "code_change" ||
-                    payload.type === "cursor_move" ||
-                    payload.type === "file_focus" ||
-                    payload.type === "file_created" ||
-                    payload.type === "file_deleted" ||
-                    payload.type === "file_renamed"
-                ) {
-                    // Normalize standard schema implicitly replacing "data.type" to "_update" pattern exactly as UI expects
-                    const outType = payload.type === "code_change" ? "code_update" : payload.type === "cursor_move" ? "cursor_update" : "file_focus_update";
-                    const outbound = {
-                        type: outType,
-                        clientId: data.clientId,
-                        userName: data.userName,
-                        color: data.color,
-                        ...payload
-                    };
-                    delete outbound.type; // strip generic type
-                    outbound.type = outType; 
-                    
-                    ws.publish(data.projectId, JSON.stringify(outbound));
-
-                    // Async auto-save to DB
-                    if (outbound.type === "code_update" && payload.filePath && payload.content !== undefined) {
-                        // Update room file state cache
-                        if (!roomFileStates.has(data.projectId)) roomFileStates.set(data.projectId, new Map());
-                        roomFileStates.get(data.projectId)!.set(payload.filePath, payload.content);
-
-                        setImmediate(() => {
-                            (async () => {
-                                try {
-                                    await supabase
-                                        .from("files")
-                                        .upsert({
-                                            project_id: data.projectId,
-                                            path: payload.filePath,
-                                            content: payload.content,
-                                            updated_at: new Date().toISOString()
-                                        }, { onConflict: "project_id, path" });
-
-                                    await supabase
-                                        .from("snapshots")
-                                        .insert({
-                                            project_id: data.projectId,
-                                            path: payload.filePath,
-                                            content: payload.content,
-                                            timestamp: new Date().toISOString(),
-                                        });
-
-                                    // Log rich event to Supabase for timeline feature
-                                    logTimelineEvent(
-                                        data.projectId, payload.filePath, payload.content,
-                                        "code_update", data.clientId, data.userName, data.color
-                                    );
-                                } catch (e) {
-                                    console.error("[WS AutoSave Error]:", e);
-                                }
-                            })();
-                        });
-                    }
-                }
-
-            } catch (err) {
-                console.error("[WS] JSON Parse Error or Unhandled Message:", err);
-            }
-        },
-
-        close(ws: import("bun").ServerWebSocket<WSData>) {
-            if (ws.data.type === "match") {
-                removeMatchClient(ws.data.projectId, ws);
-                return;
-            }
-
-            if (ws.data.type === "terminal") {
-                ws.unsubscribe(`term_${ws.data.projectId}`);
-                const roomId = ws.data.projectId;
-                const clients = termClients.get(roomId);
-                if (clients) {
-                    clients.delete(ws);
-                    // Defer cleanup — give the client 30s to reconnect (handles page refreshes)
-                    if (clients.size === 0 && !termCleanupTimers.has(roomId)) {
-                        const timer = setTimeout(() => {
-                            const current = termClients.get(roomId);
-                            if (!current || current.size === 0) stopTerminal(roomId);
-                            termCleanupTimers.delete(roomId);
-                        }, 30_000);
-                        termCleanupTimers.set(roomId, timer);
-                    }
-                }
-                return;
-            }
-
-            const data = ws.data;
-            ws.unsubscribe(data.projectId);
-            activeClients.delete(data.clientId);
-            activeClientSockets.delete(data.clientId);
-            clientLastPong.delete(data.clientId);
-
-            ws.publish(data.projectId, JSON.stringify({
-                type: "user_left",
-                clientId: data.clientId
-            }));
-
-            const remaining = Array.from(activeClients.values()).filter(c => c.projectId === data.projectId);
-
-            if (data.isHost) {
-                // Determine new host if old host left
-                if (remaining.length > 0) {
-                    const newHost = remaining[0];
-                    if (newHost) {
-                        newHost.isHost = true;
-                        roomHosts.set(data.projectId, newHost.clientId);
-                        // Broadcast host change
-                        ws.publish(data.projectId, JSON.stringify({ type: "host_changed", defaultApproved: true, hostId: newHost.clientId }));
-                    }
-                } else {
-                    roomHosts.delete(data.projectId);
-                }
-            }
-
-            // When the last collaborator exits the project, flush unsaved state and purge
-            if (remaining.length === 0) {
-                // Flush all in-memory file states to Supabase before clearing (Fix 1 + Fix 3)
-                const finalStates = roomFileStates.get(data.projectId);
-                if (finalStates && finalStates.size > 0) {
-                    void (async () => {
-                        for (const [filePath, content] of finalStates) {
-                            try {
-                                await supabase.from("files").upsert({
-                                    project_id: data.projectId,
-                                    path: filePath,
-                                    content,
-                                    updated_at: new Date().toISOString(),
-                                }, { onConflict: "project_id,path" });
-                            } catch (e) {
-                                console.error("[WS Flush Error]:", e);
-                            }
-                        }
-                        console.log(`[WS] Flushed ${finalStates.size} file(s) to Supabase for project ${data.projectId}`);
-                    })();
-                }
-
-                roomFileStates.delete(data.projectId);
-                roomYDocs.delete(data.projectId);
-
-                // Clear in-memory counters for this project
-                for (const key of timelineEventCounters.keys()) {
-                    if (key.startsWith(`${data.projectId}::`)) timelineEventCounters.delete(key);
-                }
-                // Fire-and-forget Supabase cleanup
-                void supabase
-                    .from("timeline_events")
-                    .delete()
-                    .eq("project_id", data.projectId)
-                    .then(({ error }) => {
-                        if (error) console.error("[Timeline purge error]:", error);
-                        else console.log(`[Timeline] Purged events for project ${data.projectId}`);
-                    });
-
-            }
-
-
-            console.log(`[WS] ${data.userName} left ${data.projectId}`);
-        }
-    }
+		close(ws: import("bun").ServerWebSocket<WSData>) {
+			if (ws.data.type === "match") {
+				removeMatchClient(ws.data.projectId, ws);
+				return;
+			}
+			if (ws.data.type === "terminal") {
+				handleTerminalClose(ws);
+			} else {
+				handleCollabClose(ws);
+			}
+		}
+	}
 };

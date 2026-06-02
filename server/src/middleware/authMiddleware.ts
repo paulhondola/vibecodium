@@ -30,6 +30,7 @@ if (!(globalThis as any).__supabaseTokenCache) {
   (globalThis as any).__supabaseTokenCache = new Map<string, CachedUser>();
 }
 const tokenCache = (globalThis as any).__supabaseTokenCache as Map<string, CachedUser>;
+const cacheDuration = 15 * 60 * 1000; // 15 minutes
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Remote JWKS (For Asymmetric ES256 tokens)
@@ -40,7 +41,7 @@ function getJWKS() {
   if (JWKS) return JWKS;
   const url = process.env.SUPABASE_URL;
   if (!url) throw new Error("SUPABASE_URL is not set in server/.env");
-  
+
   // Construct the JWKS endpoint from the project URL
   const jwksUrl = new URL("/auth/v1/.well-known/jwks.json", url).toString();
   JWKS = createRemoteJWKSet(new URL(jwksUrl));
@@ -115,8 +116,8 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     // ── 4. Cache for 15 minutes (well within Supabase's 1-hour token TTL) ─────
     const expMs = typeof payload.exp === "number"
       ? payload.exp * 1000          // use token's own expiry if available
-      : now + 15 * 60 * 1000;
-    tokenCache.set(token, { user: userPayload, expiresAt: Math.min(expMs, now + 15 * 60 * 1000) });
+      : now + cacheDuration;
+    tokenCache.set(token, { user: userPayload, expiresAt: Math.min(expMs, now + cacheDuration) });
 
     // ── 5. Upsert user in Supabase (fire-and-forget, non-blocking) ─────────────
     upsertUser(userPayload as Parameters<typeof upsertUser>[0]).catch((e) => console.error("[auth] upsertUser failed:", e));
