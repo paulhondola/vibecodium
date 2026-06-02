@@ -13,7 +13,7 @@ import WorkspaceTopBar from "./WorkspaceTopBar";
 import DeploySuccessModal from "./DeploySuccessModal";
 import TokenPromptModal from "./TokenPromptModal";
 import { API_BASE } from "@/lib/config";
-import { ArrowLeft, Loader2, Users, Check, Flame, PanelLeft, TerminalSquare, PanelRight, Shield, Terminal, Wrench, Key, Rocket, ExternalLink, X, FolderOpen, GitBranch, HelpCircle, Sparkles, Music, Youtube, Search } from "lucide-react";
+import { ArrowLeft, Loader2, Users, Check, Flame, PanelLeft, TerminalSquare, PanelRight, Terminal, Wrench, Key, Rocket, ExternalLink, X, FolderOpen, GitBranch, HelpCircle, Sparkles, Music, Youtube, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
