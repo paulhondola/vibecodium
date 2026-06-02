@@ -607,7 +607,6 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                                         <div className="text-[10px] text-zinc-600 mt-0.5">Scrub file edit history</div>
                                                     </div>
                                                 </button>
-                                                <div className="pt-3 px-1 pb-1">
                                             </div>
                                         </div>
                                     )}
@@ -677,10 +676,10 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                             </div>
                                             <div className="p-3 space-y-3">
                                                 <p className="text-[11px] text-zinc-500 leading-relaxed">Post your issue to the community and get help from other developers.</p>
-                                                <Button variant="primary" className="w-full" onClick={() => setShowCommunityHelp(true)}>
+                                                <button className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium bg-[#A855F7]/20 hover:bg-[#A855F7]/30 text-purple-300 rounded-md transition-colors" onClick={() => setShowCommunityHelp(true)}>
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
                                                     Request Help
-                                                </Button>
+                                                </button>
                                             </div>
                                         </div>
                                     )}
