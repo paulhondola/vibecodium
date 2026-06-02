@@ -73,6 +73,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'search' | 'git' | 'fun' | 'help' | 'spotify' | 'youtube'>('explorer');
     const [fileSearchQuery, setFileSearchQuery] = useState("");
     const [showEditorGame, setShowEditorGame] = useState(false);
+    const [editorGameType, setEditorGameType] = useState<'subway' | 'flappy'>('flappy');
     const [showQuickOpen, setShowQuickOpen] = useState(false);
     const [quickOpenQuery, setQuickOpenQuery] = useState("");
 
@@ -430,14 +431,11 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
 				isHost={isHost}
 				isConnected={isConnected}
 				isDeploying={isDeploying}
-				isSaving={isSaving}
 				collabUsers={collabUsers}
 				copied={copied}
 				onBack={onBack}
 				onDeploy={handleDeploy}
-				onSave={handleSave}
 				onCopyCollabLink={copyCollabLink}
-				onShowCommunityHelp={() => { setActiveSidebarTab("help"); setShowSidebar(true); }}
 			/>
 
 			<div className="flex-1 flex overflow-hidden">
@@ -557,12 +555,22 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                                     </div>
                                                 </div>
                                                 <button
-                                                    onClick={() => setShowEditorGame(p => !p)}
-                                                    className={`w-full flex items-start gap-2.5 px-3 py-2.5 rounded-[5px] text-left hover:bg-[#1e1e24] transition-colors ${showEditorGame ? 'bg-orange-500/10' : ''}`}
+                                                    onClick={() => { setEditorGameType('flappy'); setShowEditorGame(true); }}
+                                                    className={`w-full flex items-start gap-2.5 px-3 py-2.5 rounded-[5px] text-left hover:bg-[#1e1e24] transition-colors ${showEditorGame && editorGameType === 'flappy' ? 'bg-orange-500/10' : ''}`}
                                                 >
-                                                    <span className="text-sm leading-none shrink-0">🎮</span>
+                                                    <span className="text-sm leading-none shrink-0">🐦</span>
                                                     <div>
-                                                        <div className={`text-xs font-medium ${showEditorGame ? 'text-orange-400' : 'text-zinc-300'}`}>Code Runner Game</div>
+                                                        <div className={`text-xs font-medium ${showEditorGame && editorGameType === 'flappy' ? 'text-orange-400' : 'text-zinc-300'}`}>Flappy Bird</div>
+                                                        <div className="text-[10px] text-zinc-600 mt-0.5">Play in a PIP window</div>
+                                                    </div>
+                                                </button>
+                                                <button
+                                                    onClick={() => { setEditorGameType('subway'); setShowEditorGame(true); }}
+                                                    className={`w-full flex items-start gap-2.5 px-3 py-2.5 rounded-[5px] text-left hover:bg-[#1e1e24] transition-colors ${showEditorGame && editorGameType === 'subway' ? 'bg-orange-500/10' : ''}`}
+                                                >
+                                                    <span className="text-sm leading-none shrink-0">🏃</span>
+                                                    <div>
+                                                        <div className={`text-xs font-medium ${showEditorGame && editorGameType === 'subway' ? 'text-orange-400' : 'text-zinc-300'}`}>Subway Surfer</div>
                                                         <div className="text-[10px] text-zinc-600 mt-0.5">Play in a PIP window</div>
                                                     </div>
                                                 </button>
@@ -630,6 +638,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                         powerModeEnabled={showPowerMode}
                                         gameOpen={showEditorGame}
                                         onGameChange={setShowEditorGame}
+                                        initialGameType={editorGameType}
                                         branchName={currentBranch}
                                     />
                                 )}

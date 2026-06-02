@@ -40,6 +40,7 @@ interface EditorAreaProps {
     powerModeEnabled?: boolean;
     gameOpen?: boolean;
     onGameChange?: (open: boolean) => void;
+    initialGameType?: GameType;
     branchName?: string;
     onCloseOthers?: (file: ProjectFile) => void;
 }
@@ -48,7 +49,7 @@ export default function EditorArea({
     openFiles, onSelectFile, onCloseFile,
     activeFile, userId, remoteCodeUpdate, remoteCursorUpdate,
     pendingUpdate, onPendingResolved, powerModeEnabled = false,
-    gameOpen = false, onGameChange,
+    gameOpen = false, onGameChange, initialGameType = 'flappy',
     branchName = 'main', onCloseOthers,
 }: EditorAreaProps) {
     const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -62,7 +63,8 @@ export default function EditorArea({
     const [sparks, setSparks] = useState<{ id: string; x: number; y: number; color: string }[]>([]);
     const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const editorContainerRef = useRef<HTMLDivElement>(null);
-    const [activeGame, setActiveGame] = useState<GameType>('subway');
+    const [activeGame, setActiveGame] = useState<GameType>(initialGameType);
+    useEffect(() => { if (gameOpen) setActiveGame(initialGameType); }, [gameOpen, initialGameType]);
 
     const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
     const [contextMenu, setContextMenu] = useState<{ file: ProjectFile; x: number; y: number } | null>(null);
