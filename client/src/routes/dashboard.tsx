@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../contexts/AuthProvider";
-import { Loader2, X, ExternalLink, Search } from "lucide-react";
+import { Loader2, ExternalLink, Search } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import CoderMatchModal from "../components/CoderMatchModal";
 import ImportModal from "../components/ImportModal";
@@ -312,90 +312,18 @@ function DashboardPage() {
       </div>
 
       {/* TopAppBar */}
-      <header className="fixed top-0 z-[100] flex justify-between items-center w-full px-8 h-14 bg-[rgba(10,12,20,0.8)] backdrop-blur-xl border-b border-[rgba(168,85,247,0.1)]">
-        <div className="flex items-center gap-12">
-          <button type="button" className="text-xl font-bold tracking-tighter text-[#A855F7] font-['Space_Grotesk'] flex items-center gap-2 bg-transparent border-0 p-0" onClick={() => navigate({ to: "/", search: { w: undefined } })}>
-            <span className="material-symbols-outlined text-[#A855F7] fill-1 animate-pulse">terminal</span>
-              VibeCodium
-          </button>
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="hidden lg:flex items-center bg-[rgba(168,85,247,0.1)] px-4 py-1.5 rounded-full border border-[rgba(168,85,247,0.2)]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#A855F7] mr-3 animate-ping" />
-            <span className="text-[9px] uppercase tracking-[0.3em] font-black text-[#A855F7]">Online</span>
-          </div>
-          <div className="flex items-center gap-3 ml-2 border-l border-white/10 pl-5">
-            <span className="text-[9px] font-['JetBrains_Mono'] text-slate-500 uppercase tracking-widest hidden sm:block">
-              <span className="text-[#A855F7]">@{user.nickname}</span>
-            </span>
-            <div className="w-8 h-8 rounded-full border border-[rgba(168,85,247,0.3)] p-0.5 overflow-hidden">
-              <img alt="User Profile" className="w-full h-full rounded-full object-cover" src={user.picture || ''} />
-            </div>
-          </div>
-        </div>
-      </header>
+      <DashboardHeader user={user} onShowGame={() => {}} />
 
       {/* SideNavBar */}
-      <aside className="fixed left-0 top-14 h-[calc(100vh-56px)] w-64 bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border-r border-[rgba(168,85,247,0.15)] flex flex-col py-8 z-40">
-        <div className="px-8 mb-12">
-          <div className="text-[9px] uppercase tracking-[0.4em] font-black text-[rgba(168,85,247,0.6)] mb-2">iTEC 2026</div>
-          <div className="text-sm font-['Space_Grotesk'] font-bold text-[#f8fafc] tracking-widest flex items-center gap-2">
-            VibeCodium
-            <span className="w-1.5 h-1.5 rounded-full bg-[#A855F7] animate-pulse" />
-          </div>
-          <div className="text-[9px] font-['JetBrains_Mono'] text-slate-500 mt-1">Collaborative IDE</div>
-        </div>
-        <nav className="flex-1 space-y-1 px-4">
-          <div className="flex items-center gap-5 px-6 py-3.5 rounded bg-[rgba(168,85,247,0.1)] text-[#A855F7] border-r-2 border-[#A855F7] transition-all group" aria-current="page">
-            <span className="material-symbols-outlined text-xl">dashboard</span>
-            <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Dashboard</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => scrollToSection(recentRef)}
-            className="w-full flex items-center gap-5 px-6 py-3.5 rounded text-slate-500 hover:bg-white/5 hover:text-[#f8fafc] transition-all"
-          >
-            <span className="material-symbols-outlined text-xl">history</span>
-            <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Recent</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowImportModal(true)}
-            className="w-full flex items-center gap-5 px-6 py-3.5 rounded text-slate-500 hover:bg-white/5 hover:text-[#f8fafc] transition-all"
-          >
-            <span className="material-symbols-outlined text-xl">upload_file</span>
-            <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Import</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate({ to: "/profile" })}
-            className="w-full flex items-center gap-5 px-6 py-3.5 rounded text-slate-500 hover:bg-white/5 hover:text-[#f8fafc] transition-all"
-          >
-            <span className="material-symbols-outlined text-xl">person</span>
-            <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Profile</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowCoderMatch(true)}
-            className="w-full flex items-center gap-5 px-6 py-3.5 rounded text-pink-500 hover:bg-pink-500/10 hover:text-pink-400 transition-all"
-          >
-            <span className="material-symbols-outlined text-xl">favorite</span>
-            <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Vibe Match</span>
-            {vibeMatchUnread > 0 && (
-              <span className="ml-auto w-2.5 h-2.5 bg-pink-500 rounded-full animate-pulse shrink-0" />
-            )}
-          </button>
-        </nav>
-        <div className="px-6 mt-auto">
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="w-full flex items-center justify-center gap-3 py-5 bg-[#A855F7] text-[#02040a] font-['Space_Grotesk'] font-black text-[10px] uppercase tracking-[0.3em] rounded shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:brightness-110 active:scale-[0.98] transition-all"
-          >
-            <span className="material-symbols-outlined text-sm">add</span>
-            New Repository
-          </button>
-        </div>
-      </aside>
+      <DashboardSidebar
+        onFilterChange={() => {}}
+        onShowCreate={() => setShowCreateModal(true)}
+        onShowCoderMatch={() => setShowCoderMatch(true)}
+        scrollToSection={scrollToSection}
+        reposRef={reposRef}
+        recentRef={recentRef}
+        vibeMatchUnread={vibeMatchUnread}
+      />
 
       {/* Main Content */}
       <main className="ml-64 pt-24 px-12 pb-24 max-w-[1600px] relative z-10">

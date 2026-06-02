@@ -7,11 +7,12 @@ interface DashboardSidebarProps {
 	scrollToSection: (ref: React.RefObject<HTMLDivElement | null>) => void;
 	reposRef: React.RefObject<HTMLDivElement | null>;
 	recentRef: React.RefObject<HTMLDivElement | null>;
+	vibeMatchUnread?: number;
 }
 
 export default function DashboardSidebar({
 	onFilterChange, onShowCreate, onShowCoderMatch,
-	scrollToSection, reposRef, recentRef,
+	scrollToSection, reposRef, recentRef, vibeMatchUnread = 0,
 }: DashboardSidebarProps) {
 	const navigate = useNavigate();
 
@@ -57,6 +58,9 @@ export default function DashboardSidebar({
 				>
 					<span className="material-symbols-outlined text-xl">favorite</span>
 					<span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Vibe Match</span>
+					{vibeMatchUnread > 0 && (
+						<span className="ml-auto w-2 h-2 bg-pink-500 rounded-full animate-pulse shrink-0" />
+					)}
 				</div>
 			</nav>
 			<div className="px-6 mt-auto">

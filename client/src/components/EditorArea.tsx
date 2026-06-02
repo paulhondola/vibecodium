@@ -1,12 +1,26 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import MonacoEditor, { useMonaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import { Bot, Check, X } from "lucide-react";
+import { Bot, Check, X, GitBranch } from "lucide-react";
 import type { ProjectFile } from "./Workspace";
 import { useSocket } from "../contexts/SocketProvider";
 import type { PendingUpdate } from "../hooks/useAgentStream";
-import GamePIP from "./GamePIP";
+import GamePIP, { type GameType } from "./GamePIP";
+import TimelineBar, { type TimelineEvent } from "./TimelineBar";
 import { API_BASE } from "@/lib/config";
+import * as Y from "yjs";
+
+function uint8ArrayToBase64(arr: Uint8Array): string {
+    let binary = "";
+    for (let i = 0; i < arr.byteLength; i++) binary += String.fromCharCode(arr[i]!);
+    return btoa(binary);
+}
+function base64ToUint8Array(b64: string): Uint8Array {
+    const binaryStr = atob(b64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    return bytes;
+}
 
 function safeCssId(id: string) {
     return id.replace(/[^a-zA-Z0-9]/g, "_");
@@ -28,12 +42,20 @@ interface EditorAreaProps {
     projectId?: string | null;
     agentToken?: string | null;
     powerModeEnabled?: boolean;
+    timeTravelOpen?: boolean;
+    onTimeTravelChange?: (open: boolean) => void;
+    gameOpen?: boolean;
+    onGameChange?: (open: boolean) => void;
+    branchName?: string;
+    onCloseOthers?: (file: ProjectFile) => void;
 }
 
 export default function EditorArea({
     openFiles, onSelectFile, onCloseFile,
     activeFile, userId, remoteCodeUpdate, remoteCursorUpdate,
     pendingUpdate, onPendingResolved, projectId, agentToken, powerModeEnabled = false,
+    timeTravelOpen = false, onTimeTravelChange, gameOpen = false, onGameChange,
+    branchName = 'main', onCloseOthers,
 }: EditorAreaProps) {
     const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
     const monaco = useMonaco();
@@ -46,19 +68,62 @@ export default function EditorArea({
     const [sparks, setSparks] = useState<{ id: string; x: number; y: number; color: string }[]>([]);
     const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const editorContainerRef = useRef<HTMLDivElement>(null);
+    const [activeGame, setActiveGame] = useState<GameType>('subway');
 
-    // Game state
-    const [showGame, setShowGame] = useState(false);
+    const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
+    const [contextMenu, setContextMenu] = useState<{ file: ProjectFile; x: number; y: number } | null>(null);
 
-    const { send } = useSocket();
+    // Time-Travel Debugging state (open/close controlled by parent)
+    const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+    const [eventIndex, setEventIndex] = useState(0);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+
+    const { send, lastMessage: socketMessage } = useSocket();
     const sendRef = useRef(send);
     useEffect(() => { sendRef.current = send; }, [send]);
+
+    // One Y.Doc per open file — keyed by filePath
+    const ydocsRef = useRef(new Map<string, Y.Doc>());
 
     const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
     const isRemoteUpdate = useRef(false);
     const injectedStyles = useRef<Set<string>>(new Set());
     const activeFileRef = useRef(activeFile);
     useEffect(() => { activeFileRef.current = activeFile; }, [activeFile]);
+
+    // Initialise Y.Doc when active file changes (creates it if missing)
+    useEffect(() => {
+        if (!activeFile) return;
+        const { path: filePath, content: initialContent } = activeFile;
+        if (!ydocsRef.current.has(filePath)) {
+            const doc = new Y.Doc();
+            if (initialContent) {
+                doc.transact(() => doc.getText("content").insert(0, initialContent), "init");
+            }
+            doc.on("update", (update: Uint8Array, origin: unknown) => {
+                if (origin !== "local") return;
+                sendRef.current({
+                    type: "yjs_update",
+                    filePath: activeFileRef.current!.path,
+                    update: uint8ArrayToBase64(update),
+                });
+            });
+            ydocsRef.current.set(filePath, doc);
+        }
+        // Sync Monaco to Y.Doc on file switch (may have received remote edits while tab was inactive)
+        if (editorRef.current) {
+            const doc = ydocsRef.current.get(filePath)!;
+            const ydocContent = doc.getText("content").toString();
+            const model = editorRef.current.getModel();
+            if (model && ydocContent && model.getValue() !== ydocContent) {
+                isRemoteUpdate.current = true;
+                model.setValue(ydocContent);
+                setCode(ydocContent);
+                setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+            }
+        }
+    }, [activeFile?.path]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Konami code Easter Egg
     const konamiIndex = useRef(0);
@@ -107,15 +172,131 @@ export default function EditorArea({
         }
     }, [monaco]);
 
+    // Register onDidChangeContent on the current Monaco model.
+    // Placed after Y.Doc init so the Y.Doc exists when the listener first fires.
+    // Re-runs on file switch to future-proof against model changes (e.g. if a path prop is added).
+    useEffect(() => {
+        const ed = editorRef.current;
+        if (!ed) return;
+        const model = ed.getModel();
+        if (!model) return;
+        const disposable = model.onDidChangeContent((e) => {
+            if (isRemoteUpdate.current) return;
+            const filePath = activeFileRef.current?.path;
+            if (!filePath) return;
+            const doc = ydocsRef.current.get(filePath);
+            if (!doc) return;
+            for (const change of e.changes) {
+                doc.transact(() => {
+                    const ytext = doc.getText("content");
+                    if (change.rangeLength > 0) ytext.delete(change.rangeOffset, change.rangeLength);
+                    if (change.text) ytext.insert(change.rangeOffset, change.text);
+                }, "local");
+            }
+        });
+        return () => disposable.dispose();
+    }, [activeFile?.path]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // Sync code when active file changes
     useEffect(() => {
+        onTimeTravelChange?.(false); // Close timeline on file switch
         if (activeFile) {
+            // Guard the model update that @monaco-editor/react will trigger via executeEdits
+            // (value prop change fires onDidChangeContent — must not corrupt the new file's Y.Doc)
+            isRemoteUpdate.current = true;
             setCode(activeFile.content || "");
+            setTimeout(() => { isRemoteUpdate.current = false; }, 100);
             decorationsRef.current?.clear();
         } else {
             setCode("");
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeFile]);
+
+    // Fetch timeline events when Time-Travel opens
+    useEffect(() => {
+        if (!timeTravelOpen || !projectId || !activeFile) return;
+        setTimelineEvents([]);
+        setAnalysisResult(null);
+        const headers: Record<string, string> = {};
+        if (agentToken) headers["Authorization"] = `Bearer ${agentToken}`;
+        fetch(
+            `${API_BASE}/api/timeline/${projectId}?path=${encodeURIComponent(activeFile.path)}`,
+            { headers }
+        )
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.events) {
+                    setTimelineEvents(data.events); // already ASC (oldest → newest)
+                    setEventIndex(data.events.length - 1); // start at latest
+                }
+            })
+            .catch(err => console.error("Failed fetching timeline:", err));
+    }, [timeTravelOpen, projectId, activeFile]);
+
+    // Apply timeline event content to editor when scrubbing
+    useEffect(() => {
+        if (timeTravelOpen && timelineEvents.length > 0) {
+            const snappedCode = timelineEvents[eventIndex]?.content ?? "";
+            setCode(snappedCode);
+            if (editorRef.current) {
+                const model = editorRef.current.getModel();
+                if (model && model.getValue() !== snappedCode) {
+                    isRemoteUpdate.current = true;
+                    model.setValue(snappedCode);
+                    setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+                }
+            }
+        }
+    }, [eventIndex, timeTravelOpen, timelineEvents]);
+
+    const handleRestoreEvent = () => {
+        if (!timeTravelOpen || timelineEvents.length === 0) return;
+        const restoredContent = timelineEvents[eventIndex]?.content ?? "";
+        if (activeFileRef.current) {
+            activeFileRef.current.content = restoredContent;
+            const restoreDoc = ydocsRef.current.get(activeFileRef.current.path);
+            if (restoreDoc) {
+                // "local" origin triggers the Yjs observer → yjs_update broadcast to all peers
+                restoreDoc.transact(() => {
+                    const ytext = restoreDoc.getText("content");
+                    ytext.delete(0, ytext.length);
+                    ytext.insert(0, restoredContent);
+                }, "local");
+            } else {
+                // Fallback for files without an active Y.Doc
+                sendRef.current({
+                    type: "code_change",
+                    filePath: activeFileRef.current.path,
+                    content: restoredContent,
+                });
+            }
+        }
+        onTimeTravelChange?.(false);
+    };
+
+    const handleAnalyze = useCallback(async (eventIds: string[]): Promise<void> => {
+        if (!projectId || !activeFile) return;
+        setIsAnalyzing(true);
+        setAnalysisResult(null);
+        try {
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            if (agentToken) headers["Authorization"] = `Bearer ${agentToken}`;
+            const res = await fetch(`${API_BASE}/api/timeline/${projectId}/analyze`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ filePath: activeFile.path, eventIds }),
+            });
+            const data = await res.json();
+            if (data.success) setAnalysisResult(data.analysis);
+        } catch (e) {
+            console.error("AI analysis failed:", e);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    }, [projectId, activeFile, agentToken]);
+
+
 
     // Emit file_focus when switching files
     useEffect(() => {
@@ -123,11 +304,31 @@ export default function EditorArea({
         sendRef.current({ type: "file_focus", filePath: activeFile.path });
     }, [activeFile]);
 
-    // Apply incoming remote code update
+    // Apply incoming remote code update (non-Yjs path — room_state and legacy code_update)
     useEffect(() => {
         if (!remoteCodeUpdate) return;
         if (remoteCodeUpdate.clientId === userId) return;
         if (remoteCodeUpdate.filePath !== activeFileRef.current?.path) return;
+
+        // If Yjs is active for this file, skip regular code_update — Yjs handles it more accurately.
+        // Always apply room_state (reconnect) and __agent_accepted__ (agent accept from another client).
+        if (
+            ydocsRef.current.has(remoteCodeUpdate.filePath) &&
+            remoteCodeUpdate.clientId !== "room_state" &&
+            remoteCodeUpdate.clientId !== "__agent_accepted__"
+        ) return;
+
+        if (remoteCodeUpdate.clientId === "room_state" || remoteCodeUpdate.clientId === "__agent_accepted__") {
+            // Re-initialise the Y.Doc from the authoritative content
+            const doc = ydocsRef.current.get(remoteCodeUpdate.filePath);
+            if (doc) {
+                const ytext = doc.getText("content");
+                doc.transact(() => {
+                    ytext.delete(0, ytext.length);
+                    ytext.insert(0, remoteCodeUpdate.content);
+                }, "agent_accepted");
+            }
+        }
 
         isRemoteUpdate.current = true;
         setCode(remoteCodeUpdate.content);
@@ -143,6 +344,51 @@ export default function EditorArea({
         }
         setTimeout(() => { isRemoteUpdate.current = false; }, 50);
     }, [remoteCodeUpdate, userId]);
+
+    // Apply incoming Yjs updates and syncs from socket
+    useEffect(() => {
+        if (!socketMessage) return;
+
+        if (socketMessage.type === "yjs_update") {
+            const { filePath, update: updateB64, clientId: remoteId } = socketMessage;
+            if (remoteId === userId) return;
+            const doc = ydocsRef.current.get(filePath);
+            if (!doc) return; // file not open — ignore; room_state will cover it on next open
+            Y.applyUpdate(doc, base64ToUint8Array(updateB64), "remote");
+            const merged = doc.getText("content").toString();
+            if (filePath === activeFileRef.current?.path && editorRef.current) {
+                isRemoteUpdate.current = true;
+                const model = editorRef.current.getModel();
+                if (model && model.getValue() !== merged) {
+                    const sels = editorRef.current.getSelections();
+                    model.setValue(merged);
+                    if (sels) editorRef.current.setSelections(sels);
+                }
+                setCode(merged);
+                if (activeFileRef.current) activeFileRef.current.content = merged;
+                setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+            }
+            return;
+        }
+
+        if (socketMessage.type === "yjs_sync") {
+            const { filePath, update: updateB64 } = socketMessage;
+            // Only apply to files that are already open (have a Y.Doc)
+            const doc = ydocsRef.current.get(filePath);
+            if (!doc) return;
+            Y.applyUpdate(doc, base64ToUint8Array(updateB64), "remote");
+            if (filePath === activeFileRef.current?.path && editorRef.current) {
+                const merged = doc.getText("content").toString();
+                isRemoteUpdate.current = true;
+                const model = editorRef.current.getModel();
+                if (model && model.getValue() !== merged) model.setValue(merged);
+                setCode(merged);
+                if (activeFileRef.current) activeFileRef.current.content = merged;
+                setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+            }
+            return;
+        }
+    }, [socketMessage, userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Apply incoming remote cursor update
     useEffect(() => {
@@ -185,6 +431,7 @@ export default function EditorArea({
         decorationsRef.current = ed.createDecorationsCollection([]);
 
         ed.onDidChangeCursorPosition((e) => {
+            setCursorPos({ line: e.position.lineNumber, col: e.position.column });
             if (activeFileRef.current) {
                 sendRef.current({
                     type: "cursor_move",
@@ -274,6 +521,17 @@ export default function EditorArea({
             activeFileRef.current.content = newContent;
         }
 
+        // Sync Y.Doc so next keystroke produces a correct delta (not corrupt).
+        // Use "agent_accepted" origin so the observer doesn't double-send via yjs_update.
+        const acceptDoc = ydocsRef.current.get(pendingUpdate.filePath);
+        if (acceptDoc) {
+            acceptDoc.transact(() => {
+                const ytext = acceptDoc.getText("content");
+                ytext.delete(0, ytext.length);
+                ytext.insert(0, newContent);
+            }, "agent_accepted");
+        }
+
         sendRef.current({
             type: "agent_accepted",
             filePath: pendingUpdate.filePath,
@@ -333,10 +591,18 @@ export default function EditorArea({
         return () => window.removeEventListener("keydown", onKey);
     }, [hasPending, handleReject]);
 
+    // Close context menu on outside click
+    useEffect(() => {
+        if (!contextMenu) return;
+        const handler = () => setContextMenu(null);
+        window.addEventListener("mousedown", handler);
+        return () => window.removeEventListener("mousedown", handler);
+    }, [contextMenu]);
+
     return (
         <div className="flex flex-col h-full bg-[#09090b] text-[#c9d1d9] relative">
             {/* Tab bar */}
-            <div className="flex bg-[#09090b] border-b border-[#27272a] shrink-0 overflow-x-auto no-scrollbar scroll-smooth">
+            <div className="flex bg-[#18181b] border-b border-[#27272a] shrink-0 overflow-x-auto no-scrollbar scroll-smooth">
                 {openFiles.map(file => {
                     const isActive = activeFile?.path === file.path;
                     const ext = file.path.split('.').pop()?.toUpperCase() || '';
@@ -346,13 +612,14 @@ export default function EditorArea({
                         <div
                             key={file.path}
                             onClick={() => onSelectFile(file)}
+                            onContextMenu={(e) => { e.preventDefault(); setContextMenu({ file, x: e.clientX, y: e.clientY }); }}
                             className={`flex items-center gap-2 px-3 py-1.5 border-r border-[#27272a] cursor-pointer max-w-[200px] min-w-[120px] group transition-colors ${
                                 isActive
-                                    ? "bg-[#18181b] border-t-[3px] border-t-cyan-500 text-gray-200"
-                                    : "bg-[#09090b] text-gray-500 hover:bg-[#18181b] hover:text-gray-300 border-t-[3px] border-t-transparent"
+                                    ? "bg-[#09090b] border-t-2 border-t-[#A855F7] text-zinc-100"
+                                    : "bg-[#18181b] text-zinc-500 hover:bg-[#111113] hover:text-zinc-300 border-t-2 border-t-transparent"
                             }`}
                         >
-                            <span className={`font-bold text-[10px] ${isActive ? (isJS ? "text-yellow-400" : "text-cyan-400") : "text-gray-600"}`}>
+                            <span className={`font-bold text-[10px] ${isActive ? (isJS ? "text-yellow-400" : "text-zinc-400") : "text-zinc-600"}`}>
                                 {isJS ? 'JS' : ext.substring(0, 3)}
                             </span>
                             <span className="text-xs truncate flex-1 font-medium">{file.path.split("/").pop()}</span>
@@ -365,18 +632,7 @@ export default function EditorArea({
                         </div>
                     );
                 })}
-
-                {/* Game Toggle Button */}
-                <div className="p-1.5 flex items-center shrink-0 border-l border-[#27272a]">
-                    <button
-                        onClick={() => setShowGame(prev => !prev)}
-                        className="text-[10px] px-2 py-1 flex items-center gap-1.5 rounded transition font-medium tracking-wide bg-gradient-to-r from-orange-500/10 to-red-500/10 text-orange-400 hover:from-orange-500/20 hover:to-red-500/20 hover:shadow-[0_0_8px_rgba(249,115,22,0.2)] border border-orange-500/20"
-                        title="Play Code Runner Game"
-                    >
-                        <span className="text-xs">🎮</span>
-                        GAME
-                    </button>
-                </div>
+                
             </div>
 
             {/* Power Mode indicator — only when enabled */}
@@ -397,7 +653,7 @@ export default function EditorArea({
 
             <div
                 ref={editorContainerRef}
-                className="flex-1 relative"
+                className="flex-1 relative overflow-hidden"
                 style={powerModeEnabled && isPowerMode ? {
                     animation: 'shake 0.08s ease-in-out infinite alternate',
                 } : undefined}
@@ -438,22 +694,40 @@ export default function EditorArea({
                             scrollBeyondLastLine: false,
                             fontFamily: isRetro ? "'Courier New', monospace" : "'JetBrains Mono', 'Fira Code', monospace",
                             padding: { top: 16 },
-                            readOnly: hasPending, // lock editor while diff is shown
+                            readOnly: hasPending || timeTravelOpen, // lock editor while diff is shown or time traveling
                         }}
                         onMount={handleEditorDidMount}
                     />
+                    
+                    {/* ── Time-Travel Timeline Bar ── */}
+                    {timeTravelOpen && (
+                        <TimelineBar
+                            events={timelineEvents}
+                            currentIndex={eventIndex}
+                            onScrub={setEventIndex}
+                            onRestore={handleRestoreEvent}
+                            onClose={() => onTimeTravelChange?.(false)}
+                            onLive={() => { setEventIndex(timelineEvents.length - 1); onTimeTravelChange?.(false); }}
+                            onAnalyze={handleAnalyze}
+                            isLoading={timelineEvents.length === 0}
+                            analysisResult={analysisResult}
+                            isAnalyzing={isAnalyzing}
+                        />
+                    )}
                     </>
                 ) : (
                     <div className="flex h-full w-full items-center justify-center bg-[#09090b] select-none">
                         <div className="text-center flex flex-col items-center">
-                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-[#09090b] text-3xl font-bold mb-6 shadow-[0_0_30px_rgba(34,211,238,0.2)]">iT</div>
-                            <h2 className="text-2xl font-bold text-gray-300 mb-2 font-['Space_Grotesk']">VibeCodium Editor</h2>
-                            <p className="text-gray-500 text-sm mb-10">Select a file from the explorer to begin coding.</p>
-                            <div className="flex flex-col items-start text-xs text-gray-500 gap-3 font-mono border-t border-[#27272a] pt-6">
-                                <div className="flex items-center justify-between w-64"><span className="text-gray-600">Show Explorer</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-gray-400">⌘ E</span></div>
-                                <div className="flex items-center justify-between w-64"><span className="text-gray-600">Toggle Terminal</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-gray-400">⌘ J</span></div>
-                                <div className="flex items-center justify-between w-64"><span className="text-gray-600">Toggle Agent Chat</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-gray-400">⌘ B</span></div>
-                                <div className="flex items-center justify-between w-64"><span className="text-gray-600 text-cyan-500/80">Toggle Zen Mode</span> <span className="px-1.5 py-0.5 rounded bg-cyan-900/20 border border-cyan-500/20 text-cyan-400">⌘ K</span></div>
+                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-purple-900 flex items-center justify-center text-white text-3xl font-bold mb-6">VC</div>
+                            <h2 className="text-2xl font-semibold text-zinc-200 mb-2 tracking-[-0.48px]">VibeCodium Editor</h2>
+                            <p className="text-zinc-500 text-sm mb-10">Select a file from the explorer to begin coding.</p>
+                            <div className="flex flex-col items-start text-xs text-zinc-500 gap-3 font-mono border-t border-[#27272a] pt-6">
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Go to File</span> <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">⌘ P</span></div>
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Search in Files</span> <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">⌘ ⇧ F</span></div>
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Show Explorer</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-zinc-400">⌘ E</span></div>
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Toggle Terminal</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-zinc-400">⌘ J</span></div>
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-600">Toggle Agent Chat</span> <span className="px-1.5 py-0.5 rounded bg-[#18181b] border border-[#27272a] text-zinc-400">⌘ B</span></div>
+                                <div className="flex items-center justify-between w-64"><span className="text-zinc-500">Toggle Zen Mode</span> <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400">⌘ K</span></div>
                             </div>
                         </div>
                     </div>
@@ -461,7 +735,7 @@ export default function EditorArea({
 
                 {/* ── Compact Inline Agent Diff Panel ─────────────────────── */}
                 {hasPending && pendingUpdate && (
-                    <div className="absolute bottom-4 right-4 w-[480px] max-h-[55%] bg-[#0d0d0f]/98 backdrop-blur-xl border border-purple-500/40 rounded-xl overflow-hidden shadow-[0_8px_40px_rgba(168,85,247,0.2)] flex flex-col z-30">
+                    <div className="absolute bottom-4 right-4 w-[480px] max-h-[55%] bg-[#18181b] border border-purple-500/30 rounded-[10px] overflow-hidden flex flex-col z-30">
                         {/* Header */}
                         <div className="flex items-center justify-between px-3 py-2 bg-purple-900/20 border-b border-purple-500/20 shrink-0">
                             <div className="flex items-center gap-2 text-purple-300 font-medium text-[11px]">
@@ -516,6 +790,50 @@ export default function EditorArea({
                 )}
             </div>
 
+            {/* ── Status Bar ── */}
+            <div className="shrink-0 h-6 bg-[#111113] border-t border-[#1f1f24] flex items-center px-3 gap-4 text-[10px] font-mono text-zinc-500 select-none">
+                <span className="flex items-center gap-1">
+                    <GitBranch size={10} className="text-[#A855F7]" />
+                    {branchName}
+                </span>
+                {activeFile && (
+                    <>
+                        <span className="text-zinc-600">Ln {cursorPos.line}, Col {cursorPos.col}</span>
+                        <span className="text-zinc-600">{language}</span>
+                        <span className="truncate text-zinc-700 ml-auto">{activeFile.path.split("/").pop()}</span>
+                    </>
+                )}
+            </div>
+
+            {/* ── Tab context menu ── */}
+            {contextMenu && (
+                <div
+                    className="fixed z-[200] bg-[#18181b] border border-[#27272a] rounded-[8px] shadow-xl py-1 min-w-[160px]"
+                    style={{ top: contextMenu.y, left: contextMenu.x }}
+                    onMouseDown={e => e.stopPropagation()}
+                >
+                    <button
+                        className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-[#27272a] transition-colors"
+                        onClick={() => { onCloseFile(contextMenu.file); setContextMenu(null); }}
+                    >
+                        Close
+                    </button>
+                    <button
+                        className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-[#27272a] transition-colors"
+                        onClick={() => { onCloseOthers?.(contextMenu.file); setContextMenu(null); }}
+                    >
+                        Close Others
+                    </button>
+                    <div className="my-1 border-t border-[#27272a]" />
+                    <button
+                        className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-[#27272a] transition-colors"
+                        onClick={() => { navigator.clipboard.writeText(contextMenu.file.path); setContextMenu(null); }}
+                    >
+                        Copy Path
+                    </button>
+                </div>
+            )}
+
             <style>{`
                 @keyframes shake {
                     0% { transform: translate(-1px, 0px); }
@@ -531,8 +849,12 @@ export default function EditorArea({
             `}</style>
 
             {/* Game PIP */}
-            {showGame && (
-                <GamePIP onClose={() => setShowGame(false)} />
+            {gameOpen && (
+                <GamePIP
+                    gameType={activeGame}
+                    onSwitchGame={setActiveGame}
+                    onClose={() => onGameChange?.(false)}
+                />
             )}
         </div>
     );
