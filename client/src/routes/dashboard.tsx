@@ -56,6 +56,7 @@ function DashboardPage() {
   const [deployedApps, setDeployedApps] = useState<DeployedApp[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [vibeMatchUnread, setVibeMatchUnread] = useState(0);
 
   const reposRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
@@ -118,6 +119,30 @@ function DashboardPage() {
         .finally(() => setIsLoadingApps(false));
     }
   }, [user?.nickname, getAccessTokenSilently]);
+
+  // Poll for unread VibeMatch messages every 30s
+  useEffect(() => {
+    if (!user) return;
+    const checkUnread = async () => {
+      try {
+        const token = await getAccessTokenSilently();
+        const res = await fetch(`${API_BASE}/api/match/matches`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success && Array.isArray(data.matches)) {
+          const total = (data.matches as { unreadCount: number }[]).reduce(
+            (acc, m) => acc + (m.unreadCount ?? 0),
+            0,
+          );
+          setVibeMatchUnread(total);
+        }
+      } catch (_) {}
+    };
+    checkUnread();
+    const interval = setInterval(checkUnread, 30_000);
+    return () => clearInterval(interval);
+  }, [user, getAccessTokenSilently]);
 
   const handleImport = async (repo: GithubRepo) => {
     setImportingRepoId(repo.id);
@@ -358,6 +383,9 @@ function DashboardPage() {
           >
             <span className="material-symbols-outlined text-xl">favorite</span>
             <span className="font-['Space_Grotesk'] text-[10px] uppercase tracking-[0.2em] font-bold">Vibe Match</span>
+            {vibeMatchUnread > 0 && (
+              <span className="ml-auto w-2.5 h-2.5 bg-pink-500 rounded-full animate-pulse shrink-0" />
+            )}
           </button>
         </nav>
         <div className="px-6 mt-auto">

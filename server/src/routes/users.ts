@@ -7,21 +7,83 @@ type Variables = { user: { sub: string; [key: string]: any } };
 const router = new Hono<{ Variables: Variables }>();
 
 // GET /api/users/match — return other users for coder-match feature
+// ?order=random|language|location|active|new
 router.get("/match", authMiddleware, async (c) => {
     try {
         const currentUser = c.get("user");
+        const order = c.req.query("order") ?? "random";
 
-        const { data, error } = await supabase
+        // Collect already-swiped IDs to exclude from feed
+        const { data: swiped } = await supabase
+            .from("swipes")
+            .select("swiped_id")
+            .eq("swiper_id", currentUser.sub);
+
+        const excludeIds = [(currentUser.sub as string), ...((swiped ?? []).map((s: { swiped_id: string }) => s.swiped_id))];
+
+        let baseQuery = supabase
             .from("users")
-            .select("id, name, email, picture, bio, language, location")
-            .neq("id", currentUser.sub)
+            .select("id, name, email, picture, bio, language, location, created_at, github_username")
             .limit(20);
 
+        // Exclude self + already-swiped (each neq is AND'd by PostgREST)
+        for (const id of excludeIds) {
+            baseQuery = baseQuery.neq("id", id);
+        }
+
+        switch (order) {
+            case "active":
+                // Fall back to created_at if updated_at doesn't exist
+                baseQuery = baseQuery.order("created_at", { ascending: false });
+                break;
+            case "new":
+                baseQuery = baseQuery.order("created_at", { ascending: false });
+                break;
+            case "language": {
+                // Fetch my language, then sort matches-first in JS
+                const { data: me } = await supabase
+                    .from("users")
+                    .select("language")
+                    .eq("id", currentUser.sub)
+                    .maybeSingle();
+                const { data, error } = await baseQuery;
+                if (error) throw error;
+                const myLang = me?.language ?? null;
+                const sorted = (data ?? []).sort((a, b) => {
+                    const aMatch = myLang && a.language === myLang ? 0 : 1;
+                    const bMatch = myLang && b.language === myLang ? 0 : 1;
+                    return aMatch - bMatch;
+                });
+                return c.json({ success: true, users: sorted });
+            }
+            case "location": {
+                const { data: me } = await supabase
+                    .from("users")
+                    .select("location")
+                    .eq("id", currentUser.sub)
+                    .maybeSingle();
+                const { data, error } = await baseQuery;
+                if (error) throw error;
+                const myLoc = me?.location ?? null;
+                const sorted = (data ?? []).sort((a, b) => {
+                    const aMatch = myLoc && a.location === myLoc ? 0 : 1;
+                    const bMatch = myLoc && b.location === myLoc ? 0 : 1;
+                    return aMatch - bMatch;
+                });
+                return c.json({ success: true, users: sorted });
+            }
+            default: // random — no DB ordering, shuffle in JS
+                break;
+        }
+
+        const { data, error } = await baseQuery;
         if (error) throw error;
 
-        // Shuffle for randomised matching
-        const shuffled = (data ?? []).sort(() => 0.5 - Math.random());
-        return c.json({ success: true, users: shuffled });
+        const result = order === "random"
+            ? (data ?? []).sort(() => 0.5 - Math.random())
+            : (data ?? []);
+
+        return c.json({ success: true, users: result });
     } catch (error: any) {
         console.error("Fetch match users error:", error);
         return c.json({ success: false, error: "Failed to fetch users" }, 500);
