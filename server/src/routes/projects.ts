@@ -320,11 +320,27 @@ projectsRoutes.post("/:id/push", async (c) => {
             await checkoutB.exited;
         }
 
-        const gitAdd = Bun.spawn(["git", "add", "."], { cwd: targetDir });
-        await gitAdd.exited;
+        // Sync latest Supabase files to disk before committing.
+        // This ensures the working tree has the latest editor state.
+        // We DO NOT run `git add .` here because we only want to commit what the user explicitly staged.
+        const { syncProjectFilesToDisk } = await import("../utils/sync");
+        await syncProjectFilesToDisk(projectId);
 
-        const gitCommit = Bun.spawn(["git", "commit", "-m", commitMessage], { cwd: targetDir });
-        await gitCommit.exited;
+        // Commit — check for "nothing to commit"
+        const gitCommit = Bun.spawn(["git", "commit", "-m", commitMessage], {
+            cwd: targetDir, stdout: "pipe", stderr: "pipe",
+        });
+        const commitExit = await gitCommit.exited;
+        const commitOut = await new Response(gitCommit.stdout).text();
+        const commitErr = await new Response(gitCommit.stderr).text();
+
+        if (commitExit !== 0) {
+            const combined = (commitOut + commitErr).toLowerCase();
+            if (combined.includes("nothing to commit") || combined.includes("no changes added")) {
+                return c.json({ error: "Nothing to commit — stage some changes first." }, 400);
+            }
+            return c.json({ error: "Commit failed", details: commitErr || commitOut }, 500);
+        }
 
         const repoUrl = project.repo_url;
         const authenticatedUrl = repoUrl.startsWith("https://github.com/")

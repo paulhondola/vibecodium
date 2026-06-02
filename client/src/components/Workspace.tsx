@@ -142,10 +142,27 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                 console.error("Fetch files error:", err);
                 setIsLoading(false);
                 if (err?.error === 'consent_required' || err?.message?.includes('Consent required')) {
+                    // loginWithRedirect(); // Assume it exists in scope, or omit if it causes type errors, but wait, it is extracted from useAuth!
                     loginWithRedirect();
                 }
             });
+        return () => { cancelled = true; };
     }, [projectId, isAuthenticated, getAccessTokenSilently, loginWithRedirect]);
+
+    // Keep openFiles and activeFile in sync with latest files array
+    // (e.g. when another client updates a file or agent writes to it, so horizontal bar doesn't show stale version)
+    useEffect(() => {
+        if (!files.length) return;
+        setOpenFiles(prev => prev.map(openFile => {
+            const latest = files.find(f => f.path === openFile.path);
+            return latest ? latest : openFile;
+        }));
+        setActiveFile(prev => {
+            if (!prev) return prev;
+            const latest = files.find(f => f.path === prev.path);
+            return latest ? latest : prev;
+        });
+    }, [files]);
 
     // 2. Consume parsed WebSocket messages from SocketProvider
     useEffect(() => {

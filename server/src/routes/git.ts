@@ -44,20 +44,22 @@ gitRoutes.post("/", async (c) => {
         const gitDir = path.join(targetDir, ".git");
 
         // Only do a full ensureGitRepo (clone + sync) when .git is missing.
-        // For status/diff commands, also sync files so the latest Supabase edits show up.
-        // For stage/unstage/revert/branch ops, just ensure the dir exists without re-syncing.
+        // For status, sync files so the latest Supabase edits show up on disk.
+        // For all other commands (diff, add, restore, reset, checkout, branch),
+        // skip syncing — the client runs status first so files are already current.
         const subCommand = args[1] ?? "";
-        const needsSync = !fs.existsSync(gitDir) || subCommand === "status" || subCommand === "diff";
+        const needsSync = !fs.existsSync(gitDir) || subCommand === "status";
 
         let projectDir: string;
-        if (needsSync) {
+        if (!fs.existsSync(gitDir)) {
+            // No .git — full clone + force sync
             projectDir = await ensureGitRepo(projectId, repoUrl, githubToken);
+        } else if (needsSync) {
+            // .git exists, sync files for status
+            projectDir = await syncProjectFilesToDisk(projectId);
         } else {
-            if (!fs.existsSync(targetDir)) {
-                projectDir = await ensureGitRepo(projectId, repoUrl, githubToken);
-            } else {
-                projectDir = targetDir;
-            }
+            // All other commands — don't touch files on disk
+            projectDir = targetDir;
         }
 
         // Ensure git identity

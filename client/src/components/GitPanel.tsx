@@ -31,15 +31,17 @@ export interface GitPanelProps {
 function parseGitStatus(output: string): ChangedFile[] {
     const result: ChangedFile[] = [];
     for (const line of output.split("\n")) {
-        if (line.length < 3) continue;
-        const X = line[0];
-        const Y = line[1];
-        const filePath = line.slice(3).trim();
+        // git status --porcelain format: XY PATH (X=index, Y=worktree, space, path)
+        const match = line.match(/^(.)(.) (.+)$/);
+        if (!match) continue;
+        const idxStatus = match[1];   // index (staged) status
+        const wtStatus  = match[2];   // working-tree (unstaged) status
+        const filePath  = match[3].trim();
         if (!filePath) continue;
         result.push({
             path: filePath,
-            stagedStatus: X !== " " && X !== "?" ? X : "",
-            unstagedStatus: X === "?" && Y === "?" ? "U" : Y !== " " ? Y : "",
+            stagedStatus:   idxStatus !== " " && idxStatus !== "?" ? idxStatus : "",
+            unstagedStatus: idxStatus === "?" && wtStatus === "?" ? "U" : wtStatus !== " " ? wtStatus : "",
         });
     }
     return result;
@@ -120,15 +122,12 @@ function SubHeader({
 
 function FileRow({
     file, staged, loading,
-    onStage, onUnstage, onRevert, onClick,
+    onStage, onUnstage, onClick,
 }: {
     file: ChangedFile; staged: boolean; loading?: boolean;
     onStage?: () => void; onUnstage?: () => void;
-    onRevert?: () => void; onClick?: () => void;
+    onClick?: () => void;
 }) {
-    const [confirmRevert, setConfirmRevert] = useState(false);
-    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
     const status = staged ? file.stagedStatus : file.unstagedStatus;
     const meta = STATUS_META[status] ?? { label: "?", color: "text-zinc-500" };
 
@@ -136,17 +135,7 @@ function FileRow({
     const fileName = parts[parts.length - 1];
     const dir = parts.length > 1 ? parts.slice(0, -1).join("/") + "/" : "";
 
-    const startRevert = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setConfirmRevert(true);
-        timerRef.current = setTimeout(() => setConfirmRevert(false), 3000);
-    };
-    const doRevert = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (timerRef.current) clearTimeout(timerRef.current);
-        setConfirmRevert(false);
-        onRevert?.();
-    };
+
 
     return (
         <div
@@ -161,9 +150,9 @@ function FileRow({
             }
 
             {/* Filename + dir */}
-            <span className="flex-1 min-w-0 text-[11px] font-mono truncate">
-                <span className="text-zinc-200">{fileName}</span>
+            <span className="flex-1 min-w-0 text-[11px] font-mono truncate" title={file.path}>
                 {dir && <span className="text-zinc-600">{dir}</span>}
+                <span className="text-zinc-200">{fileName}</span>
             </span>
 
             {/* Diff stats */}
@@ -192,19 +181,6 @@ function FileRow({
                         </button>
                     )
                 }
-                {onRevert && status !== "U" && (
-                    confirmRevert
-                        ? <button onClick={doRevert}
-                            className="px-1 py-0.5 rounded bg-red-500/20 text-red-400 text-[9px] font-bold"
-                            title="Confirm discard">
-                            ✓
-                          </button>
-                        : <button onClick={startRevert}
-                            className="p-0.5 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition-colors"
-                            title="Discard changes">
-                            <RotateCcw size={10} />
-                          </button>
-                )}
             </div>
         </div>
     );
@@ -265,12 +241,9 @@ export default function GitPanel({ projectId, getToken, onBranchChange, onTokenR
         setIsRefreshing(true);
         setGlobalError(null);
         try {
-            // Run status + numstat in parallel (status triggers sync, numstat reuses warm dir)
-            const [statusRes, numstatRes, cachedNumstatRes] = await Promise.all([
-                git(["git", "status", "--porcelain"]),
-                git(["git", "diff", "--numstat"]),
-                git(["git", "diff", "--cached", "--numstat"]),
-            ]);
+            // Run status FIRST — this triggers the Supabase-to-disk file sync on the server.
+            // Only AFTER status completes do we run diff commands, so the synced files are stable.
+            const statusRes = await git(["git", "status", "--porcelain"]);
 
             if (!statusRes.success && statusRes.output) {
                 setGlobalError(statusRes.output);
@@ -278,13 +251,19 @@ export default function GitPanel({ projectId, getToken, onBranchChange, onTokenR
                 return;
             }
 
+            // Now run diff numstat commands in parallel (files are stable on disk)
+            const [numstatRes, cachedNumstatRes] = await Promise.all([
+                git(["git", "diff", "--numstat"]),
+                git(["git", "diff", "--cached", "--numstat"]),
+            ]);
+
             const parsed = parseGitStatus(statusRes.output);
-            const unstaged = parseNumstat(numstatRes.output);
-            const staged   = parseNumstat(cachedNumstatRes.output);
+            const unstagedStats = parseNumstat(numstatRes.output);
+            const stagedStats   = parseNumstat(cachedNumstatRes.output);
 
             const enriched = parsed.map(f => {
-                const us = unstaged.get(f.path);
-                const st = staged.get(f.path);
+                const us = unstagedStats.get(f.path);
+                const st = stagedStats.get(f.path);
                 const stats = st ?? us;
                 return stats ? { ...f, additions: stats.add, deletions: stats.del } : f;
             });
@@ -530,7 +509,6 @@ export default function GitPanel({ projectId, getToken, onBranchChange, onTokenR
                                             <FileRow key={`s-${f.path}`} file={f} staged
                                                 loading={loadingFiles.has(f.path)}
                                                 onUnstage={() => unstageFile(f.path)}
-                                                onRevert={() => revertFile(f.path)}
                                                 onClick={() => onDiffOpen?.(f.path, f.stagedStatus)}
                                             />
                                         ))
@@ -567,7 +545,6 @@ export default function GitPanel({ projectId, getToken, onBranchChange, onTokenR
                                                 <FileRow key={`u-${f.path}`} file={f} staged={false}
                                                     loading={loadingFiles.has(f.path)}
                                                     onStage={() => stageFile(f.path)}
-                                                    onRevert={f.unstagedStatus !== "U" ? () => revertFile(f.path) : undefined}
                                                     onClick={() => onDiffOpen?.(f.path, f.unstagedStatus)}
                                                 />
                                             ))
