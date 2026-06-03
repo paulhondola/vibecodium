@@ -10,7 +10,11 @@ interface ImportModalProps {
 	onSuccess: (projectId: string, path: string) => void;
 }
 
-export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
+export default function ImportModal({
+	isOpen,
+	onClose,
+	onSuccess,
+}: ImportModalProps) {
 	const [url, setUrl] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -27,7 +31,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
 
 		try {
 			const token = await getAccessTokenSilently();
-			
+
 			const res = await fetch(`${API_BASE}/api/projects/import`, {
 				method: "POST",
 				headers: {
@@ -68,14 +72,19 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
 								<Github size={18} className="text-gray-400" />
 								Import Repository
 							</h3>
-							<button onClick={onClose} className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-[#27272a] transition-colors">
+							<button
+								onClick={onClose}
+								className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-[#27272a] transition-colors"
+							>
 								<X size={16} />
 							</button>
 						</div>
 
 						<div className="p-6">
 							<p className="text-sm text-gray-400 mb-4">
-								Enter a GitHub repository URL to clone into your isolated workspace. Private repos require a GitHub token set in your profile.
+								Enter a GitHub repository URL to clone into your isolated
+								workspace. Private repos require a GitHub token set in your
+								profile.
 							</p>
 
 							<div className="flex flex-col gap-2 mb-6">
@@ -104,7 +113,11 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
 									disabled={isLoading || !url}
 									className="group flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-semibold rounded-lg hover:from-cyan-500 hover:to-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_15px_rgba(6,182,212,0.2)]"
 								>
-									{isLoading ? <Loader2 size={16} className="animate-spin" /> : <Github size={16} />}
+									{isLoading ? (
+										<Loader2 size={16} className="animate-spin" />
+									) : (
+										<Github size={16} />
+									)}
 									{isLoading ? "Cloning..." : "Import"}
 								</button>
 							</div>

@@ -16,7 +16,10 @@ function matchedPair(a: string, b: string): [string, string] {
 router.post("/swipe", authMiddleware, async (c) => {
 	try {
 		const currentUser = c.get("user");
-		const body = await c.req.json<{ swipedId: string; direction: "left" | "right" }>();
+		const body = await c.req.json<{
+			swipedId: string;
+			direction: "left" | "right";
+		}>();
 
 		if (!body.swipedId || !["left", "right"].includes(body.direction)) {
 			return c.json({ success: false, error: "Invalid request" }, 400);
@@ -26,7 +29,11 @@ router.post("/swipe", authMiddleware, async (c) => {
 		const { error: swipeError } = await supabase
 			.from("swipes")
 			.upsert(
-				{ swiper_id: currentUser.sub, swiped_id: body.swipedId, direction: body.direction },
+				{
+					swiper_id: currentUser.sub,
+					swiped_id: body.swipedId,
+					direction: body.direction,
+				},
 				{ onConflict: "swiper_id,swiped_id" },
 			);
 
@@ -53,7 +60,10 @@ router.post("/swipe", authMiddleware, async (c) => {
 		const [userA, userB] = matchedPair(currentUser.sub, body.swipedId);
 		const { data: match, error: matchError } = await supabase
 			.from("matches")
-			.upsert({ user_a_id: userA, user_b_id: userB, is_active: true }, { onConflict: "user_a_id,user_b_id" })
+			.upsert(
+				{ user_a_id: userA, user_b_id: userB, is_active: true },
+				{ onConflict: "user_a_id,user_b_id" },
+			)
 			.select("id")
 			.single();
 
@@ -88,7 +98,11 @@ router.delete("/swipe/last", authMiddleware, async (c) => {
 		// If it was a right swipe, also remove any resulting match row
 		if (lastSwipe.direction === "right") {
 			const [userA, userB] = matchedPair(currentUser.sub, lastSwipe.swiped_id);
-			await supabase.from("matches").delete().eq("user_a_id", userA).eq("user_b_id", userB);
+			await supabase
+				.from("matches")
+				.delete()
+				.eq("user_a_id", userA)
+				.eq("user_b_id", userB);
 		}
 
 		return c.json({ success: true });
@@ -106,7 +120,9 @@ router.get("/matches", authMiddleware, async (c) => {
 
 		const { data: matches, error } = await supabase
 			.from("matches")
-			.select("id, user_a_id, user_b_id, created_at, is_active, user_a_last_read, user_b_last_read")
+			.select(
+				"id, user_a_id, user_b_id, created_at, is_active, user_a_last_read, user_b_last_read",
+			)
 			.or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
 			.eq("is_active", true)
 			.order("created_at", { ascending: false });
@@ -115,9 +131,12 @@ router.get("/matches", authMiddleware, async (c) => {
 
 		const enriched = await Promise.all(
 			(matches ?? []).map(async (match) => {
-				const partnerId = match.user_a_id === userId ? match.user_b_id : match.user_a_id;
+				const partnerId =
+					match.user_a_id === userId ? match.user_b_id : match.user_a_id;
 				const isUserA = match.user_a_id === userId;
-				const myLastRead: string | null = isUserA ? match.user_a_last_read : match.user_b_last_read;
+				const myLastRead: string | null = isUserA
+					? match.user_a_last_read
+					: match.user_b_last_read;
 
 				const [partnerResult, lastMsgResult, unreadResult] = await Promise.all([
 					supabase
@@ -179,7 +198,8 @@ router.get("/:matchId/messages", authMiddleware, async (c) => {
 			.or(`user_a_id.eq.${currentUser.sub},user_b_id.eq.${currentUser.sub}`)
 			.maybeSingle();
 
-		if (!match) return c.json({ success: false, error: "Match not found" }, 404);
+		if (!match)
+			return c.json({ success: false, error: "Match not found" }, 404);
 
 		let query = supabase
 			.from("messages")
@@ -201,12 +221,18 @@ router.get("/:matchId/messages", authMiddleware, async (c) => {
 		// Mark as read
 		const isUserA = match.user_a_id === currentUser.sub;
 		const readField = isUserA ? "user_a_last_read" : "user_b_last_read";
-		await supabase.from("matches").update({ [readField]: new Date().toISOString() }).eq("id", matchId);
+		await supabase
+			.from("matches")
+			.update({ [readField]: new Date().toISOString() })
+			.eq("id", matchId);
 
 		return c.json({
 			success: true,
 			messages: items,
-			meta: { hasMore, nextCursor: hasMore && items[0] ? items[0].created_at : null },
+			meta: {
+				hasMore,
+				nextCursor: hasMore && items[0] ? items[0].created_at : null,
+			},
 		});
 	} catch (error: any) {
 		console.error("[match/:matchId/messages GET]", error);
@@ -234,12 +260,19 @@ router.post("/:matchId/messages", authMiddleware, async (c) => {
 			.maybeSingle();
 
 		if (!match || !match.is_active) {
-			return c.json({ success: false, error: "Match not found or inactive" }, 404);
+			return c.json(
+				{ success: false, error: "Match not found or inactive" },
+				404,
+			);
 		}
 
 		const { data: message, error } = await supabase
 			.from("messages")
-			.insert({ match_id: matchId, sender_id: currentUser.sub, body: body.trim() })
+			.insert({
+				match_id: matchId,
+				sender_id: currentUser.sub,
+				body: body.trim(),
+			})
 			.select()
 			.single();
 
@@ -248,7 +281,10 @@ router.post("/:matchId/messages", authMiddleware, async (c) => {
 		// Update sender's last_read so they don't see their own message as unread
 		const isUserA = match.user_a_id === currentUser.sub;
 		const readField = isUserA ? "user_a_last_read" : "user_b_last_read";
-		await supabase.from("matches").update({ [readField]: new Date().toISOString() }).eq("id", matchId);
+		await supabase
+			.from("matches")
+			.update({ [readField]: new Date().toISOString() })
+			.eq("id", matchId);
 
 		// Fan-out to WebSocket subscribers
 		broadcastToMatch(matchId, { type: "new_message", message });
@@ -273,10 +309,14 @@ router.delete("/:matchId", authMiddleware, async (c) => {
 			.or(`user_a_id.eq.${currentUser.sub},user_b_id.eq.${currentUser.sub}`)
 			.maybeSingle();
 
-		if (!match) return c.json({ success: false, error: "Match not found" }, 404);
+		if (!match)
+			return c.json({ success: false, error: "Match not found" }, 404);
 
 		// Soft delete — keeps swipe record so profile won't reappear in feed
-		await supabase.from("matches").update({ is_active: false }).eq("id", matchId);
+		await supabase
+			.from("matches")
+			.update({ is_active: false })
+			.eq("id", matchId);
 
 		return c.json({ success: true });
 	} catch (error: any) {

@@ -1,4 +1,13 @@
-import { ArrowLeft, Loader2, Users, Check, PanelLeft, TerminalSquare, PanelRight, Rocket } from "lucide-react";
+import {
+	ArrowLeft,
+	Loader2,
+	Users,
+	Check,
+	PanelLeft,
+	TerminalSquare,
+	PanelRight,
+	Rocket,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface CollabUser {
@@ -30,46 +39,104 @@ interface WorkspaceTopBarProps {
 }
 
 export default function WorkspaceTopBar({
-	projectName, projectId, showWhiteboard, setShowWhiteboard,
-	showSidebar, setShowSidebar, showTerminal, setShowTerminal,
-	showChat, setShowChat, isHost, isConnected, isDeploying,
-	collabUsers, copied, onBack, onDeploy, onCopyCollabLink,
+	projectName,
+	projectId,
+	showWhiteboard,
+	setShowWhiteboard,
+	showSidebar,
+	setShowSidebar,
+	showTerminal,
+	setShowTerminal,
+	showChat,
+	setShowChat,
+	isHost,
+	isConnected,
+	isDeploying,
+	collabUsers,
+	copied,
+	onBack,
+	onDeploy,
+	onCopyCollabLink,
 }: WorkspaceTopBarProps) {
 	return (
 		<div className="h-12 bg-[#111113] border-b border-[#27272a] flex items-center justify-between px-4 shrink-0 relative z-20">
 			<div className="flex items-center gap-4">
-				<button onClick={onBack} className="text-zinc-500 hover:text-zinc-200 transition-colors flex items-center gap-1.5 text-sm">
-					<ArrowLeft size={16} /> <span className="hidden sm:block">Back to Dashboard</span>
+				<button
+					onClick={onBack}
+					className="text-zinc-500 hover:text-zinc-200 transition-colors flex items-center gap-1.5 text-sm"
+				>
+					<ArrowLeft size={16} />{" "}
+					<span className="hidden sm:block">Back to Dashboard</span>
 				</button>
 				<div className="w-[1px] h-4 bg-[#27272a]"></div>
 				<div className="flex items-center gap-2">
-					<span className="font-semibold text-sm text-gray-200">{projectName ?? (projectId ? `Project ${projectId.slice(0, 8)}` : "itec-project")}</span>
+					<span className="font-semibold text-sm text-gray-200">
+						{projectName ??
+							(projectId ? `Project ${projectId.slice(0, 8)}` : "itec-project")}
+					</span>
 
 					<div className="ml-6 flex items-center bg-[#09090b] rounded-lg p-0.5 border border-[#27272a]">
 						<button
 							onClick={() => setShowWhiteboard(false)}
 							className={`px-3 py-1 flex items-center gap-2 rounded-md text-xs font-semibold transition-all ${!showWhiteboard ? "bg-[#27272a] text-[#A855F7]" : "text-zinc-500 hover:text-zinc-300"}`}
 						>
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+							<svg
+								width="14"
+								height="14"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							>
+								<polyline points="16 18 22 12 16 6"></polyline>
+								<polyline points="8 6 2 12 8 18"></polyline>
+							</svg>
 							Code
 						</button>
 						<button
 							onClick={() => setShowWhiteboard(true)}
 							className={`px-3 py-1 flex items-center gap-2 rounded-md text-xs font-semibold transition-all ${showWhiteboard ? "bg-[#27272a] text-yellow-400" : "text-zinc-500 hover:text-zinc-300"}`}
 						>
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+							<svg
+								width="14"
+								height="14"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							>
+								<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+								<line x1="12" y1="8" x2="12" y2="16"></line>
+								<line x1="8" y1="12" x2="16" y2="12"></line>
+							</svg>
 							Whiteboard
 						</button>
 					</div>
 				</div>
 				<div className="flex items-center gap-0.5 ml-4 bg-[#09090b] p-0.5 rounded-[5px] border border-[#27272a]">
-					<button onClick={() => setShowSidebar(!showSidebar)} className={`p-1 rounded hover:bg-[#1e1e24] ${showSidebar ? "text-[#A855F7]" : "text-zinc-500"} transition-colors`} title="Toggle Sidebar (⌘E)">
+					<button
+						onClick={() => setShowSidebar(!showSidebar)}
+						className={`p-1 rounded hover:bg-[#1e1e24] ${showSidebar ? "text-[#A855F7]" : "text-zinc-500"} transition-colors`}
+						title="Toggle Sidebar (⌘E)"
+					>
 						<PanelLeft size={14} />
 					</button>
-					<button onClick={() => setShowTerminal(!showTerminal)} className={`p-1 rounded hover:bg-[#1e1e24] ${showTerminal ? "text-[#A855F7]" : "text-zinc-500"} transition-colors`} title="Toggle Terminal (⌘J)">
+					<button
+						onClick={() => setShowTerminal(!showTerminal)}
+						className={`p-1 rounded hover:bg-[#1e1e24] ${showTerminal ? "text-[#A855F7]" : "text-zinc-500"} transition-colors`}
+						title="Toggle Terminal (⌘J)"
+					>
 						<TerminalSquare size={14} />
 					</button>
-					<button onClick={() => setShowChat(!showChat)} className={`p-1 rounded hover:bg-[#1e1e24] ${showChat ? "text-[#A855F7]" : "text-zinc-500"} transition-colors`} title="Toggle Chat (⌘B)">
+					<button
+						onClick={() => setShowChat(!showChat)}
+						className={`p-1 rounded hover:bg-[#1e1e24] ${showChat ? "text-[#A855F7]" : "text-zinc-500"} transition-colors`}
+						title="Toggle Chat (⌘B)"
+					>
 						<PanelRight size={14} />
 					</button>
 				</div>
@@ -86,7 +153,12 @@ export default function WorkspaceTopBar({
 			</div>
 
 			<div className="flex items-center gap-2">
-				<Button variant="primary" size="sm" onClick={onDeploy} loading={isDeploying}>
+				<Button
+					variant="primary"
+					size="sm"
+					onClick={onDeploy}
+					loading={isDeploying}
+				>
 					<Rocket />
 					Ship to Cloud
 				</Button>
@@ -95,7 +167,11 @@ export default function WorkspaceTopBar({
 					variant="secondary"
 					size="sm"
 					onClick={onCopyCollabLink}
-					className={copied ? "border-emerald-500/40 text-emerald-400 hover:border-emerald-500/60 hover:text-emerald-300" : ""}
+					className={
+						copied
+							? "border-emerald-500/40 text-emerald-400 hover:border-emerald-500/60 hover:text-emerald-300"
+							: ""
+					}
 				>
 					{copied ? <Check /> : <Users />}
 					{copied ? "Copied!" : "Collaborate"}
@@ -103,7 +179,7 @@ export default function WorkspaceTopBar({
 
 				{collabUsers.length > 0 && (
 					<div className="flex -space-x-2">
-						{collabUsers.map(u => (
+						{collabUsers.map((u) => (
 							<div
 								key={u.id}
 								title={`${u.name}${u.isHost ? " (Host)" : ""}`}

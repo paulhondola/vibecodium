@@ -6,7 +6,11 @@ interface CreateRepoModalProps {
 	isCreating: boolean;
 }
 
-export default function CreateRepoModal({ onClose, onSubmit, isCreating }: CreateRepoModalProps) {
+export default function CreateRepoModal({
+	onClose,
+	onSubmit,
+	isCreating,
+}: CreateRepoModalProps) {
 	return (
 		<div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm">
 			<div className="bg-[rgba(10,12,20,0.95)] backdrop-blur-xl border border-[rgba(168,85,247,0.3)] rounded-xl p-8 w-full max-w-md shadow-[0_0_60px_rgba(168,85,247,0.3)] relative">
@@ -17,7 +21,9 @@ export default function CreateRepoModal({ onClose, onSubmit, isCreating }: Creat
 					<X size={20} />
 				</button>
 
-				<h2 className="text-2xl font-['Space_Grotesk'] font-bold text-[#A855F7] mb-6">Create New Repository</h2>
+				<h2 className="text-2xl font-['Space_Grotesk'] font-bold text-[#A855F7] mb-6">
+					Create New Repository
+				</h2>
 
 				<form onSubmit={onSubmit} className="space-y-6">
 					<div>

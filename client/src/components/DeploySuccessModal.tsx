@@ -7,7 +7,11 @@ interface DeploySuccessModalProps {
 	showConfetti: boolean;
 }
 
-export default function DeploySuccessModal({ deploySuccess, onClose, showConfetti }: DeploySuccessModalProps) {
+export default function DeploySuccessModal({
+	deploySuccess,
+	onClose,
+	showConfetti,
+}: DeploySuccessModalProps) {
 	return (
 		<>
 			<AnimatePresence>
@@ -25,12 +29,20 @@ export default function DeploySuccessModal({ deploySuccess, onClose, showConfett
 									<Rocket size={40} className="text-green-500" />
 								</div>
 							</div>
-							<h2 className="text-2xl font-bold text-white mb-2">Deployed Successfully!</h2>
-							<p className="text-gray-400 text-sm mb-6">Your project is now live on Railway with zero downtime.</p>
+							<h2 className="text-2xl font-bold text-white mb-2">
+								Deployed Successfully!
+							</h2>
+							<p className="text-gray-400 text-sm mb-6">
+								Your project is now live on Railway with zero downtime.
+							</p>
 							<div className="bg-[#09090b] border border-[#27272a] rounded-xl p-4 flex items-center justify-between mb-8 group hover:border-green-500/30 transition-colors">
 								<div className="flex flex-col items-start overflow-hidden">
-									<span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">Production URL</span>
-									<span className="text-sm text-green-400 font-mono truncate w-full">{deploySuccess.url}</span>
+									<span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+										Production URL
+									</span>
+									<span className="text-sm text-green-400 font-mono truncate w-full">
+										{deploySuccess.url}
+									</span>
 								</div>
 								<a
 									href={deploySuccess.url}
@@ -81,7 +93,13 @@ export default function DeploySuccessModal({ deploySuccess, onClose, showConfett
 							}}
 							className="absolute w-2 h-2 rounded-sm"
 							style={{
-								backgroundColor: ["#22c55e", "#3b82f6", "#eab308", "#ec4899", "#a855f7"][Math.floor(Math.random() * 5)],
+								backgroundColor: [
+									"#22c55e",
+									"#3b82f6",
+									"#eab308",
+									"#ec4899",
+									"#a855f7",
+								][Math.floor(Math.random() * 5)],
 							}}
 						/>
 					))}

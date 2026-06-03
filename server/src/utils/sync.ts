@@ -15,7 +15,7 @@ import { supabase } from "../db/supabase";
  */
 export async function syncProjectFilesToDisk(
 	projectId: string,
-	opts?: { force?: boolean }
+	opts?: { force?: boolean },
 ): Promise<string> {
 	const targetDir = `/tmp/vibecodium/${projectId}`;
 	const force = opts?.force ?? false;
@@ -55,7 +55,7 @@ export async function syncProjectFilesToDisk(
 export async function ensureGitRepo(
 	projectId: string,
 	repoUrl: string,
-	githubToken?: string
+	githubToken?: string,
 ): Promise<string> {
 	const targetDir = `/tmp/vibecodium/${projectId}`;
 	const gitDir = path.join(targetDir, ".git");
@@ -70,7 +70,7 @@ export async function ensureGitRepo(
 			repoUrl.startsWith("https://github.com/")
 				? repoUrl.replace(
 						"https://github.com/",
-						`https://${githubToken}@github.com/`
+						`https://${githubToken}@github.com/`,
 					)
 				: repoUrl;
 
@@ -85,7 +85,7 @@ export async function ensureGitRepo(
 			await initProc.exited;
 			const remoteProc = Bun.spawn(
 				["git", "remote", "add", "origin", repoUrl],
-				{ cwd: targetDir }
+				{ cwd: targetDir },
 			);
 			await remoteProc.exited;
 		}

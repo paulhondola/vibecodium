@@ -20,8 +20,16 @@ import { addMatchClient, removeMatchClient } from "./ws/matchMessaging";
 
 // WebSocket handlers
 import type { WSData } from "./ws/terminal";
-import { handleTerminalOpen, handleTerminalMessage, handleTerminalClose } from "./ws/terminal";
-import { handleCollabOpen, handleCollabMessage, handleCollabClose } from "./ws/collaboration";
+import {
+	handleTerminalOpen,
+	handleTerminalMessage,
+	handleTerminalClose,
+} from "./ws/terminal";
+import {
+	handleCollabOpen,
+	handleCollabMessage,
+	handleCollabClose,
+} from "./ws/collaboration";
 
 // Re-export for deploy.ts
 export { broadcastToTerminal } from "./ws/terminal";
@@ -32,12 +40,14 @@ export const app = new Hono()
 		return c.json({ success: false, error: "Internal server error" }, 500);
 	})
 	.use(logger())
-	.use(cors({
-		origin: "*",
-		allowHeaders: ["*"],
-		allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-		credentials: false,
-	}))
+	.use(
+		cors({
+			origin: "*",
+			allowHeaders: ["*"],
+			allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+			credentials: false,
+		}),
+	)
 	.route("/api/git", gitRoutes)
 	.route("/api/projects", projectsRoutes)
 	.route("/api/sessions", sessionsRoutes)
@@ -53,11 +63,19 @@ export const app = new Hono()
 	// Serve static assets from the client dist folder
 	.use("/assets/*", serveStatic({ root: "../client/dist" }))
 	.use("/favicon.ico", serveStatic({ path: "../client/dist/favicon.ico" }))
-	.use("/vibecodium_icon.svg", serveStatic({ path: "../client/dist/vibecodium_icon.svg" }))
+	.use(
+		"/vibecodium_icon.svg",
+		serveStatic({ path: "../client/dist/vibecodium_icon.svg" }),
+	)
 	.use("/vite.svg", serveStatic({ path: "../client/dist/vite.svg" }))
-	.use("/subway-surfer.html", serveStatic({ path: "../client/dist/subway-surfer.html" }))
+	.use(
+		"/subway-surfer.html",
+		serveStatic({ path: "../client/dist/subway-surfer.html" }),
+	)
 	.use("/flappy-bird/*", serveStatic({ root: "../client/dist" }))
-	.get("/hello", async (c) => c.json({ message: "Hello BHVR!", success: true }, 200))
+	.get("/hello", async (c) =>
+		c.json({ message: "Hello BHVR!", success: true }, 200),
+	)
 	.get("*", serveStatic({ path: "../client/dist/index.html" }));
 
 // ──────────────────────────────────────────
@@ -75,18 +93,38 @@ export default {
 			const matchId = url.searchParams.get("matchId") || "";
 			const userId = url.searchParams.get("userId") || "anon";
 			if (!matchId) return new Response("matchId required", { status: 400 });
-			if (server.upgrade(req, {
-				data: { type: "match", projectId: matchId, clientId: userId, userName: "", isHost: false, color: "" }
-			})) return;
+			if (
+				server.upgrade(req, {
+					data: {
+						type: "match",
+						projectId: matchId,
+						clientId: userId,
+						userName: "",
+						isHost: false,
+						color: "",
+					},
+				})
+			)
+				return;
 			return new Response("Upgrade failed", { status: 500 });
 		}
 
 		// Terminals — Docker-backed collaborative sandbox
 		if (url.pathname === "/ws/terminal") {
 			const roomId = url.searchParams.get("roomId") || "default";
-			if (server.upgrade(req, {
-				data: { type: "terminal", projectId: roomId, clientId: crypto.randomUUID(), userName: "terminal", color: "", isHost: false }
-			})) return;
+			if (
+				server.upgrade(req, {
+					data: {
+						type: "terminal",
+						projectId: roomId,
+						clientId: crypto.randomUUID(),
+						userName: "terminal",
+						color: "",
+						isHost: false,
+					},
+				})
+			)
+				return;
 			return new Response("Upgrade failed", { status: 500 });
 		}
 
@@ -105,9 +143,18 @@ export default {
 			const clientId = url.searchParams.get("userId") || "anon";
 			const userName = url.searchParams.get("userName") || "Anonymous";
 
-			if (server.upgrade(req, {
-				data: { type: "collab", projectId, clientId, userName, isHost: false, color: "" }
-			})) {
+			if (
+				server.upgrade(req, {
+					data: {
+						type: "collab",
+						projectId,
+						clientId,
+						userName,
+						isHost: false,
+						color: "",
+					},
+				})
+			) {
 				return;
 			}
 			return new Response("Upgrade failed", { status: 500 });
@@ -148,6 +195,6 @@ export default {
 			} else {
 				handleCollabClose(ws);
 			}
-		}
-	}
+		},
+	},
 };

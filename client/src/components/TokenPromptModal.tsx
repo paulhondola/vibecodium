@@ -7,7 +7,10 @@ interface TokenPromptModalProps {
 	onClose: () => void;
 }
 
-export default function TokenPromptModal({ tokenPrompt, onClose }: TokenPromptModalProps) {
+export default function TokenPromptModal({
+	tokenPrompt,
+	onClose,
+}: TokenPromptModalProps) {
 	const navigate = useNavigate();
 
 	return (
@@ -25,7 +28,9 @@ export default function TokenPromptModal({ tokenPrompt, onClose }: TokenPromptMo
 								<Key size={32} className="text-[#A855F7]" />
 							</div>
 						</div>
-						<h2 className="text-xl font-bold text-white mb-3">Integrations Required</h2>
+						<h2 className="text-xl font-bold text-white mb-3">
+							Integrations Required
+						</h2>
 						<p className="text-gray-400 text-sm mb-8 leading-relaxed">
 							{tokenPrompt.message}
 						</p>
