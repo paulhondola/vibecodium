@@ -166,11 +166,17 @@ function ProfilePage() {
 					if (data.success) {
 						if (data.githubToken) setGithubToken(data.githubToken);
 						if (data.vercelToken) setVercelToken(data.vercelToken);
-						if (data.llmApiKey) setLlmApiKey(data.llmApiKey);
 						if (data.llmBaseUrl) {
 							setLlmBaseUrl(data.llmBaseUrl);
 							const matched = LLM_PROVIDERS.find(p => p.baseUrl === data.llmBaseUrl);
-							setLlmProvider(matched ? matched.id : "custom");
+							const inferredProvider = matched ? matched.id : "custom";
+							setLlmProvider(inferredProvider);
+							if (data.llmApiKeys && data.llmApiKeys[inferredProvider]) {
+								setLlmApiKey(data.llmApiKeys[inferredProvider]);
+							} else if (data.llmApiKey) {
+								setLlmApiKey(data.llmApiKey);
+							}
+							if (data.llmApiKeys) setLlmApiKeys(data.llmApiKeys);
 						}
 						setLlmModel(data.llmModel ?? "");
 					}
@@ -178,7 +184,7 @@ function ProfilePage() {
 				.catch((err) => console.error("Failed to fetch tokens", err))
 				.finally(() => setIsFetchingTokens(false));
 		}
-	}, [isAuthenticated, getAccessTokenSilently, llmProvider]);
+	}, [isAuthenticated, getAccessTokenSilently]);
 
 	// Fetch public profile fields on mount
 	useEffect(() => {
@@ -233,11 +239,17 @@ function ProfilePage() {
 				}).then((r) => r.json());
 				if (updatedTokens.githubToken) setGithubToken(updatedTokens.githubToken);
 				if (updatedTokens.vercelToken) setVercelToken(updatedTokens.vercelToken);
-				if (updatedTokens.llmApiKey) setLlmApiKey(updatedTokens.llmApiKey);
 				if (updatedTokens.llmBaseUrl) {
 					setLlmBaseUrl(updatedTokens.llmBaseUrl);
 					const matched = LLM_PROVIDERS.find(p => p.baseUrl === updatedTokens.llmBaseUrl);
-					setLlmProvider(matched ? matched.id : "custom");
+					const inferredProvider = matched ? matched.id : "custom";
+					setLlmProvider(inferredProvider);
+					if (updatedTokens.llmApiKeys?.[inferredProvider]) {
+						setLlmApiKey(updatedTokens.llmApiKeys[inferredProvider]);
+					} else if (updatedTokens.llmApiKey) {
+						setLlmApiKey(updatedTokens.llmApiKey);
+					}
+					if (updatedTokens.llmApiKeys) setLlmApiKeys(updatedTokens.llmApiKeys);
 				}
 				setLlmModel(updatedTokens.llmModel ?? "");
 			} else {
