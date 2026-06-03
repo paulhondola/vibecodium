@@ -116,7 +116,7 @@ function ProfilePage() {
 		text: string;
 		type: "success" | "error";
 	} | null>(null);
-	const [showEditProfile, setShowEditProfile] = useState(false);
+
 
 	useEffect(() => {
 		if (user?.nickname) {
@@ -356,10 +356,10 @@ function ProfilePage() {
 
 						<div className="space-y-3 pt-6 border-t border-white/5">
 							<button
-								onClick={() => setShowEditProfile((prev) => !prev)}
+								onClick={() => document.getElementById("public-profile")?.scrollIntoView({ behavior: "smooth" })}
 								className="w-full py-3 bg-[rgba(26,31,46,0.4)] hover:bg-[rgba(168,85,247,0.1)] border border-transparent hover:border-[rgba(168,85,247,0.3)] text-white rounded-xl transition-all font-['Space_Grotesk'] tracking-widest uppercase text-xs font-bold"
 							>
-								{showEditProfile ? "Hide Edit Profile" : "Edit Profile"}
+								Edit Profile
 							</button>
 							<button
 								onClick={() => logout()}
@@ -400,8 +400,7 @@ function ProfilePage() {
 					</div>
 
 					{/* Public Profile */}
-					{showEditProfile && (
-						<div id="public-profile" className={cardCls}>
+					<div id="public-profile" className={cardCls}>
 							<h3 className="text-md font-['Space_Grotesk'] font-bold text-white tracking-tight flex items-center gap-2 mb-6">
 								<User size={16} className="text-[#A855F7]" />
 								Public Profile for Vibe Match
@@ -453,8 +452,7 @@ function ProfilePage() {
 									)}
 								</div>
 							</div>
-						</div>
-					)}
+					</div>
 
 					{/* Integrations */}
 					<div className={cardCls}>

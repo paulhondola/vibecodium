@@ -212,24 +212,15 @@ export default function EditorArea({
         if (remoteCodeUpdate.clientId === userId) return;
         if (remoteCodeUpdate.filePath !== activeFileRef.current?.path) return;
 
-        // If Yjs is active for this file, skip regular code_update — Yjs handles it more accurately.
-        // Always apply room_state (reconnect) and __agent_accepted__ (agent accept from another client).
-        if (
-            ydocsRef.current.has(remoteCodeUpdate.filePath) &&
-            remoteCodeUpdate.clientId !== "room_state" &&
-            remoteCodeUpdate.clientId !== "__agent_accepted__"
-        ) return;
-
-        if (remoteCodeUpdate.clientId === "room_state" || remoteCodeUpdate.clientId === "__agent_accepted__") {
-            // Re-initialise the Y.Doc from the authoritative content
-            const doc = ydocsRef.current.get(remoteCodeUpdate.filePath);
-            if (doc) {
-                const ytext = doc.getText("content");
-                doc.transact(() => {
-                    ytext.delete(0, ytext.length);
-                    ytext.insert(0, remoteCodeUpdate.content);
-                }, "agent_accepted");
-            }
+        // Keep Y.Doc in sync with incoming content so local edits stay coherent.
+        const doc = ydocsRef.current.get(remoteCodeUpdate.filePath);
+        if (doc) {
+            const ytext = doc.getText("content");
+            const origin = remoteCodeUpdate.clientId === "__agent_accepted__" ? "agent_accepted" : "remote";
+            doc.transact(() => {
+                ytext.delete(0, ytext.length);
+                ytext.insert(0, remoteCodeUpdate.content);
+            }, origin);
         }
 
         isRemoteUpdate.current = true;
