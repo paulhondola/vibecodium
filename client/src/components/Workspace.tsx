@@ -545,6 +545,7 @@ function WorkspaceInner({
 	}, [files, fileSearchQuery]);
 
 	const handlePendingUpdate = useCallback((update: PendingUpdate) => {
+		console.log("[Workspace] handlePendingUpdate called, filePath:", update.filePath, "status:", update.status);
 		setPendingUpdate(update);
 	}, []);
 

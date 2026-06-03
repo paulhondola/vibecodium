@@ -123,9 +123,11 @@ export default function VibeChat({
 
 	// Bubble up new pending updates once (avoid re-notifying on re-render)
 	useEffect(() => {
+		console.log("[VibeChat] pendingUpdate effect:", pendingUpdate?.filePath ?? "null");
 		if (!pendingUpdate) return;
 		if (pendingNotifiedRef.current === pendingUpdate.id) return;
 		pendingNotifiedRef.current = pendingUpdate.id;
+		console.log("[VibeChat] calling onPendingUpdate for", pendingUpdate.filePath);
 		onPendingUpdate(pendingUpdate);
 	}, [pendingUpdate, onPendingUpdate]);
 
