@@ -692,7 +692,7 @@ function DashboardPage() {
                 <div className="text-slate-400 font-['Space_Grotesk'] tracking-widest uppercase text-xs">Loading workspaces...</div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3">
+              <div className="flex flex-col gap-3">
                 {[...savedProjects]
                   .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                   .map(project => (
@@ -700,23 +700,23 @@ function DashboardPage() {
                       key={project._id}
                       type="button"
                       onClick={() => navigate({ to: "/", search: { w: project._id } })}
-                      className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-[rgba(59,130,246,0.15)] shadow-[0_4px_16px_0_rgba(0,0,0,0.3)] group relative px-6 py-5 rounded-xl transition-all duration-200 overflow-hidden text-left hover:border-[rgba(59,130,246,0.5)] hover:shadow-[0_0_24px_rgba(59,130,246,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3B82F6] focus-visible:ring-offset-2 focus-visible:ring-offset-[#02040a] flex items-center gap-5"
+                      className="bg-[rgba(10,12,20,0.6)] backdrop-blur-xl border border-[rgba(59,130,246,0.15)] shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] group relative px-8 py-5 rounded-xl transition-all duration-300 overflow-hidden text-left hover:border-[rgba(59,130,246,0.5)] hover:shadow-[0_0_30px_rgba(59,130,246,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3B82F6] focus-visible:ring-offset-2 focus-visible:ring-offset-[#02040a] flex items-center gap-6"
                     >
-                      <div className="absolute top-0 left-0 w-1 h-full bg-[#3B82F6] opacity-20 group-hover:opacity-80 transition-opacity" />
-                      <div className="w-10 h-10 rounded-lg bg-[rgba(59,130,246,0.1)] flex items-center justify-center border border-[rgba(59,130,246,0.2)] shrink-0">
-                        <span className="material-symbols-outlined text-[#3B82F6] text-xl">folder</span>
+                      <div className="absolute top-0 left-0 w-1 h-full bg-[#3B82F6] opacity-30 group-hover:opacity-100 transition-opacity" />
+                      <div className="w-12 h-12 rounded-lg bg-[rgba(59,130,246,0.1)] flex items-center justify-center border border-[rgba(59,130,246,0.2)] shrink-0">
+                        <span className="material-symbols-outlined text-[#3B82F6] text-2xl">folder</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-['Space_Grotesk'] font-bold text-[rgba(248,250,252,0.9)] group-hover:text-[#3B82F6] transition-colors truncate">
+                        <h3 className="text-base font-['Space_Grotesk'] font-bold tracking-tight text-white group-hover:text-[#3B82F6] transition-colors truncate">
                           {project.name}
                         </h3>
                         <p className="text-[10px] font-['JetBrains_Mono'] text-slate-500 truncate mt-0.5">{project.repoUrl}</p>
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] font-['JetBrains_Mono'] text-slate-500 uppercase tracking-widest shrink-0">
+                      <div className="flex items-center gap-1.5 text-[10px] font-['JetBrains_Mono'] text-slate-500 uppercase tracking-widest shrink-0">
                         <span className="material-symbols-outlined text-sm">schedule</span>
                         {getTimeDiff(project.createdAt)}
                       </div>
-                      <span className="material-symbols-outlined text-slate-600 group-hover:text-[#3B82F6] transition-colors shrink-0">chevron_right</span>
+                      <span className="material-symbols-outlined text-slate-600 group-hover:text-[#3B82F6] transition-colors shrink-0 text-xl">chevron_right</span>
                     </button>
                   ))}
               </div>
