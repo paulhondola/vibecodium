@@ -672,7 +672,7 @@ function DashboardPage() {
 
         {/* All Workspaces Section */}
         {(isFetchingExternal || savedProjects.length > 0) && (
-          <section className="mb-24">
+          <section className="mb-24 pt-10">
             <div className="flex items-center justify-between mb-10 border-b border-white/5 pb-4 px-8">
               <div className="flex items-center gap-5">
                 <div className="w-12 h-12 rounded-lg bg-[rgba(59,130,246,0.1)] flex items-center justify-center border border-[rgba(59,130,246,0.2)]">
