@@ -322,9 +322,14 @@ projectsRoutes.post("/:id/push", async (c) => {
 
         // Sync latest Supabase files to disk before committing.
         // This ensures the working tree has the latest editor state.
-        // We DO NOT run `git add .` here because we only want to commit what the user explicitly staged.
         const { syncProjectFilesToDisk } = await import("../utils/sync");
         await syncProjectFilesToDisk(projectId);
+
+        // Re-stage all tracked files so the index reflects the latest Supabase
+        // content written to disk above. Without this, if the user edited a file
+        // after staging it, the commit would contain the old staged content.
+        const gitAddU = Bun.spawn(["git", "add", "-u"], { cwd: targetDir, stdout: "pipe", stderr: "pipe" });
+        await gitAddU.exited;
 
         // Commit — check for "nothing to commit"
         const gitCommit = Bun.spawn(["git", "commit", "-m", commitMessage], {

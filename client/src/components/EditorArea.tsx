@@ -47,7 +47,7 @@ interface EditorAreaProps {
 
 export default function EditorArea({
     openFiles, onSelectFile, onCloseFile,
-    activeFile, userId, remoteCodeUpdate, remoteCursorUpdate,
+    activeFile, userId, remoteCodeUpdate,
     pendingUpdate, onPendingResolved, powerModeEnabled = false,
     gameOpen = false, onGameChange, initialGameType = 'flappy',
     branchName = 'main', onCloseOthers,
@@ -84,6 +84,10 @@ export default function EditorArea({
     const activeFileRef = useRef(activeFile);
     useEffect(() => { activeFileRef.current = activeFile; }, [activeFile]);
     const contentListenerDisposable = useRef<{ dispose: () => void } | null>(null);
+    const monacoRef = useRef(monaco);
+    useEffect(() => { monacoRef.current = monaco; }, [monaco]);
+    // Last known cursor positions per remote clientId — re-applied after model.setValue
+    const remoteCursorsRef = useRef<Map<string, { color: string; userName: string; position: { lineNumber: number; column: number } }>>(new Map());
 
     // Initialise Y.Doc when active file changes (creates it if missing)
     useEffect(() => {
@@ -238,31 +242,83 @@ export default function EditorArea({
         setTimeout(() => { isRemoteUpdate.current = false; }, 50);
     }, [remoteCodeUpdate, userId]);
 
-    // Apply incoming Yjs updates and syncs — registered directly on the socket (bypasses React batching)
+    const applyRemoteCursors = () => {
+        if (!decorationsRef.current || !monacoRef.current || !editorRef.current) return;
+        const ranges = Array.from(remoteCursorsRef.current.entries()).map(([clientId, { color, userName, position }]) => {
+            const safeId = safeCssId(clientId);
+            if (!injectedStyles.current.has(safeId)) {
+                // Sanitize: color must be a hex color from the server's COLORS array
+                const safeColor = /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : "#A855F7";
+                // Sanitize: escape CSS string special chars from userName
+                const safeName = userName.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, " ").slice(0, 40);
+                const style = document.createElement("style");
+                style.id = `cursor-${safeId}`;
+                style.textContent = [
+                    `.rc-${safeId} { border-left: 2px solid ${safeColor} !important; position: relative; z-index: 9; }`,
+                    `.rc-${safeId}::after {`,
+                    `  content: "${safeName}";`,
+                    `  position: absolute; top: -18px; left: 0;`,
+                    `  background: ${safeColor}; color: white;`,
+                    `  font-size: 10px; padding: 1px 5px; border-radius: 3px;`,
+                    `  white-space: nowrap; pointer-events: none; font-family: 'Inter', sans-serif;`,
+                    `}`,
+                ].join("\n");
+                document.head.appendChild(style);
+                injectedStyles.current.add(safeId);
+            }
+            return {
+                range: new monacoRef.current!.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+                options: { className: `rc-${safeId}`, hoverMessage: { value: `**${userName}**` } }
+            };
+        });
+        decorationsRef.current.set(ranges);
+    };
+
+    // Handle all fast-path real-time messages directly (bypasses React batching)
     const userIdRef = useRef(userId);
     useEffect(() => { userIdRef.current = userId; }, [userId]);
 
     useEffect(() => {
         return onMessage((data) => {
+            if (data.type === "code_update") {
+                const { filePath, content, clientId: remoteId } = data;
+                if (remoteId === userIdRef.current) return;
+                if (filePath !== activeFileRef.current?.path || !editorRef.current) return;
+                isRemoteUpdate.current = true;
+                const model = editorRef.current.getModel();
+                if (model && model.getValue() !== content) {
+                    const sels = editorRef.current.getSelections();
+                    model.setValue(content);
+                    if (sels) editorRef.current.setSelections(sels);
+                    applyRemoteCursors(); // re-apply cursor decorations cleared by setValue
+                }
+                setCode(content);
+                if (activeFileRef.current) activeFileRef.current.content = content;
+                // sync Y.Doc so subsequent local edits have correct offsets
+                const doc = ydocsRef.current.get(filePath);
+                if (doc) {
+                    const ytext = doc.getText("content");
+                    doc.transact(() => { ytext.delete(0, ytext.length); ytext.insert(0, content); }, "remote");
+                }
+                setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+                return;
+            }
+
+            if (data.type === "cursor_update") {
+                const { filePath, clientId, color, userName, position } = data;
+                if (clientId === userIdRef.current) return;
+                if (filePath !== activeFileRef.current?.path) return;
+                remoteCursorsRef.current.set(clientId, { color, userName, position });
+                applyRemoteCursors();
+                return;
+            }
+
             if (data.type === "yjs_update") {
                 const { filePath, update: updateB64, clientId: remoteId } = data;
                 if (remoteId === userIdRef.current) return;
                 const doc = ydocsRef.current.get(filePath);
                 if (!doc) return;
                 Y.applyUpdate(doc, base64ToUint8Array(updateB64), "remote");
-                const merged = doc.getText("content").toString();
-                if (filePath === activeFileRef.current?.path && editorRef.current) {
-                    isRemoteUpdate.current = true;
-                    const model = editorRef.current.getModel();
-                    if (model && model.getValue() !== merged) {
-                        const sels = editorRef.current.getSelections();
-                        model.setValue(merged);
-                        if (sels) editorRef.current.setSelections(sels);
-                    }
-                    setCode(merged);
-                    if (activeFileRef.current) activeFileRef.current.content = merged;
-                    setTimeout(() => { isRemoteUpdate.current = false; }, 50);
-                }
                 return;
             }
 
@@ -271,54 +327,9 @@ export default function EditorArea({
                 const doc = ydocsRef.current.get(filePath);
                 if (!doc) return;
                 Y.applyUpdate(doc, base64ToUint8Array(updateB64), "remote");
-                if (filePath === activeFileRef.current?.path && editorRef.current) {
-                    const merged = doc.getText("content").toString();
-                    isRemoteUpdate.current = true;
-                    const model = editorRef.current.getModel();
-                    if (model && model.getValue() !== merged) model.setValue(merged);
-                    setCode(merged);
-                    if (activeFileRef.current) activeFileRef.current.content = merged;
-                    setTimeout(() => { isRemoteUpdate.current = false; }, 50);
-                }
             }
         });
     }, [onMessage]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // Apply incoming remote cursor update
-    useEffect(() => {
-        if (!remoteCursorUpdate || !monaco || !editorRef.current) return;
-        if (remoteCursorUpdate.clientId === userId) return;
-        if (remoteCursorUpdate.filePath !== activeFileRef.current?.path) return;
-
-        const { clientId, color, userName, position } = remoteCursorUpdate;
-        const safeId = safeCssId(clientId);
-
-        if (!decorationsRef.current) {
-            decorationsRef.current = editorRef.current.createDecorationsCollection([]);
-        }
-
-        if (!injectedStyles.current.has(safeId)) {
-            const style = document.createElement("style");
-            style.id = `cursor-${safeId}`;
-            style.innerHTML = `
-                .rc-${safeId} { border-left: 2px solid ${color} !important; position: relative; z-index: 9; }
-                .rc-${safeId}::after {
-                    content: "${userName}";
-                    position: absolute; top: -18px; left: 0;
-                    background: ${color}; color: white;
-                    font-size: 10px; padding: 1px 5px; border-radius: 3px;
-                    white-space: nowrap; pointer-events: none; font-family: 'Inter', sans-serif;
-                }
-            `;
-            document.head.appendChild(style);
-            injectedStyles.current.add(safeId);
-        }
-
-        decorationsRef.current.set([{
-            range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
-            options: { className: `rc-${safeId}`, hoverMessage: { value: `**${userName}**` } }
-        }]);
-    }, [remoteCursorUpdate, userId, monaco]);
 
     const handleEditorDidMount = (ed: editor.IStandaloneCodeEditor) => {
         editorRef.current = ed;

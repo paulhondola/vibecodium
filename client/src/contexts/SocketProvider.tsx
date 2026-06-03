@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthProvider";
 import { WS_BASE } from "@/lib/config";
 
@@ -116,10 +116,10 @@ export function SocketProvider({ children, projectId }: { children: React.ReactN
         }
     };
 
-    const onMessage = (handler: MessageHandler) => {
+    const onMessage = useCallback((handler: MessageHandler) => {
         handlersRef.current.add(handler);
         return () => { handlersRef.current.delete(handler); };
-    };
+    }, []);
 
     return (
         <SocketContext.Provider value={{ socket: ws.current, isConnected, send, lastMessage, onMessage }}>
