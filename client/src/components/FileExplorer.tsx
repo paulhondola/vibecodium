@@ -14,6 +14,7 @@ import {
 import type { ProjectFile } from "./Workspace";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { API_BASE } from "@/lib/config";
+import { generateUUID } from "@/lib/uuid";
 
 interface FileExplorerProps {
 	files: ProjectFile[];
@@ -466,7 +467,7 @@ export default function FileExplorer({
 				});
 				onFilesChange([
 					...files,
-					{ id: crypto.randomUUID(), path: keepPath, content: "" },
+					{ id: generateUUID(), path: keepPath, content: "" },
 				]);
 			} else {
 				const res = await fetch(`${apiBase}/files/create`, {
@@ -477,7 +478,7 @@ export default function FileExplorer({
 				const data = await res.json();
 				if (data.success) {
 					const newFile: ProjectFile = {
-						id: crypto.randomUUID(),
+						id: generateUUID(),
 						path: newPath,
 						content: "",
 					};

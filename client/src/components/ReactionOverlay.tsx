@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { generateUUID } from "@/lib/uuid";
 
 interface FloatingEmoji {
 	id: string;
@@ -52,7 +53,7 @@ export default function ReactionOverlay({
 	}, [lastMessage]);
 
 	const spawnEmoji = (emoji: string, sender?: string) => {
-		const id = crypto.randomUUID();
+		const id = generateUUID();
 		const x = 10 + Math.random() * 80; // 10–90% from left
 		setFloating((prev) => [
 			...prev,

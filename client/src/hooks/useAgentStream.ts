@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { API_BASE } from "@/lib/config";
+import { generateUUID } from "@/lib/uuid";
 
 export interface PendingUpdate {
 	id: string;
@@ -60,7 +61,7 @@ function parseSuggestedChange(buffer: string): PendingUpdate | null {
 	const suggestedContent = suggMatch?.[1]?.trim() ?? "";
 
 	return {
-		id: crypto.randomUUID(),
+		id: generateUUID(),
 		filePath,
 		originalContent,
 		suggestedContent,
@@ -86,7 +87,7 @@ function parseNewFileActions(
 		if (!seenKeys.has(key)) {
 			seenKeys.add(key);
 			actions.push({
-				id: crypto.randomUUID(),
+				id: generateUUID(),
 				type: "create_file",
 				filePath: m[1],
 				content: m[2].trim(),
@@ -101,7 +102,7 @@ function parseNewFileActions(
 		if (!seenKeys.has(key)) {
 			seenKeys.add(key);
 			actions.push({
-				id: crypto.randomUUID(),
+				id: generateUUID(),
 				type: "delete_file",
 				filePath: m[1],
 			});
@@ -115,7 +116,7 @@ function parseNewFileActions(
 		if (!seenKeys.has(key)) {
 			seenKeys.add(key);
 			actions.push({
-				id: crypto.randomUUID(),
+				id: generateUUID(),
 				type: "rename_file",
 				filePath: m[1],
 				newPath: m[2],

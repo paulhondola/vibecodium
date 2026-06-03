@@ -13,6 +13,7 @@ import WorkspaceTopBar from "./WorkspaceTopBar";
 import DeploySuccessModal from "./DeploySuccessModal";
 import TokenPromptModal from "./TokenPromptModal";
 import { API_BASE } from "@/lib/config";
+import { generateUUID } from "@/lib/uuid";
 import {
 	Loader2,
 	Flame,
@@ -374,7 +375,7 @@ function WorkspaceInner({
 				});
 				if (res.ok) {
 					const newFile: ProjectFile = {
-						id: crypto.randomUUID(),
+						id: generateUUID(),
 						path: action.filePath,
 						content: action.content ?? "",
 					};

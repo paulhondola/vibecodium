@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from "react";
+import { generateUUID } from "@/lib/uuid";
 import MonacoEditor, { useMonaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { Bot, Check, X, GitBranch } from "lucide-react";
@@ -490,7 +491,7 @@ export default function EditorArea({
 					];
 					const color =
 						SPARK_COLORS[Math.floor(Math.random() * SPARK_COLORS.length)];
-					const id = crypto.randomUUID();
+					const id = generateUUID();
 					setSparks((prev) => [...prev, { id, x, y, color }]);
 					setTimeout(
 						() => setSparks((prev) => prev.filter((s) => s.id !== id)),
