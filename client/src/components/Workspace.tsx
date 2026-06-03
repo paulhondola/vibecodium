@@ -81,7 +81,7 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
     const [currentBranch, setCurrentBranch] = useState("main");
 
 	// Deployment state
-    const [isSaving, setIsSaving] = useState(false);
+	const [isSaving, setIsSaving] = useState(false);
 	const [isDeploying, setIsDeploying] = useState(false);
 	const [deploySuccess, setDeploySuccess] = useState<{ url: string } | null>(null);
 	const [showConfetti, setShowConfetti] = useState(false);
@@ -539,6 +539,8 @@ function WorkspaceInner({ onBack, projectId }: { onBack: () => void, projectId: 
                                             getToken={getAccessTokenSilently}
                                             onBranchChange={setCurrentBranch}
                                             onTokenRequired={(type, message) => setTokenPrompt({ type, message })}
+                                            onSave={handleSave}
+                                            isSavingProject={isSaving}
                                         />
                                     )}
                                     {activeSidebarTab === 'fun' && (

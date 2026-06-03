@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import {
     GitBranch, GitCommit, ChevronDown, ChevronRight,
-    Plus, Minus, RotateCcw, RefreshCw, Loader2, X,
+    Plus, Minus, RefreshCw, Loader2, X,
     GitMerge, AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -24,6 +24,8 @@ export interface GitPanelProps {
     onBranchChange?: (branch: string) => void;
     onTokenRequired?: (type: "GITHUB", message: string) => void;
     onDiffOpen?: (filePath: string, status: string) => void;
+    onSave?: () => void;
+    isSavingProject?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -193,7 +195,7 @@ const slide = {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function GitPanel({ projectId, getToken, onBranchChange, onTokenRequired, onDiffOpen }: GitPanelProps) {
+export default function GitPanel({ projectId, getToken, onBranchChange, onTokenRequired, onDiffOpen, onSave, isSavingProject }: GitPanelProps) {
     const [files, setFiles]                     = useState<ChangedFile[]>([]);
     const [isRefreshing, setIsRefreshing]       = useState(false);
     const [globalError, setGlobalError]         = useState<string | null>(null);
@@ -320,13 +322,6 @@ export default function GitPanel({ projectId, getToken, onBranchChange, onTokenR
             // Try git restore --staged first, fall back to git reset HEAD
             let res = await git(["git", "restore", "--staged", "--", filePath]);
             if (!res.success) res = await git(["git", "reset", "HEAD", "--", filePath]);
-            if (res.success) await refreshStatus();
-            else setGlobalError(res.output);
-        });
-
-    const revertFile = (filePath: string) =>
-        withFileLoading(filePath, async () => {
-            const res = await git(["git", "checkout", "--", filePath]);
             if (res.success) await refreshStatus();
             else setGlobalError(res.output);
         });
@@ -475,6 +470,12 @@ export default function GitPanel({ projectId, getToken, onBranchChange, onTokenR
                                 onClick={handleCommitPush} disabled={isSaving}>
                                 {isSaving ? <Loader2 size={12} className="animate-spin" /> : <GitCommit size={12} />} Commit &amp; Push
                             </button>
+                            {onSave && (
+                                <button className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#18181b] hover:bg-[#27272a] text-zinc-400 hover:text-zinc-200 border border-[#27272a] rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    onClick={onSave} disabled={isSavingProject}>
+                                    {isSavingProject ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Save to GitHub
+                                </button>
+                            )}
                         </div>
 
                         {/* Global git error */}
