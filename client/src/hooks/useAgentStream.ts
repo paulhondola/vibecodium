@@ -203,10 +203,7 @@ export function useAgentStream(): UseAgentStreamResult {
 
 				while (true) {
 					const { done, value } = await reader.read();
-					if (done) {
-						console.log("[AgentStream] done. hasXML:", buffer.includes("</suggested_change>"), "| first300:", buffer.substring(0, 300));
-						break;
-					}
+					if (done) break;
 
 					sseBuffer += decoder.decode(value, { stream: true });
 

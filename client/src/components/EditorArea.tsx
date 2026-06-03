@@ -848,7 +848,7 @@ export default function EditorArea({
 
 				{/* ── Compact Inline Agent Diff Panel ─────────────────────── */}
 				{hasPending && pendingUpdate && (
-					<div className="absolute bottom-4 right-4 w-[480px] max-h-[55%] bg-[#18181b] border border-purple-500/30 rounded-[10px] overflow-hidden flex flex-col z-30">
+					<div className="absolute bottom-4 right-4 left-4 max-w-[480px] ml-auto max-h-[55%] bg-[#18181b] border border-purple-500/30 rounded-[10px] overflow-hidden flex flex-col z-30">
 						{/* Header */}
 						<div className="flex items-center justify-between px-3 py-2 bg-purple-900/20 border-b border-purple-500/20 shrink-0">
 							<div className="flex items-center gap-2 text-purple-300 font-medium text-[11px]">
