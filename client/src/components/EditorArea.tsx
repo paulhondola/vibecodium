@@ -71,7 +71,7 @@ export default function EditorArea({
 
 
 
-    const { send, lastMessage: socketMessage } = useSocket();
+    const { send, onMessage } = useSocket();
     const sendRef = useRef(send);
     useEffect(() => { sendRef.current = send; }, [send]);
 
@@ -83,6 +83,7 @@ export default function EditorArea({
     const injectedStyles = useRef<Set<string>>(new Set());
     const activeFileRef = useRef(activeFile);
     useEffect(() => { activeFileRef.current = activeFile; }, [activeFile]);
+    const contentListenerDisposable = useRef<{ dispose: () => void } | null>(null);
 
     // Initialise Y.Doc when active file changes (creates it if missing)
     useEffect(() => {
@@ -164,15 +165,11 @@ export default function EditorArea({
         }
     }, [monaco]);
 
-    // Register onDidChangeContent on the current Monaco model.
-    // Placed after Y.Doc init so the Y.Doc exists when the listener first fires.
-    // Re-runs on file switch to future-proof against model changes (e.g. if a path prop is added).
-    useEffect(() => {
-        const ed = editorRef.current;
-        if (!ed) return;
+    const registerContentListener = (ed: editor.IStandaloneCodeEditor) => {
+        contentListenerDisposable.current?.dispose();
         const model = ed.getModel();
         if (!model) return;
-        const disposable = model.onDidChangeContent((e) => {
+        contentListenerDisposable.current = model.onDidChangeContent((e) => {
             if (isRemoteUpdate.current) return;
             const filePath = activeFileRef.current?.path;
             if (!filePath) return;
@@ -186,8 +183,7 @@ export default function EditorArea({
                 }, "local");
             }
         });
-        return () => disposable.dispose();
-    }, [activeFile?.path]); // eslint-disable-line react-hooks/exhaustive-deps
+    };
 
     // Sync code when active file changes
     useEffect(() => {
@@ -251,50 +247,51 @@ export default function EditorArea({
         setTimeout(() => { isRemoteUpdate.current = false; }, 50);
     }, [remoteCodeUpdate, userId]);
 
-    // Apply incoming Yjs updates and syncs from socket
+    // Apply incoming Yjs updates and syncs — registered directly on the socket (bypasses React batching)
+    const userIdRef = useRef(userId);
+    useEffect(() => { userIdRef.current = userId; }, [userId]);
+
     useEffect(() => {
-        if (!socketMessage) return;
-
-        if (socketMessage.type === "yjs_update") {
-            const { filePath, update: updateB64, clientId: remoteId } = socketMessage;
-            if (remoteId === userId) return;
-            const doc = ydocsRef.current.get(filePath);
-            if (!doc) return; // file not open — ignore; room_state will cover it on next open
-            Y.applyUpdate(doc, base64ToUint8Array(updateB64), "remote");
-            const merged = doc.getText("content").toString();
-            if (filePath === activeFileRef.current?.path && editorRef.current) {
-                isRemoteUpdate.current = true;
-                const model = editorRef.current.getModel();
-                if (model && model.getValue() !== merged) {
-                    const sels = editorRef.current.getSelections();
-                    model.setValue(merged);
-                    if (sels) editorRef.current.setSelections(sels);
-                }
-                setCode(merged);
-                if (activeFileRef.current) activeFileRef.current.content = merged;
-                setTimeout(() => { isRemoteUpdate.current = false; }, 50);
-            }
-            return;
-        }
-
-        if (socketMessage.type === "yjs_sync") {
-            const { filePath, update: updateB64 } = socketMessage;
-            // Only apply to files that are already open (have a Y.Doc)
-            const doc = ydocsRef.current.get(filePath);
-            if (!doc) return;
-            Y.applyUpdate(doc, base64ToUint8Array(updateB64), "remote");
-            if (filePath === activeFileRef.current?.path && editorRef.current) {
+        return onMessage((data) => {
+            if (data.type === "yjs_update") {
+                const { filePath, update: updateB64, clientId: remoteId } = data;
+                if (remoteId === userIdRef.current) return;
+                const doc = ydocsRef.current.get(filePath);
+                if (!doc) return;
+                Y.applyUpdate(doc, base64ToUint8Array(updateB64), "remote");
                 const merged = doc.getText("content").toString();
-                isRemoteUpdate.current = true;
-                const model = editorRef.current.getModel();
-                if (model && model.getValue() !== merged) model.setValue(merged);
-                setCode(merged);
-                if (activeFileRef.current) activeFileRef.current.content = merged;
-                setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+                if (filePath === activeFileRef.current?.path && editorRef.current) {
+                    isRemoteUpdate.current = true;
+                    const model = editorRef.current.getModel();
+                    if (model && model.getValue() !== merged) {
+                        const sels = editorRef.current.getSelections();
+                        model.setValue(merged);
+                        if (sels) editorRef.current.setSelections(sels);
+                    }
+                    setCode(merged);
+                    if (activeFileRef.current) activeFileRef.current.content = merged;
+                    setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+                }
+                return;
             }
-            return;
-        }
-    }, [socketMessage, userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+            if (data.type === "yjs_sync") {
+                const { filePath, update: updateB64 } = data;
+                const doc = ydocsRef.current.get(filePath);
+                if (!doc) return;
+                Y.applyUpdate(doc, base64ToUint8Array(updateB64), "remote");
+                if (filePath === activeFileRef.current?.path && editorRef.current) {
+                    const merged = doc.getText("content").toString();
+                    isRemoteUpdate.current = true;
+                    const model = editorRef.current.getModel();
+                    if (model && model.getValue() !== merged) model.setValue(merged);
+                    setCode(merged);
+                    if (activeFileRef.current) activeFileRef.current.content = merged;
+                    setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+                }
+            }
+        });
+    }, [onMessage]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Apply incoming remote cursor update
     useEffect(() => {
@@ -335,6 +332,7 @@ export default function EditorArea({
     const handleEditorDidMount = (ed: editor.IStandaloneCodeEditor) => {
         editorRef.current = ed;
         decorationsRef.current = ed.createDecorationsCollection([]);
+        registerContentListener(ed);
 
         ed.onDidChangeCursorPosition((e) => {
             setCursorPos({ line: e.position.lineNumber, col: e.position.column });

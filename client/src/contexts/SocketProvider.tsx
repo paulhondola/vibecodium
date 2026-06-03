@@ -2,11 +2,14 @@ import React, { createContext, useContext, useEffect, useRef, useState } from "r
 import { useAuth } from "@/contexts/AuthProvider";
 import { WS_BASE } from "@/lib/config";
 
+type MessageHandler = (msg: any) => void;
+
 interface SocketContextData {
     socket: WebSocket | null;
     isConnected: boolean;
     send: (msg: any) => void;
     lastMessage: any;
+    onMessage: (handler: MessageHandler) => () => void;
 }
 
 const SocketContext = createContext<SocketContextData | null>(null);
@@ -26,6 +29,7 @@ export function SocketProvider({ children, projectId }: { children: React.ReactN
     const sessionIdRef = useRef(Math.random().toString(36).substring(2, 10));
     const pendingQueueRef = useRef<string[]>([]);
     const connectionAttemptRef = useRef(0);
+    const handlersRef = useRef<Set<MessageHandler>>(new Set());
 
     useEffect(() => {
         if (!projectId || !isAuthenticated) return;
@@ -46,13 +50,11 @@ export function SocketProvider({ children, projectId }: { children: React.ReactN
                 setIsConnected(true);
                 connectionAttemptRef.current = 0;
 
-                // Flush queued messages before requesting sync
                 const queued = pendingQueueRef.current.splice(0);
                 for (const msg of queued) {
                     try { socket.send(msg); } catch (_) {}
                 }
 
-                // Always request current room state on connect/reconnect
                 socket.send(JSON.stringify({ type: "sync_request" }));
             };
 
@@ -63,6 +65,11 @@ export function SocketProvider({ children, projectId }: { children: React.ReactN
                         socket.send(JSON.stringify({ type: "pong" }));
                         return;
                     }
+                    // Notify all direct handlers immediately (no React batching)
+                    for (const handler of handlersRef.current) {
+                        handler(data);
+                    }
+                    // Also update state for components that use lastMessage
                     setLastMessage(data);
                 } catch {
                     console.error("[Socket] Failed to parse message");
@@ -109,8 +116,13 @@ export function SocketProvider({ children, projectId }: { children: React.ReactN
         }
     };
 
+    const onMessage = (handler: MessageHandler) => {
+        handlersRef.current.add(handler);
+        return () => { handlersRef.current.delete(handler); };
+    };
+
     return (
-        <SocketContext.Provider value={{ socket: ws.current, isConnected, send, lastMessage }}>
+        <SocketContext.Provider value={{ socket: ws.current, isConnected, send, lastMessage, onMessage }}>
             {children}
         </SocketContext.Provider>
     );
