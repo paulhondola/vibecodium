@@ -203,7 +203,10 @@ export function useAgentStream(): UseAgentStreamResult {
 
 				while (true) {
 					const { done, value } = await reader.read();
-					if (done) break;
+					if (done) {
+						console.log("[AgentStream] done. hasXML:", buffer.includes("</suggested_change>"), "| first300:", buffer.substring(0, 300));
+						break;
+					}
 
 					sseBuffer += decoder.decode(value, { stream: true });
 
@@ -258,9 +261,6 @@ export function useAgentStream(): UseAgentStreamResult {
 					);
 				}
 			} finally {
-				console.log("[AgentStream] buffer length:", buffer.length);
-				console.log("[AgentStream] has XML:", buffer.includes("</suggested_change>"));
-				console.log("[AgentStream] first 300 chars:", buffer.substring(0, 300));
 				setIsStreaming(false);
 			}
 		},
