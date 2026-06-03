@@ -325,11 +325,22 @@ projectsRoutes.post("/:id/push", async (c) => {
         const { syncProjectFilesToDisk } = await import("../utils/sync");
         await syncProjectFilesToDisk(projectId);
 
-        // Re-stage all tracked files so the index reflects the latest Supabase
-        // content written to disk above. Without this, if the user edited a file
-        // after staging it, the commit would contain the old staged content.
-        const gitAddU = Bun.spawn(["git", "add", "-u"], { cwd: targetDir, stdout: "pipe", stderr: "pipe" });
-        await gitAddU.exited;
+        // Stage only the files managed by the platform.
+        // We never do `git add -u` or `git add .` because those would stage
+        // deletions of files tracked by git but not present in Supabase, which
+        // would wipe files from the remote repo that the platform doesn't own.
+        const { data: platformFiles } = await supabase
+            .from("files")
+            .select("path")
+            .eq("project_id", projectId);
+
+        const filePaths = (platformFiles ?? []).map(f => f.path).filter(Boolean);
+        if (filePaths.length > 0) {
+            const gitAdd = Bun.spawn(["git", "add", "--", ...filePaths], {
+                cwd: targetDir, stdout: "pipe", stderr: "pipe",
+            });
+            await gitAdd.exited;
+        }
 
         // Commit — check for "nothing to commit"
         const gitCommit = Bun.spawn(["git", "commit", "-m", commitMessage], {
