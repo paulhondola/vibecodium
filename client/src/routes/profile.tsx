@@ -162,8 +162,12 @@ function ProfilePage() {
 						if (data.githubToken) setGithubToken(data.githubToken);
 						if (data.vercelToken) setVercelToken(data.vercelToken);
 						if (data.llmApiKey) setLlmApiKey(data.llmApiKey);
-						if (data.llmBaseUrl) setLlmBaseUrl(data.llmBaseUrl);
-						if (data.llmModel) setLlmModel(data.llmModel);
+						if (data.llmBaseUrl) {
+							setLlmBaseUrl(data.llmBaseUrl);
+							const matched = LLM_PROVIDERS.find(p => p.baseUrl === data.llmBaseUrl);
+							setLlmProvider(matched ? matched.id : "custom");
+						}
+						setLlmModel(data.llmModel ?? "");
 					}
 				})
 				.catch((err) => console.error("Failed to fetch tokens", err))
@@ -228,8 +232,12 @@ function ProfilePage() {
 				if (updatedTokens.githubToken) setGithubToken(updatedTokens.githubToken);
 				if (updatedTokens.vercelToken) setVercelToken(updatedTokens.vercelToken);
 				if (updatedTokens.llmApiKey) setLlmApiKey(updatedTokens.llmApiKey);
-				if (updatedTokens.llmBaseUrl) setLlmBaseUrl(updatedTokens.llmBaseUrl);
-				if (updatedTokens.llmModel) setLlmModel(updatedTokens.llmModel);
+				if (updatedTokens.llmBaseUrl) {
+					setLlmBaseUrl(updatedTokens.llmBaseUrl);
+					const matched = LLM_PROVIDERS.find(p => p.baseUrl === updatedTokens.llmBaseUrl);
+					setLlmProvider(matched ? matched.id : "custom");
+				}
+				setLlmModel(updatedTokens.llmModel ?? "");
 			} else {
 				setSaveMessage({
 					text: data.error || "Failed to update tokens",
