@@ -226,7 +226,6 @@ export function useAgentStream(): UseAgentStreamResult {
 							// Detect suggested_change (only first one)
 							if (!pendingSet && buffer.includes("</suggested_change>")) {
 								const update = parseSuggestedChange(buffer);
-								console.log("[stream] XML detected, parsed:", update ? `filePath=${update.filePath} orig="${update.originalContent}" sugg="${update.suggestedContent}"` : "null");
 								if (update) {
 									if (
 										update.filePath === "unknown" ||

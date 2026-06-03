@@ -545,8 +545,43 @@ function WorkspaceInner({
 	}, [files, fileSearchQuery]);
 
 	const handlePendingUpdate = useCallback((update: PendingUpdate) => {
-		console.log("[Workspace] handlePendingUpdate called, filePath:", update.filePath, "status:", update.status);
 		setPendingUpdate(update);
+		// S4: switch back from whiteboard so the diff panel is visible
+		setShowWhiteboard(false);
+		// S3: auto-open the target file
+		setFiles(prev => {
+			const target = prev.find(f => f.path === update.filePath);
+			if (target) {
+				setOpenFiles(o => o.find(f => f.path === target.path) ? o : [...o, target]);
+				setActiveFile(target);
+			}
+			return prev;
+		});
+	}, []);
+
+	const handleAcceptFromChat = useCallback(() => {
+		if (!pendingUpdate) return;
+		setFiles(prev => {
+			const target = prev.find(f => f.path === pendingUpdate.filePath);
+			const currentContent = target?.content ?? "";
+			const newContent = currentContent.includes(pendingUpdate.originalContent)
+				? currentContent.replace(pendingUpdate.originalContent, pendingUpdate.suggestedContent)
+				: pendingUpdate.suggestedContent;
+			const updated = prev.map(f =>
+				f.path === pendingUpdate.filePath ? { ...f, content: newContent } : f
+			);
+			setOpenFiles(o => o.map(f =>
+				f.path === pendingUpdate.filePath ? { ...f, content: newContent } : f
+			));
+			setActiveFile(a => a?.path === pendingUpdate.filePath ? { ...a, content: newContent } : a);
+			setRemoteCodeUpdate({ filePath: pendingUpdate.filePath, content: newContent, clientId: "__chat_accepted__" });
+			return updated;
+		});
+		setPendingUpdate(null);
+	}, [pendingUpdate]);
+
+	const handleRejectFromChat = useCallback(() => {
+		setPendingUpdate(null);
 	}, []);
 
 	const handleSelectFile = (file: ProjectFile) => {
@@ -1068,6 +1103,9 @@ function WorkspaceInner({
 									token={agentToken}
 									onPendingUpdate={handlePendingUpdate}
 									onFileAction={handleFileAction}
+									activePendingUpdate={pendingUpdate}
+									onAcceptPending={handleAcceptFromChat}
+									onRejectPending={handleRejectFromChat}
 								/>
 							</Panel>
 						</>

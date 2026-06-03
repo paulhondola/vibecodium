@@ -42,6 +42,9 @@ interface VibeChatProps {
 	token: string | null;
 	onPendingUpdate: (update: PendingUpdate) => void;
 	onFileAction: (action: AgentFileAction) => void;
+	activePendingUpdate?: PendingUpdate | null;
+	onAcceptPending?: () => void;
+	onRejectPending?: () => void;
 }
 
 const CHAT_PROVIDERS = [
@@ -70,6 +73,9 @@ export default function VibeChat({
 	token,
 	onPendingUpdate,
 	onFileAction,
+	activePendingUpdate,
+	onAcceptPending,
+	onRejectPending,
 }: VibeChatProps) {
 	const [messages, setMessages] = useState<Message[]>([WELCOME]);
 	const [input, setInput] = useState("");
@@ -123,11 +129,9 @@ export default function VibeChat({
 
 	// Bubble up new pending updates once (avoid re-notifying on re-render)
 	useEffect(() => {
-		console.log("[VibeChat] pendingUpdate effect:", pendingUpdate?.filePath ?? "null");
 		if (!pendingUpdate) return;
 		if (pendingNotifiedRef.current === pendingUpdate.id) return;
 		pendingNotifiedRef.current = pendingUpdate.id;
-		console.log("[VibeChat] calling onPendingUpdate for", pendingUpdate.filePath);
 		onPendingUpdate(pendingUpdate);
 	}, [pendingUpdate, onPendingUpdate]);
 
@@ -397,6 +401,27 @@ export default function VibeChat({
 					</span>
 				)}
 			</div>
+
+			{/* Pending suggestion banner — shown when editor diff panel may not be visible */}
+			{activePendingUpdate && (
+				<div className="mx-3 mb-1 flex items-center gap-2 px-3 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg text-[11px]">
+					<span className="text-purple-300 font-semibold flex-1 truncate">
+						✦ Change ready for <code className="font-mono text-purple-200">{activePendingUpdate.filePath.split("/").pop()}</code>
+					</span>
+					<button
+						onClick={onRejectPending}
+						className="px-2 py-0.5 rounded bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/20 font-semibold transition-colors"
+					>
+						Reject
+					</button>
+					<button
+						onClick={onAcceptPending}
+						className="px-2 py-0.5 rounded bg-green-500/10 hover:bg-green-500/20 text-green-300 border border-green-500/20 font-semibold transition-colors"
+					>
+						Accept
+					</button>
+				</div>
+			)}
 
 			{/* Messages */}
 			<div
