@@ -98,7 +98,7 @@ agentRoutes.post("/suggest", async (c) => {
 			if (providerConfig) {
 				LLM_BASE_URL = providerConfig.baseUrl;
 				LLM_MODEL = body.model || providerConfig.defaultModel;
-				LLM_KEY = userTokens.llmApiKeys[body.provider] ?? "";
+				LLM_KEY = userTokens.llmApiKeys[body.provider] ?? userTokens.llmApiKey ?? SERVER_LLM_KEY ?? "";
 			} else if (body.provider === "custom") {
 				LLM_BASE_URL = userTokens.llmBaseUrl ?? SERVER_LLM_BASE_URL;
 				LLM_MODEL = body.model || userTokens.llmModel || SERVER_LLM_MODEL;
