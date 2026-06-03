@@ -1,32 +1,32 @@
 {
-  "name": "server",
-  "version": "0.0.1",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./client": {
-      "types": "./dist/client.d.ts",
-      "default": "./dist/client.js"
-    }
-  },
-  "scripts": {
-    "build": "tsc",
-    "dev": "npx concurrently \"bun run --preload ./src/preload.ts --watch src/index.ts\" \"tsc --watch\""
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.106.2",
-    "dockerode": "^4.0.10",
-    "hono": "^4.10.8",
-    "jose": "^6.2.2",
-    "mongoose": "^9.3.3",
-    "shared": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/dockerode": "^4.0.1"
-  }
+	"name": "server",
+	"version": "0.0.1",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./client": {
+			"types": "./dist/client.d.ts",
+			"default": "./dist/client.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc",
+		"dev": "npx concurrently \"bun run --preload ./src/preload.ts --watch src/index.ts\" \"tsc --watch\""
+	},
+	"dependencies": {
+		"@supabase/supabase-js": "^2.106.2",
+		"dockerode": "^4.0.10",
+		"hono": "^4.10.8",
+		"jose": "^6.2.2",
+		"mongoose": "^9.3.3",
+		"shared": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"@types/dockerode": "^4.0.1"
+	}
 }

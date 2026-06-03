@@ -42,12 +42,19 @@ export interface WSData {
 	type: "collab" | "terminal" | "match";
 }
 
-export const termClients = new Map<string, Set<import("bun").ServerWebSocket<WSData>>>();
+export const termClients = new Map<
+	string,
+	Set<import("bun").ServerWebSocket<WSData>>
+>();
 export const termRooms = new Map<string, TerminalRoom>();
 const termLineBuffers = new Map<string, string>(); // per-room line edit buffer
 
 export function broadcastToTerminal(roomId: string, message: string) {
-	termClients.get(roomId)?.forEach(c => { try { c.send(message); } catch (_) { } });
+	termClients.get(roomId)?.forEach((c) => {
+		try {
+			c.send(message);
+		} catch (_) {}
+	});
 }
 
 export async function stopTerminal(roomId: string): Promise<void> {
@@ -57,14 +64,22 @@ export async function stopTerminal(roomId: string): Promise<void> {
 	termClients.delete(roomId);
 	termLineBuffers.delete(roomId);
 
-	clients?.forEach(c => {
-		try { c.send("\r\n\x1b[33m[Container stopped]\x1b[0m\r\n"); } catch (_) { }
+	clients?.forEach((c) => {
+		try {
+			c.send("\r\n\x1b[33m[Container stopped]\x1b[0m\r\n");
+		} catch (_) {}
 	});
 
 	if (room) {
-		try { room.proc?.kill(); } catch (_) { }
-		try { await room.container.stop({ t: 5 }); } catch (_) { }
-		try { await room.container.remove(); } catch (_) { }
+		try {
+			room.proc?.kill();
+		} catch (_) {}
+		try {
+			await room.container.stop({ t: 5 });
+		} catch (_) {}
+		try {
+			await room.container.remove();
+		} catch (_) {}
 		console.log(`[Terminal] Cleaned up container for room ${roomId}`);
 	}
 }
@@ -91,11 +106,17 @@ export function handleTerminalOpen(ws: import("bun").ServerWebSocket<WSData>) {
 	// ── First client: bootstrap Docker container ──
 	(async () => {
 		const broadcastToRoom = (msg: string) =>
-			termClients.get(roomId)?.forEach(c => { try { c.send(msg); } catch (_) { } });
+			termClients.get(roomId)?.forEach((c) => {
+				try {
+					c.send(msg);
+				} catch (_) {}
+			});
 
 		let container: Docker.Container | null = null;
 		try {
-			broadcastToRoom("\x1b[1;36m[VibeCodium]\x1b[0m Syncing project files...\r\n");
+			broadcastToRoom(
+				"\x1b[1;36m[VibeCodium]\x1b[0m Syncing project files...\r\n",
+			);
 			const hostDir = await syncProjectFilesToDisk(roomId);
 
 			// Load file list for language detection
@@ -104,10 +125,13 @@ export function handleTerminalOpen(ws: import("bun").ServerWebSocket<WSData>) {
 				.select("path, content")
 				.eq("project_id", roomId);
 
-
 			// Pick image from file extensions
-			const image = detectTerminalImage((projectFiles ?? []).map(f => f.path));
-			broadcastToRoom(`\x1b[90mImage: ${image}  |  ${hostDir} → /usr/src/app\x1b[0m\r\n`);
+			const image = detectTerminalImage(
+				(projectFiles ?? []).map((f) => f.path),
+			);
+			broadcastToRoom(
+				`\x1b[90mImage: ${image}  |  ${hostDir} → /usr/src/app\x1b[0m\r\n`,
+			);
 
 			// Pull image (instant if already cached)
 			// NOTE: docker.modem.followProgress hangs in Bun — drain raw stream events instead
@@ -116,7 +140,7 @@ export function handleTerminalOpen(ws: import("bun").ServerWebSocket<WSData>) {
 				await new Promise<void>((res, rej) => {
 					docker.pull(image, (err: Error | null, pullStream: any) => {
 						if (err) return rej(err);
-						pullStream.on("data", () => { }); // drain
+						pullStream.on("data", () => {}); // drain
 						pullStream.on("end", res);
 						pullStream.on("error", rej);
 					});
@@ -145,7 +169,7 @@ export function handleTerminalOpen(ws: import("bun").ServerWebSocket<WSData>) {
 			// Spawn interactive shell via docker exec (Bun-compatible approach)
 			const proc = Bun.spawn(
 				["docker", "exec", "-i", container.id, "/bin/sh", "-i"],
-				{ stdin: "pipe", stdout: "pipe", stderr: "pipe" }
+				{ stdin: "pipe", stdout: "pipe", stderr: "pipe" },
 			);
 
 			const sink = proc.stdin as import("bun").FileSink;
@@ -175,16 +199,23 @@ export function handleTerminalOpen(ws: import("bun").ServerWebSocket<WSData>) {
 				}
 			})();
 
-			broadcastToRoom("\x1b[1;32m[Ready]\x1b[0m Sandbox started. Working dir: \x1b[33m/usr/src/app\x1b[0m\r\n\r\n");
-
+			broadcastToRoom(
+				"\x1b[1;32m[Ready]\x1b[0m Sandbox started. Working dir: \x1b[33m/usr/src/app\x1b[0m\r\n\r\n",
+			);
 		} catch (e: any) {
 			// Cleanup partially-created container on error
 			if (container) {
-				try { await container.stop({ t: 0 }); } catch (_) { }
-				try { await container.remove(); } catch (_) { }
+				try {
+					await container.stop({ t: 0 });
+				} catch (_) {}
+				try {
+					await container.remove();
+				} catch (_) {}
 			}
-			termClients.get(roomId)?.forEach(c => {
-				try { c.send(`\x1b[1;31m[Error]\x1b[0m ${e.message}\r\n`); } catch (_) { }
+			termClients.get(roomId)?.forEach((c) => {
+				try {
+					c.send(`\x1b[1;31m[Error]\x1b[0m ${e.message}\r\n`);
+				} catch (_) {}
 				c.close(1011, e.message);
 			});
 			console.error("[Terminal] Container start failed:", e.message);
@@ -192,7 +223,10 @@ export function handleTerminalOpen(ws: import("bun").ServerWebSocket<WSData>) {
 	})();
 }
 
-export function handleTerminalMessage(ws: import("bun").ServerWebSocket<WSData>, message: string) {
+export function handleTerminalMessage(
+	ws: import("bun").ServerWebSocket<WSData>,
+	message: string,
+) {
 	const room = termRooms.get(ws.data.projectId);
 	if (!room) return;
 
@@ -207,12 +241,18 @@ export function handleTerminalMessage(ws: import("bun").ServerWebSocket<WSData>,
 			stopTerminal(ws.data.projectId);
 			return;
 		}
-	} catch { /* not JSON — treat as raw stdin */ }
+	} catch {
+		/* not JSON — treat as raw stdin */
+	}
 
 	// Server-side line buffering (no PTY = no kernel line discipline)
 	// We echo characters locally and only flush the line to the shell on Enter.
 	const broadcastAll = (msg: string) =>
-		termClients.get(ws.data.projectId)?.forEach(c => { try { c.send(msg); } catch (_) { } });
+		termClients.get(ws.data.projectId)?.forEach((c) => {
+			try {
+				c.send(msg);
+			} catch (_) {}
+		});
 
 	const roomId = ws.data.projectId;
 
@@ -221,7 +261,9 @@ export function handleTerminalMessage(ws: import("bun").ServerWebSocket<WSData>,
 		const line = (termLineBuffers.get(roomId) ?? "") + "\n";
 		termLineBuffers.set(roomId, "");
 		broadcastAll("\r\n");
-		try { room.sink.write(line); } catch (_) { }
+		try {
+			room.sink.write(line);
+		} catch (_) {}
 	} else if (message === "\x7f" || message === "\b") {
 		// Backspace — pop last char from buffer, erase on screen
 		const buf = termLineBuffers.get(roomId) ?? "";
@@ -231,10 +273,14 @@ export function handleTerminalMessage(ws: import("bun").ServerWebSocket<WSData>,
 		}
 	} else if (message.startsWith("\x1b")) {
 		// Escape sequences (arrow keys, etc.) — forward directly, don't buffer
-		try { room.sink.write(message); } catch (_) { }
+		try {
+			room.sink.write(message);
+		} catch (_) {}
 	} else if (message.length === 1 && message.charCodeAt(0) < 32) {
 		// Other control chars (Ctrl+C, Ctrl+D, etc.) — forward directly
-		try { room.sink.write(message); } catch (_) { }
+		try {
+			room.sink.write(message);
+		} catch (_) {}
 	} else {
 		// Printable chars — append to buffer and echo
 		const buf = termLineBuffers.get(roomId) ?? "";

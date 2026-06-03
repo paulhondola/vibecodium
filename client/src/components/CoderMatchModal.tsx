@@ -76,7 +76,10 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 	const [users, setUsers] = useState<MatchUser[]>([]);
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [isLoadingUsers, setIsLoadingUsers] = useState(true);
-	const [matchAnimation, setMatchAnimation] = useState<{ user: MatchUser; matchId: string } | null>(null);
+	const [matchAnimation, setMatchAnimation] = useState<{
+		user: MatchUser;
+		matchId: string;
+	} | null>(null);
 	const [rewound, setRewound] = useState(false);
 	const [lastSwipedUser, setLastSwipedUser] = useState<MatchUser | null>(null);
 
@@ -95,22 +98,28 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 
 	// ── Fetch swipe candidates ─────────────────────────────────────────────────
 
-	const fetchUsers = useCallback(async (orderMode: OrderMode) => {
-		setIsLoadingUsers(true);
-		setCurrentIndex(0);
-		try {
-			const token = await getAccessTokenSilently();
-			const res = await fetch(`${API_BASE}/api/users/match?order=${orderMode}`, {
-				headers: { Authorization: `Bearer ${token}` },
-			});
-			const data = await res.json();
-			if (data.success) setUsers(data.users ?? []);
-		} catch (err) {
-			console.error("Failed to fetch match users:", err);
-		} finally {
-			setIsLoadingUsers(false);
-		}
-	}, [getAccessTokenSilently]);
+	const fetchUsers = useCallback(
+		async (orderMode: OrderMode) => {
+			setIsLoadingUsers(true);
+			setCurrentIndex(0);
+			try {
+				const token = await getAccessTokenSilently();
+				const res = await fetch(
+					`${API_BASE}/api/users/match?order=${orderMode}`,
+					{
+						headers: { Authorization: `Bearer ${token}` },
+					},
+				);
+				const data = await res.json();
+				if (data.success) setUsers(data.users ?? []);
+			} catch (err) {
+				console.error("Failed to fetch match users:", err);
+			} finally {
+				setIsLoadingUsers(false);
+			}
+		},
+		[getAccessTokenSilently],
+	);
 
 	useEffect(() => {
 		fetchUsers(order);
@@ -152,7 +161,10 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 			const token = await getAccessTokenSilently();
 			const res = await fetch(`${API_BASE}/api/match/swipe`, {
 				method: "POST",
-				headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${token}`,
+				},
 				body: JSON.stringify({ swipedId: swiped.id, direction }),
 			});
 			const data = await res.json();
@@ -201,7 +213,9 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 	const openChat = async (matchId: string) => {
 		setActiveMatchId(matchId);
 		setMessages([]);
-		setMessageInput(ICEBREAKERS[Math.floor(Math.random() * ICEBREAKERS.length)] ?? "");
+		setMessageInput(
+			ICEBREAKERS[Math.floor(Math.random() * ICEBREAKERS.length)] ?? "",
+		);
 		setIsLoadingMessages(true);
 
 		try {
@@ -223,7 +237,9 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 
 		// Open WS for real-time delivery
 		if (wsRef.current) wsRef.current.close();
-		const ws = new WebSocket(`${WS_BASE}/ws/match?matchId=${matchId}&userId=${user?._raw?.id ?? ""}`);
+		const ws = new WebSocket(
+			`${WS_BASE}/ws/match?matchId=${matchId}&userId=${user?._raw?.id ?? ""}`,
+		);
 		ws.onmessage = (event) => {
 			try {
 				const payload = JSON.parse(event.data);
@@ -267,11 +283,17 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 		setIsSending(true);
 		try {
 			const token = await getAccessTokenSilently();
-			const res = await fetch(`${API_BASE}/api/match/${activeMatchId}/messages`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-				body: JSON.stringify({ body }),
-			});
+			const res = await fetch(
+				`${API_BASE}/api/match/${activeMatchId}/messages`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${token}`,
+					},
+					body: JSON.stringify({ body }),
+				},
+			);
 			// Don't manually add to state — WS broadcast delivers the message to
 			// all clients in the room including the sender, avoiding duplicates.
 			if (!res.ok) throw new Error("Send failed");
@@ -304,20 +326,23 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 			<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
 				<div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-8 flex flex-col items-center">
 					<Loader2 size={32} className="animate-spin text-pink-500 mb-4" />
-					<p className="text-white font-medium">Finding hot coders in your area...</p>
+					<p className="text-white font-medium">
+						Finding hot coders in your area...
+					</p>
 				</div>
 			</div>
 		);
 	}
 
 	const profile = users[currentIndex];
-	const pseudoAge = profile ? 20 + (profile.id ? (profile.id.length % 15) : 4) : 0;
+	const pseudoAge = profile
+		? 20 + (profile.id ? profile.id.length % 15 : 4)
+		: 0;
 	const activeMatch = matches.find((m) => m.id === activeMatchId);
 
 	return (
 		<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
 			<div className="bg-[#09090b] border border-[#27272a] rounded-3xl overflow-hidden max-w-sm w-full relative shadow-[0_0_50px_rgba(236,72,153,0.15)] flex flex-col h-[640px]">
-
 				{/* Match animation overlay */}
 				{matchAnimation && (
 					<div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-6 text-center">
@@ -325,7 +350,8 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 							IT'S A MATCH!
 						</h2>
 						<p className="text-white mb-8 text-lg font-medium">
-							You and {matchAnimation.user.name} both love avoiding documentation.
+							You and {matchAnimation.user.name} both love avoiding
+							documentation.
 						</p>
 						<div className="flex gap-4">
 							<img
@@ -355,7 +381,9 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 				<div className="p-4 border-b border-[#27272a] flex justify-between items-center bg-[#18181b] shrink-0">
 					<div className="flex items-center gap-2 text-pink-500 font-bold text-xl tracking-tight">
 						<Flame size={24} className="fill-pink-500" />
-						<div>Vibe<span className="text-white">Match</span></div>
+						<div>
+							Vibe<span className="text-white">Match</span>
+						</div>
 					</div>
 					<button
 						type="button"
@@ -418,7 +446,9 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 							{currentIndex >= users.length ? (
 								<div className="flex-1 flex flex-col items-center justify-center text-center">
 									<Flame className="w-12 h-12 text-pink-500 mx-auto mb-3" />
-									<h3 className="text-white font-bold text-lg mb-1">No more coders!</h3>
+									<h3 className="text-white font-bold text-lg mb-1">
+										No more coders!
+									</h3>
 									<p className="text-gray-400 text-sm mb-4">
 										You've seen everyone. Go back to coding.
 									</p>
@@ -442,7 +472,9 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 									<div className="flex-1 p-4 flex flex-col bg-white text-black overflow-auto">
 										<h3 className="text-xl font-black flex items-baseline gap-2">
 											{profile.name}
-											<span className="text-base font-normal text-gray-500">{pseudoAge}</span>
+											<span className="text-base font-normal text-gray-500">
+												{pseudoAge}
+											</span>
 											{profile.language && (
 												<span className="ml-auto text-xs bg-pink-50 text-pink-500 border border-pink-100 px-2 py-0.5 rounded font-bold flex items-center gap-1">
 													<Code2 size={11} /> {profile.language}
@@ -467,8 +499,7 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 												onClick={(e) => e.stopPropagation()}
 												className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors w-fit"
 											>
-												<Github size={13} />
-												@{profile.github_username}
+												<Github size={13} />@{profile.github_username}
 											</a>
 										)}
 									</div>
@@ -489,7 +520,9 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 								type="button"
 								onClick={handleRewind}
 								disabled={rewound || currentIndex === 0}
-								title={rewound ? "Rewind used this session" : "Undo last swipe (Z)"}
+								title={
+									rewound ? "Rewind used this session" : "Undo last swipe (Z)"
+								}
 								className="w-14 h-14 rounded-full bg-[#09090b] flex items-center justify-center border-2 border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black transition-all shadow-[0_0_15px_rgba(251,191,36,0.2)] hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:bg-[#09090b] disabled:hover:text-amber-400"
 							>
 								<RotateCcw size={20} strokeWidth={2.5} />
@@ -515,7 +548,9 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 						) : matches.length === 0 ? (
 							<div className="flex flex-col items-center justify-center h-full text-center px-6">
 								<Heart size={40} className="text-gray-600 mb-3" />
-								<p className="text-gray-400 text-sm">No matches yet. Start swiping!</p>
+								<p className="text-gray-400 text-sm">
+									No matches yet. Start swiping!
+								</p>
 							</div>
 						) : (
 							<ul>
@@ -549,7 +584,9 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 													</span>
 													{match.lastMessage && (
 														<span className="text-gray-600 text-[10px] shrink-0 ml-2">
-															{new Date(match.lastMessage.created_at).toLocaleDateString()}
+															{new Date(
+																match.lastMessage.created_at,
+															).toLocaleDateString()}
 														</span>
 													)}
 												</div>
@@ -559,7 +596,10 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 														: "Say hello!"}
 												</p>
 											</div>
-											<MessageCircle size={16} className="text-gray-600 shrink-0" />
+											<MessageCircle
+												size={16}
+												className="text-gray-600 shrink-0"
+											/>
 										</button>
 									</li>
 								))}
@@ -608,7 +648,9 @@ export default function CoderMatchModal({ onClose }: { onClose: () => void }) {
 								</div>
 							) : messages.length === 0 ? (
 								<div className="flex flex-col items-center justify-center h-full text-center">
-									<p className="text-gray-500 text-xs">No messages yet. Break the ice!</p>
+									<p className="text-gray-500 text-xs">
+										No messages yet. Break the ice!
+									</p>
 								</div>
 							) : (
 								messages.map((msg) => {

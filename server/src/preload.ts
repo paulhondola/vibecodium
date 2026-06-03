@@ -9,15 +9,15 @@ import { plugin } from "bun";
 // try/catch fallbacks in those packages engage normally.
 // See: https://github.com/oven-sh/bun/issues/18546
 plugin({
-  name: "stub-broken-native-modules",
-  setup(build) {
-    build.onResolve({ filter: /\.(node)$/ }, (args) => ({
-      path: args.path,
-      namespace: "stub-native",
-    }));
-    build.onLoad({ filter: /.*/, namespace: "stub-native" }, () => ({
-      contents: "module.exports = {};",
-      loader: "js",
-    }));
-  },
+	name: "stub-broken-native-modules",
+	setup(build) {
+		build.onResolve({ filter: /\.(node)$/ }, (args) => ({
+			path: args.path,
+			namespace: "stub-native",
+		}));
+		build.onLoad({ filter: /.*/, namespace: "stub-native" }, () => ({
+			contents: "module.exports = {};",
+			loader: "js",
+		}));
+	},
 });

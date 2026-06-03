@@ -20,7 +20,11 @@ interface ReelsWidgetProps {
 	isAgentLoading?: boolean;
 }
 
-export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true }: ReelsWidgetProps) {
+export default function ReelsWidget({
+	onClose,
+	onMinimize,
+	isAgentLoading = true,
+}: ReelsWidgetProps) {
 	const [reels, setReels] = useState<Reel[]>([]);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isLoading, setIsLoading] = useState(false);
@@ -35,31 +39,34 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 	const wasLoadingRef = useRef(isAgentLoading);
 
 	// Fetch reels from backend
-	const fetchReels = useCallback(async (page: number) => {
-		if (isLoading) return;
-		if (page > 1 && !hasMore) return;
+	const fetchReels = useCallback(
+		async (page: number) => {
+			if (isLoading) return;
+			if (page > 1 && !hasMore) return;
 
-		setIsLoading(true);
-		try {
-			const res = await fetch(`${API_BASE}/api/reels?page=${page}&limit=5`);
-			const data = await res.json();
+			setIsLoading(true);
+			try {
+				const res = await fetch(`${API_BASE}/api/reels?page=${page}&limit=5`);
+				const data = await res.json();
 
-			if (data.success) {
-				// If page 1, replace instead of append to prevent duplicates on remount
-				if (page === 1) {
-					setReels(data.reels);
-				} else {
-					setReels(prev => [...prev, ...data.reels]);
+				if (data.success) {
+					// If page 1, replace instead of append to prevent duplicates on remount
+					if (page === 1) {
+						setReels(data.reels);
+					} else {
+						setReels((prev) => [...prev, ...data.reels]);
+					}
+					setHasMore(data.hasMore);
+					setCurrentPage(page);
 				}
-				setHasMore(data.hasMore);
-				setCurrentPage(page);
+			} catch (err) {
+				console.error("Failed to fetch reels:", err);
+			} finally {
+				setIsLoading(false);
 			}
-		} catch (err) {
-			console.error("Failed to fetch reels:", err);
-		} finally {
-			setIsLoading(false);
-		}
-	}, [isLoading, hasMore]);
+		},
+		[isLoading, hasMore],
+	);
 
 	// Initial fetch
 	useEffect(() => {
@@ -69,7 +76,11 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 	// Auto-minimize when agent transitions from loading → finished
 	useEffect(() => {
 		// Only auto-minimize if we transition from true → false (agent just finished)
-		if (wasLoadingRef.current === true && isAgentLoading === false && !isMinimized) {
+		if (
+			wasLoadingRef.current === true &&
+			isAgentLoading === false &&
+			!isMinimized
+		) {
 			// Wait 1 second then auto-minimize
 			const timer = setTimeout(() => {
 				setIsMinimized(true);
@@ -100,7 +111,7 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 						}
 
 						// Find current reel index for infinite scroll
-						const currentIndex = reels.findIndex(r => r.id === reelId);
+						const currentIndex = reels.findIndex((r) => r.id === reelId);
 
 						// Only handle direct video playback (not YouTube iframes)
 						if (element instanceof HTMLVideoElement) {
@@ -111,7 +122,8 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 							// Preload next 2 videos
 							for (let i = 1; i <= 2; i++) {
 								const nextReel = reels[currentIndex + i];
-								if (nextReel && !nextReel.videoId) { // Only preload direct videos
+								if (nextReel && !nextReel.videoId) {
+									// Only preload direct videos
 									const nextVideo = videoRefs.current.get(nextReel.id);
 									if (nextVideo) {
 										nextVideo.load();
@@ -135,7 +147,7 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 			{
 				root: containerRef.current,
 				threshold: [0, 0.25, 0.5, 0.75, 1.0],
-			}
+			},
 		);
 
 		// Observe all videos
@@ -157,7 +169,10 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [onClose]);
 
-	const handleVideoRef = (reelId: string, el: HTMLVideoElement | HTMLDivElement | null) => {
+	const handleVideoRef = (
+		reelId: string,
+		el: HTMLVideoElement | HTMLDivElement | null,
+	) => {
 		if (el) {
 			videoRefs.current.set(reelId, el as HTMLVideoElement);
 			observerRef.current?.observe(el);
@@ -183,7 +198,7 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 
 		// Force refresh YouTube iframes with new mute state
 		// (YouTube embeds need src change to update mute param)
-		setReels(prev => [...prev]);
+		setReels((prev) => [...prev]);
 	};
 
 	if (isMinimized) {
@@ -240,7 +255,7 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 			<div
 				ref={containerRef}
 				className="flex-1 w-full overflow-y-scroll snap-y snap-mandatory scroll-smooth"
-				style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+				style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
 			>
 				<style>{`
 					.reels-container::-webkit-scrollbar {
@@ -250,12 +265,15 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 
 				{reels.map((reel, index) => {
 					// Only render YouTube iframe if it's the current visible one or adjacent ones
-					const shouldRenderYouTube = !reel.videoId || Math.abs(index - currentVisibleIndex) <= 1;
+					const shouldRenderYouTube =
+						!reel.videoId || Math.abs(index - currentVisibleIndex) <= 1;
 
 					return (
 						<div
 							key={`${reel.id}_${index}`}
-							ref={(el) => { if (reel.videoId) handleVideoRef(reel.id, el); }}
+							ref={(el) => {
+								if (reel.videoId) handleVideoRef(reel.id, el);
+							}}
 							data-reel-id={reel.id}
 							data-reel-index={index}
 							className="snap-start snap-always h-full w-full relative flex items-center justify-center bg-black"
@@ -274,7 +292,11 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 								) : (
 									// Placeholder with thumbnail for off-screen reels
 									<div className="w-full h-full flex items-center justify-center bg-black">
-										<img src={reel.thumbnail} alt={reel.title} className="w-full h-full object-contain" />
+										<img
+											src={reel.thumbnail}
+											alt={reel.title}
+											className="w-full h-full object-contain"
+										/>
 									</div>
 								)
 							) : (
@@ -294,8 +316,12 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 
 							{/* Video Info Overlay */}
 							<div className="absolute bottom-4 left-4 right-4 text-white pointer-events-none">
-								<h3 className="font-bold text-sm drop-shadow-lg line-clamp-2 bg-black/50 px-2 py-1 rounded">{reel.title}</h3>
-								<p className="text-xs text-gray-300 drop-shadow-lg bg-black/50 px-2 py-0.5 rounded mt-1">{reel.credits}</p>
+								<h3 className="font-bold text-sm drop-shadow-lg line-clamp-2 bg-black/50 px-2 py-1 rounded">
+									{reel.title}
+								</h3>
+								<p className="text-xs text-gray-300 drop-shadow-lg bg-black/50 px-2 py-0.5 rounded mt-1">
+									{reel.credits}
+								</p>
 							</div>
 						</div>
 					);
@@ -306,7 +332,9 @@ export default function ReelsWidget({ onClose, onMinimize, isAgentLoading = true
 					<div className="snap-start h-full w-full flex items-center justify-center bg-[#09090b]">
 						<div className="flex flex-col items-center gap-3">
 							<Loader2 className="animate-spin text-pink-500" size={32} />
-							<span className="text-sm text-gray-400">Loading more vibes...</span>
+							<span className="text-sm text-gray-400">
+								Loading more vibes...
+							</span>
 						</div>
 					</div>
 				)}
