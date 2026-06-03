@@ -90,8 +90,18 @@ agentRoutes.post("/suggest", async (c) => {
 		const userTokens = await getUserTokens(userId);
 
 		let LLM_BASE_URL = userTokens.llmBaseUrl ?? SERVER_LLM_BASE_URL;
-		let LLM_KEY = userTokens.llmApiKey ?? SERVER_LLM_KEY;
 		let LLM_MODEL = userTokens.llmModel ?? SERVER_LLM_MODEL;
+
+		// Resolve the API key: prefer per-provider key matching the configured
+		// base URL, fall back to the raw llmApiKey (legacy single-key format).
+		// If llmApiKey is a serialized JSON dict (new multi-provider format),
+		// don't use it directly — extract the matching key from llmApiKeys instead.
+		const matchedProvider = Object.entries(LLM_PROVIDERS).find(([, cfg]) => cfg.baseUrl === LLM_BASE_URL)?.[0];
+		let LLM_KEY: string =
+			(matchedProvider ? userTokens.llmApiKeys[matchedProvider] : null) ??
+			(userTokens.llmApiKey?.startsWith("{") ? null : userTokens.llmApiKey) ??
+			SERVER_LLM_KEY ??
+			"";
 
 		if (body.provider && body.provider !== "default") {
 			const providerConfig = LLM_PROVIDERS[body.provider];
