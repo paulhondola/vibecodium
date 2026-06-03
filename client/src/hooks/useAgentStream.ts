@@ -258,6 +258,9 @@ export function useAgentStream(): UseAgentStreamResult {
 					);
 				}
 			} finally {
+				console.log("[AgentStream] buffer length:", buffer.length);
+				console.log("[AgentStream] has XML:", buffer.includes("</suggested_change>"));
+				console.log("[AgentStream] first 300 chars:", buffer.substring(0, 300));
 				setIsStreaming(false);
 			}
 		},
