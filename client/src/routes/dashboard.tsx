@@ -673,10 +673,10 @@ function DashboardPage() {
         {/* All Workspaces Section */}
         {(isFetchingExternal || savedProjects.length > 0) && (
           <section className="mb-24">
-            <div className="flex items-center justify-between mb-10 border-b border-white/5 pb-4">
+            <div className="flex items-center justify-between mb-10 border-b border-white/5 pb-4 px-8">
               <div className="flex items-center gap-5">
-                <div className="w-10 h-10 rounded bg-[rgba(59,130,246,0.1)] flex items-center justify-center border border-[rgba(59,130,246,0.2)]">
-                  <span className="material-symbols-outlined text-[#3B82F6]" style={{ fontVariationSettings: "'FILL' 1" }}>folder_copy</span>
+                <div className="w-12 h-12 rounded-lg bg-[rgba(59,130,246,0.1)] flex items-center justify-center border border-[rgba(59,130,246,0.2)]">
+                  <span className="material-symbols-outlined text-[#3B82F6] text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>folder_copy</span>
                 </div>
                 <h2 className="text-xs font-['Space_Grotesk'] font-black uppercase tracking-[0.5em] text-[rgba(248,250,252,0.8)]">
                   All Workspaces
