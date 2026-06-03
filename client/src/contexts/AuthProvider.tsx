@@ -7,12 +7,12 @@
  * Backed by @supabase/supabase-js GitHub OAuth.
  */
 import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  useCallback,
-  type ReactNode,
+	createContext,
+	useContext,
+	useEffect,
+	useState,
+	useCallback,
+	type ReactNode,
 } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
@@ -23,28 +23,30 @@ import { supabase } from "@/lib/supabase";
 
 /** Normalised user shape — mirrors Auth0's user object fields used in the app. */
 export interface AuthUser {
-  /** GitHub handle, e.g. "octocat" — was user.nickname in Auth0 */
-  nickname: string;
-  /** Display name — was user.name in Auth0 */
-  name: string;
-  /** Avatar URL — was user.picture in Auth0 */
-  picture: string;
-  /** Primary email */
-  email: string;
-  /** Raw Supabase user for advanced usage */
-  _raw: User;
+	/** GitHub handle, e.g. "octocat" — was user.nickname in Auth0 */
+	nickname: string;
+	/** Display name — was user.name in Auth0 */
+	name: string;
+	/** Avatar URL — was user.picture in Auth0 */
+	picture: string;
+	/** Primary email */
+	email: string;
+	/** Raw Supabase user for advanced usage */
+	_raw: User;
 }
 
 export interface AuthContextValue {
-  user: AuthUser | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  /** Kicks off GitHub OAuth redirect — mirrors loginWithRedirect() */
-  loginWithRedirect: (opts?: { appState?: { returnTo?: string } }) => Promise<void>;
-  /** Signs the user out — mirrors logout() */
-  logout: () => Promise<void>;
-  /** Returns the current JWT access token — mirrors getAccessTokenSilently() */
-  getAccessTokenSilently: () => Promise<string>;
+	user: AuthUser | null;
+	isAuthenticated: boolean;
+	isLoading: boolean;
+	/** Kicks off GitHub OAuth redirect — mirrors loginWithRedirect() */
+	loginWithRedirect: (opts?: {
+		appState?: { returnTo?: string };
+	}) => Promise<void>;
+	/** Signs the user out — mirrors logout() */
+	logout: () => Promise<void>;
+	/** Returns the current JWT access token — mirrors getAccessTokenSilently() */
+	getAccessTokenSilently: () => Promise<string>;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -52,14 +54,20 @@ export interface AuthContextValue {
 // ──────────────────────────────────────────────────────────────────────────────
 
 function toAuthUser(user: User): AuthUser {
-  const meta = user.user_metadata ?? {};
-  return {
-    nickname: meta.user_name ?? meta.preferred_username ?? user.email?.split("@")[0] ?? "",
-    name: meta.full_name ?? meta.name ?? "",
-    picture: meta.avatar_url ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(meta.full_name ?? user.email ?? "U")}&background=0D8ABC&color=fff`,
-    email: user.email ?? "",
-    _raw: user,
-  };
+	const meta = user.user_metadata ?? {};
+	return {
+		nickname:
+			meta.user_name ??
+			meta.preferred_username ??
+			user.email?.split("@")[0] ??
+			"",
+		name: meta.full_name ?? meta.name ?? "",
+		picture:
+			meta.avatar_url ??
+			`https://ui-avatars.com/api/?name=${encodeURIComponent(meta.full_name ?? user.email ?? "U")}&background=0D8ABC&color=fff`,
+		email: user.email ?? "",
+		_raw: user,
+	};
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -69,81 +77,84 @@ function toAuthUser(user: User): AuthUser {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+	const [user, setUser] = useState<AuthUser | null>(null);
+	const [session, setSession] = useState<Session | null>(null);
+	const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Hydrate from persisted session on mount
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        setSession(data.session);
-        setUser(toAuthUser(data.session.user));
-      }
-      setIsLoading(false);
-    });
+	useEffect(() => {
+		// Hydrate from persisted session on mount
+		supabase.auth.getSession().then(({ data }) => {
+			if (data.session) {
+				setSession(data.session);
+				setUser(toAuthUser(data.session.user));
+			}
+			setIsLoading(false);
+		});
 
-    // Subscribe to auth state changes (login, logout, token refresh)
-    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
-      setSession(newSession);
-      setUser(newSession ? toAuthUser(newSession.user) : null);
-      setIsLoading(false);
+		// Subscribe to auth state changes (login, logout, token refresh)
+		const { data: listener } = supabase.auth.onAuthStateChange(
+			(event, newSession) => {
+				setSession(newSession);
+				setUser(newSession ? toAuthUser(newSession.user) : null);
+				setIsLoading(false);
 
-      // Handle redirect after successful sign in
-      if (event === "SIGNED_IN") {
-        const returnTo = sessionStorage.getItem("auth_return_to");
-        if (returnTo) {
-          sessionStorage.removeItem("auth_return_to");
-          // Use window.location.replace to ensure the browser history is clean
-          // or at least that we move to the target immediately.
-          window.location.replace(returnTo);
-        }
-      }
-    });
+				// Handle redirect after successful sign in
+				if (event === "SIGNED_IN") {
+					const returnTo = sessionStorage.getItem("auth_return_to");
+					if (returnTo) {
+						sessionStorage.removeItem("auth_return_to");
+						// Use window.location.replace to ensure the browser history is clean
+						// or at least that we move to the target immediately.
+						window.location.replace(returnTo);
+					}
+				}
+			},
+		);
 
-    return () => listener.subscription.unsubscribe();
-  }, []);
+		return () => listener.subscription.unsubscribe();
+	}, []);
 
-  const loginWithRedirect = useCallback(
-    async (opts?: { appState?: { returnTo?: string } }) => {
-      // Store returnTo in sessionStorage for persistence across OAuth redirect
-      if (opts?.appState?.returnTo) {
-        sessionStorage.setItem("auth_return_to", opts.appState.returnTo);
-      }
+	const loginWithRedirect = useCallback(
+		async (opts?: { appState?: { returnTo?: string } }) => {
+			// Store returnTo in sessionStorage for persistence across OAuth redirect
+			if (opts?.appState?.returnTo) {
+				sessionStorage.setItem("auth_return_to", opts.appState.returnTo);
+			}
 
-      const redirectTo = window.location.origin;
-      await supabase.auth.signInWithOAuth({
-        provider: "github",
-        options: { redirectTo },
-      });
-    },
-    [],
-  );
+			const redirectTo = window.location.origin;
+			await supabase.auth.signInWithOAuth({
+				provider: "github",
+				options: { redirectTo },
+			});
+		},
+		[],
+	);
 
-  const logout = useCallback(async () => {
-    await supabase.auth.signOut();
-  }, []);
+	const logout = useCallback(async () => {
+		await supabase.auth.signOut();
+	}, []);
 
-  const getAccessTokenSilently = useCallback(async (): Promise<string> => {
-    // Try current session first
-    if (session?.access_token) return session.access_token;
+	const getAccessTokenSilently = useCallback(async (): Promise<string> => {
+		// Try current session first
+		if (session?.access_token) return session.access_token;
 
-    // Force-refresh to get a fresh JWT
-    const { data, error } = await supabase.auth.refreshSession();
-    if (error || !data.session) throw new Error("Session expired — please log in again.");
-    return data.session.access_token;
-  }, [session]);
+		// Force-refresh to get a fresh JWT
+		const { data, error } = await supabase.auth.refreshSession();
+		if (error || !data.session)
+			throw new Error("Session expired — please log in again.");
+		return data.session.access_token;
+	}, [session]);
 
-  const value: AuthContextValue = {
-    user,
-    isAuthenticated: !!user,
-    isLoading,
-    loginWithRedirect,
-    logout,
-    getAccessTokenSilently,
-  };
+	const value: AuthContextValue = {
+		user,
+		isAuthenticated: !!user,
+		isLoading,
+		loginWithRedirect,
+		logout,
+		getAccessTokenSilently,
+	};
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -151,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 // ──────────────────────────────────────────────────────────────────────────────
 
 export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth() must be used inside <AuthProvider>");
-  return ctx;
+	const ctx = useContext(AuthContext);
+	if (!ctx) throw new Error("useAuth() must be used inside <AuthProvider>");
+	return ctx;
 }

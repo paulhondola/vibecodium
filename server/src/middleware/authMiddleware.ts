@@ -22,14 +22,17 @@ import { upsertUser } from "../utils/tokens";
 // In-memory token cache (avoids re-verifying the same JWT on every request)
 // ──────────────────────────────────────────────────────────────────────────────
 interface CachedUser {
-  user: Record<string, any>;
-  expiresAt: number; // epoch ms
+	user: Record<string, any>;
+	expiresAt: number; // epoch ms
 }
 
 if (!(globalThis as any).__supabaseTokenCache) {
-  (globalThis as any).__supabaseTokenCache = new Map<string, CachedUser>();
+	(globalThis as any).__supabaseTokenCache = new Map<string, CachedUser>();
 }
-const tokenCache = (globalThis as any).__supabaseTokenCache as Map<string, CachedUser>;
+const tokenCache = (globalThis as any).__supabaseTokenCache as Map<
+	string,
+	CachedUser
+>;
 const cacheDuration = 15 * 60 * 1000; // 15 minutes
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -38,14 +41,14 @@ const cacheDuration = 15 * 60 * 1000; // 15 minutes
 let JWKS: ReturnType<typeof createRemoteJWKSet> | null = null;
 
 function getJWKS() {
-  if (JWKS) return JWKS;
-  const url = process.env.SUPABASE_URL;
-  if (!url) throw new Error("SUPABASE_URL is not set in server/.env");
+	if (JWKS) return JWKS;
+	const url = process.env.SUPABASE_URL;
+	if (!url) throw new Error("SUPABASE_URL is not set in server/.env");
 
-  // Construct the JWKS endpoint from the project URL
-  const jwksUrl = new URL("/auth/v1/.well-known/jwks.json", url).toString();
-  JWKS = createRemoteJWKSet(new URL(jwksUrl));
-  return JWKS;
+	// Construct the JWKS endpoint from the project URL
+	const jwksUrl = new URL("/auth/v1/.well-known/jwks.json", url).toString();
+	JWKS = createRemoteJWKSet(new URL(jwksUrl));
+	return JWKS;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -53,89 +56,106 @@ function getJWKS() {
 // ──────────────────────────────────────────────────────────────────────────────
 
 export const authMiddleware = createMiddleware(async (c, next) => {
-  const authHeader = c.req.header("Authorization");
+	const authHeader = c.req.header("Authorization");
 
-  if (!authHeader?.startsWith("Bearer ")) {
-    return c.json({ error: "Missing or invalid authorization header" }, 401);
-  }
+	if (!authHeader?.startsWith("Bearer ")) {
+		return c.json({ error: "Missing or invalid authorization header" }, 401);
+	}
 
-  const token = authHeader.slice(7);
-  if (!token) {
-    return c.json({ error: "Malformed authorization header" }, 401);
-  }
+	const token = authHeader.slice(7);
+	if (!token) {
+		return c.json({ error: "Malformed authorization header" }, 401);
+	}
 
-  try {
-    const jwtSecret = process.env.SUPABASE_JWT_SECRET;
+	try {
+		const jwtSecret = process.env.SUPABASE_JWT_SECRET;
 
-    // ── 1. Check in-memory cache ──────────────────────────────────────────────
-    const now = Date.now();
-    const cached = tokenCache.get(token);
-    if (cached && cached.expiresAt > now) {
-      c.set("user", cached.user);
-      return await next();
-    }
+		// ── 1. Check in-memory cache ──────────────────────────────────────────────
+		const now = Date.now();
+		const cached = tokenCache.get(token);
+		if (cached && cached.expiresAt > now) {
+			c.set("user", cached.user);
+			return await next();
+		}
 
-    // ── 2. Verify JWT ─────────────────────────────────────────────────────────
-    let payload: any;
-    const header = decodeProtectedHeader(token);
+		// ── 2. Verify JWT ─────────────────────────────────────────────────────────
+		let payload: any;
+		const header = decodeProtectedHeader(token);
 
-    if (header.alg === "ES256") {
-      // Use Remote JWKS for Asymmetric tokens (cloud projects)
-      const { payload: verifiedPayload } = await jwtVerify(token, getJWKS(), {
-        algorithms: ["ES256"],
-      });
-      payload = verifiedPayload;
-    } else {
-      // Fallback to Symmetric HS256 with the secret (local dev or legacy)
-      if (!jwtSecret) {
-        throw new Error("SUPABASE_JWT_SECRET is not set for symmetric token");
-      }
-      const secret = new TextEncoder().encode(jwtSecret);
-      const { payload: verifiedPayload } = await jwtVerify(token, secret, {
-        algorithms: ["HS256", "HS384", "HS512"],
-      });
-      payload = verifiedPayload;
-    }
+		if (header.alg === "ES256") {
+			// Use Remote JWKS for Asymmetric tokens (cloud projects)
+			const { payload: verifiedPayload } = await jwtVerify(token, getJWKS(), {
+				algorithms: ["ES256"],
+			});
+			payload = verifiedPayload;
+		} else {
+			// Fallback to Symmetric HS256 with the secret (local dev or legacy)
+			if (!jwtSecret) {
+				throw new Error("SUPABASE_JWT_SECRET is not set for symmetric token");
+			}
+			const secret = new TextEncoder().encode(jwtSecret);
+			const { payload: verifiedPayload } = await jwtVerify(token, secret, {
+				algorithms: ["HS256", "HS384", "HS512"],
+			});
+			payload = verifiedPayload;
+		}
 
-    // ── 3. Normalise payload — keep compat shim for existing routes ───────────
-    const meta = (payload.user_metadata ?? {}) as Record<string, any>;
-    const userPayload: Record<string, any> = {
-      // Standard OIDC / existing route fields
-      sub: payload.sub,
-      email: payload.email ?? meta.email ?? "",
-      // Compat shims — existing routes use user.nickname / user.name / user.picture
-      nickname: meta.user_name ?? meta.preferred_username ?? (payload.email as string | undefined)?.split("@")[0] ?? "",
-      name: meta.full_name ?? meta.name ?? "",
-      picture: meta.avatar_url ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(meta.full_name ?? payload.email ?? "U")}&background=0D8ABC&color=fff`,
-      // Raw metadata for anything that needs it
-      user_metadata: meta,
-      // Pass through everything else in the JWT payload
-      ...payload,
-    };
+		// ── 3. Normalise payload — keep compat shim for existing routes ───────────
+		const meta = (payload.user_metadata ?? {}) as Record<string, any>;
+		const userPayload: Record<string, any> = {
+			// Standard OIDC / existing route fields
+			sub: payload.sub,
+			email: payload.email ?? meta.email ?? "",
+			// Compat shims — existing routes use user.nickname / user.name / user.picture
+			nickname:
+				meta.user_name ??
+				meta.preferred_username ??
+				(payload.email as string | undefined)?.split("@")[0] ??
+				"",
+			name: meta.full_name ?? meta.name ?? "",
+			picture:
+				meta.avatar_url ??
+				`https://ui-avatars.com/api/?name=${encodeURIComponent(meta.full_name ?? payload.email ?? "U")}&background=0D8ABC&color=fff`,
+			// Raw metadata for anything that needs it
+			user_metadata: meta,
+			// Pass through everything else in the JWT payload
+			...payload,
+		};
 
-    // ── 4. Cache for 15 minutes (well within Supabase's 1-hour token TTL) ─────
-    const expMs = typeof payload.exp === "number"
-      ? payload.exp * 1000          // use token's own expiry if available
-      : now + cacheDuration;
-    tokenCache.set(token, { user: userPayload, expiresAt: Math.min(expMs, now + cacheDuration) });
+		// ── 4. Cache for 15 minutes (well within Supabase's 1-hour token TTL) ─────
+		const expMs =
+			typeof payload.exp === "number"
+				? payload.exp * 1000 // use token's own expiry if available
+				: now + cacheDuration;
+		tokenCache.set(token, {
+			user: userPayload,
+			expiresAt: Math.min(expMs, now + cacheDuration),
+		});
 
-    // ── 5. Upsert user in Supabase (fire-and-forget, non-blocking) ─────────────
-    upsertUser(userPayload as Parameters<typeof upsertUser>[0]).catch((e) => console.error("[auth] upsertUser failed:", e));
+		// ── 5. Upsert user in Supabase (fire-and-forget, non-blocking) ─────────────
+		upsertUser(userPayload as Parameters<typeof upsertUser>[0]).catch((e) =>
+			console.error("[auth] upsertUser failed:", e),
+		);
 
-    c.set("user", userPayload);
-    await next();
-  } catch (error: any) {
-    // JWT verification errors (expired, invalid signature, etc.)
-    let diagnosticMsg = "";
-    try {
-      const header = decodeProtectedHeader(token);
-      diagnosticMsg = ` (Token Header: alg=${header.alg})`;
-    } catch (e) {
-      diagnosticMsg = " (Failed to decode header)";
-    }
+		c.set("user", userPayload);
+		await next();
+	} catch (error: any) {
+		// JWT verification errors (expired, invalid signature, etc.)
+		let diagnosticMsg = "";
+		try {
+			const header = decodeProtectedHeader(token);
+			diagnosticMsg = ` (Token Header: alg=${header.alg})`;
+		} catch (e) {
+			diagnosticMsg = " (Failed to decode header)";
+		}
 
-    const isSecretError = error.message.includes("secret") || error.message.includes("key") || error.message.includes("signature");
-    console.error(`[auth] Token verification failed: ${error.message}${diagnosticMsg}${isSecretError ? " (Check SUPABASE_JWT_SECRET in .env)" : ""}`);
-    return c.json({ error: "Unauthorized", details: error.message }, 401);
-  }
+		const isSecretError =
+			error.message.includes("secret") ||
+			error.message.includes("key") ||
+			error.message.includes("signature");
+		console.error(
+			`[auth] Token verification failed: ${error.message}${diagnosticMsg}${isSecretError ? " (Check SUPABASE_JWT_SECRET in .env)" : ""}`,
+		);
+		return c.json({ error: "Unauthorized", details: error.message }, 401);
+	}
 });

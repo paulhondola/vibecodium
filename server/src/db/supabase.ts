@@ -9,16 +9,16 @@ const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!url || !key) {
-  throw new Error(
-    "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in server/.env"
-  );
+	throw new Error(
+		"SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in server/.env",
+	);
 }
 
 export const supabase = createClient(url, key, {
-  auth: {
-    // Server-side only — no session persistence needed
-    autoRefreshToken: false,
-    persistSession: false,
-    detectSessionInUrl: false,
-  },
+	auth: {
+		// Server-side only — no session persistence needed
+		autoRefreshToken: false,
+		persistSession: false,
+		detectSessionInUrl: false,
+	},
 });

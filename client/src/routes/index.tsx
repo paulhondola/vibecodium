@@ -6,67 +6,80 @@ import Workspace from "../components/Workspace";
 
 export const Route = createFileRoute("/")({
 	component: Index,
-    validateSearch: (search: Record<string, unknown>) => {
-        return { w: search.w as string | undefined };
-    }
+	validateSearch: (search: Record<string, unknown>) => {
+		return { w: search.w as string | undefined };
+	},
 });
 
 function Index() {
-    const { w } = Route.useSearch();
-    // Derive view directly from URL so navigations (OAuth callback, shared links)
-    // are reflected immediately without stale state.
-    const view: "landing" | "app" = w ? "app" : "landing";
-    const [projectId, setProjectId] = useState<string | null>(w ?? null);
-    const [manualApp, setManualApp] = useState(false); // entered without a ?w= URL
-    const { isAuthenticated, isLoading, loginWithRedirect } = useAuth();
-    const navigate = useNavigate();
+	const { w } = Route.useSearch();
+	// Derive view directly from URL so navigations (OAuth callback, shared links)
+	// are reflected immediately without stale state.
+	const view: "landing" | "app" = w ? "app" : "landing";
+	const [projectId, setProjectId] = useState<string | null>(w ?? null);
+	const [manualApp, setManualApp] = useState(false); // entered without a ?w= URL
+	const { isAuthenticated, isLoading, loginWithRedirect } = useAuth();
+	const navigate = useNavigate();
 
-    // Keep projectId in sync when ?w= changes (OAuth restore, shared link navigation)
-    useEffect(() => {
-        if (w && w !== projectId) {
-            setProjectId(w);
-        }
-    }, [w]);
+	// Keep projectId in sync when ?w= changes (OAuth restore, shared link navigation)
+	useEffect(() => {
+		if (w && w !== projectId) {
+			setProjectId(w);
+		}
+	}, [w]);
 
-    const inApp = view === "app" || manualApp;
+	const inApp = view === "app" || manualApp;
 
-    useEffect(() => {
-        // Only trigger login if we are definitely not loading and not authenticated
-        if (inApp && !isLoading && !isAuthenticated) {
-            // Check if we are currently in the middle of an OAuth redirect processing
-            // (Supabase adds access_token etc to the hash/URL)
-            const hasAuthParams = window.location.hash.includes('access_token=') || 
-                                 window.location.search.includes('code=');
-            
-            if (!hasAuthParams) {
-                loginWithRedirect({
-                    appState: { returnTo: window.location.href },
-                });
-            }
-        }
-    }, [inApp, isLoading, isAuthenticated, loginWithRedirect]);
+	useEffect(() => {
+		// Only trigger login if we are definitely not loading and not authenticated
+		if (inApp && !isLoading && !isAuthenticated) {
+			// Check if we are currently in the middle of an OAuth redirect processing
+			// (Supabase adds access_token etc to the hash/URL)
+			const hasAuthParams =
+				window.location.hash.includes("access_token=") ||
+				window.location.search.includes("code=");
 
-    if (!inApp) {
-        return <LandingPage onEnter={(pid?: string) => {
-            if (pid) {
-                setProjectId(pid);
-                navigate({ to: "/", search: { w: pid } });
-            } else {
-                setManualApp(true);
-            }
-        }} />;
-    }
+			if (!hasAuthParams) {
+				loginWithRedirect({
+					appState: { returnTo: window.location.href },
+				});
+			}
+		}
+	}, [inApp, isLoading, isAuthenticated, loginWithRedirect]);
 
-    if (isLoading) {
-        return <div className="min-h-screen bg-[#000000] flex items-center justify-center text-cyan-400">Loading Workspace...</div>;
-    }
+	if (!inApp) {
+		return (
+			<LandingPage
+				onEnter={(pid?: string) => {
+					if (pid) {
+						setProjectId(pid);
+						navigate({ to: "/", search: { w: pid } });
+					} else {
+						setManualApp(true);
+					}
+				}}
+			/>
+		);
+	}
 
-    if (!isAuthenticated) return null; // loginWithRedirect fires via useEffect
+	if (isLoading) {
+		return (
+			<div className="min-h-screen bg-[#000000] flex items-center justify-center text-cyan-400">
+				Loading Workspace...
+			</div>
+		);
+	}
 
-    return <Workspace projectId={projectId} onBack={() => {
-        setManualApp(false);
-        setProjectId(null);
-        navigate({ to: "/dashboard" });
-    }} />;
+	if (!isAuthenticated) return null; // loginWithRedirect fires via useEffect
+
+	return (
+		<Workspace
+			projectId={projectId}
+			onBack={() => {
+				setManualApp(false);
+				setProjectId(null);
+				navigate({ to: "/dashboard" });
+			}}
+		/>
+	);
 }
-
